@@ -11,6 +11,15 @@ export interface ZoomActions {
   zoomOut: () => void;
 }
 
+// IMPORTANT: Always use granular selectors to prevent unnecessary re-renders!
+//
+// ✅ CORRECT: Use granular selectors
+// const zoomLevel = useZoomStore(s => s.level);
+// const zoomIn = useZoomStore(s => s.zoomIn);
+//
+// ❌ WRONG: Don't destructure the entire store
+// const { level, zoomIn } = useZoomStore();
+
 export const useZoomStore = create<ZoomState & ZoomActions>((set) => ({
   level: 1,
   pixelsPerSecond: 100,

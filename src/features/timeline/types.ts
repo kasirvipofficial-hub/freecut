@@ -1,6 +1,8 @@
+import type { TimelineTrack, TimelineClip } from '@/types/timeline';
+
 export interface TimelineState {
-  tracks: import('@/types/timeline').TimelineTrack[];
-  clips: import('@/types/timeline').TimelineClip[];
+  tracks: TimelineTrack[];
+  clips: TimelineClip[];
   currentFrame: number;
   isPlaying: boolean;
   fps: number;
@@ -12,9 +14,9 @@ export interface TimelineState {
 }
 
 export interface TimelineActions {
-  setTracks: (tracks: import('@/types/timeline').TimelineTrack[]) => void;
-  addClip: (clip: import('@/types/timeline').TimelineClip) => void;
-  updateClip: (id: string, updates: Partial<import('@/types/timeline').TimelineClip>) => void;
+  setTracks: (tracks: TimelineTrack[]) => void;
+  addClip: (clip: TimelineClip) => void;
+  updateClip: (id: string, updates: Partial<TimelineClip>) => void;
   removeClips: (ids: string[]) => void;
   setCurrentFrame: (frame: number) => void;
   play: () => void;

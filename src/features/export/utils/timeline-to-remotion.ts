@@ -1,5 +1,6 @@
 import type { TimelineTrack, TimelineClip } from '@/types/timeline';
 import type { RemotionTrack, RemotionItem, RemotionInputProps } from '@/types/export';
+import { secondsToFrames } from '@/utils/time-utils';
 
 export function convertTimelineToRemotion(
   tracks: TimelineTrack[],
@@ -7,14 +8,9 @@ export function convertTimelineToRemotion(
   fps: number
 ): RemotionInputProps {
   // TODO: Implement timeline to Remotion conversion
-  // IMPORTANT: Convert seconds to frames!
+  // IMPORTANT: Convert seconds to frames using secondsToFrames utility!
   return {
     fps,
     tracks: [],
   };
-}
-
-export function secondsToFrames(seconds: number, fps: number): number {
-  // TODO: Implement seconds to frames conversion
-  return Math.round(seconds * fps);
 }

@@ -1,51 +1,73 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+@plugin "tailwindcss-animate";
+
+@custom-variant dark (&:is(.dark *));
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
-  }
+    /* Professional Video Editor Dark Theme - OKLCH Colors */
+    /* Inspired by Premiere Pro & DaVinci Resolve */
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    /* Base - Very dark, reduced eye strain */
+    --background: oklch(0.15 0 0);              /* #262626 - Main canvas */
+    --foreground: oklch(0.95 0 0);              /* #f2f2f2 - Primary text */
+
+    /* Panels - Layered depth */
+    --card: oklch(0.18 0 0);                    /* #2e2e2e - Panel backgrounds */
+    --card-foreground: oklch(0.92 0 0);         /* #ebebeb - Panel text */
+
+    --popover: oklch(0.16 0 0);                 /* #292929 - Dropdowns */
+    --popover-foreground: oklch(0.92 0 0);
+
+    /* Primary - Orange accent (playback, active states) */
+    --primary: oklch(0.68 0.19 45);             /* #FF8C3A - Vibrant orange */
+    --primary-foreground: oklch(0.12 0 0);      /* Dark text on primary */
+
+    /* Secondary - Subtle panel variation */
+    --secondary: oklch(0.22 0 0);               /* #383838 - Secondary surfaces */
+    --secondary-foreground: oklch(0.88 0 0);
+
+    /* Muted - Backgrounds and disabled states */
+    --muted: oklch(0.20 0 0);                   /* #333333 - Muted backgrounds */
+    --muted-foreground: oklch(0.60 0 0);        /* #999999 - Muted text */
+
+    /* Accent - Hover states and highlights */
+    --accent: oklch(0.24 0 0);                  /* #3d3d3d - Hover backgrounds */
+    --accent-foreground: oklch(0.95 0 0);
+
+    /* Destructive - Red for delete/errors */
+    --destructive: oklch(0.58 0.22 25);         /* #E53E3E - Error red */
+    --destructive-foreground: oklch(0.98 0 0);
+
+    /* Borders - Subtle separators */
+    --border: oklch(0.25 0 0);                  /* #404040 - Borders */
+    --input: oklch(0.24 0 0);                   /* #3d3d3d - Input borders */
+    --ring: oklch(0.68 0.19 45);                /* Orange focus ring */
+
+    /* Video Editor Specific - Track colors */
+    --video-track: oklch(0.62 0.17 250);        /* #5B9EF8 - Blue for video */
+    --audio-track: oklch(0.65 0.18 155);        /* #3ECF8E - Green for audio */
+    --subtitle-track: oklch(0.70 0.15 200);     /* #67C3F3 - Cyan for subs */
+    --playhead: oklch(0.68 0.19 45);            /* Orange playhead */
+
+    /* Panel system - Layered depth */
+    --panel-bg: oklch(0.18 0 0);                /* #2e2e2e - Panels */
+    --panel-header: oklch(0.14 0 0);            /* #242424 - Panel headers */
+    --timeline-bg: oklch(0.12 0 0);             /* #1f1f1f - Timeline darker */
+
+    /* Sidebar */
+    --sidebar: oklch(0.18 0 0);
+    --sidebar-foreground: oklch(0.92 0 0);
+    --sidebar-primary: oklch(0.68 0.19 45);
+    --sidebar-primary-foreground: oklch(0.12 0 0);
+    --sidebar-accent: oklch(0.22 0 0);
+    --sidebar-accent-foreground: oklch(0.92 0 0);
+    --sidebar-border: oklch(0.25 0 0);
+    --sidebar-ring: oklch(0.68 0.19 45);
+
+    --radius: 0.5rem;
   }
 }
 
@@ -53,7 +75,213 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
+
+  /* Force dark mode always */
+  html {
+    color-scheme: dark;
+  }
+
+  /* Monospace for technical data */
+  code,
+  pre,
+  .font-mono,
+  [data-mono] {
+    font-family: 'IBM Plex Mono', 'Consolas', 'Monaco', monospace;
+  }
+
+  /* Smooth scrolling */
+  * {
+    scroll-behavior: smooth;
+  }
+
+  /* Professional scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: oklch(0.15 0 0);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.30 0 0);
+    border-radius: 6px;
+    border: 2px solid oklch(0.15 0 0);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.35 0 0);
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: oklch(0.15 0 0);
+  }
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Map CSS variables to Tailwind */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Video editor custom colors */
+  --color-video-track: var(--video-track);
+  --color-audio-track: var(--audio-track);
+  --color-subtitle-track: var(--subtitle-track);
+  --color-playhead: var(--playhead);
+  --color-panel-bg: var(--panel-bg);
+  --color-panel-header: var(--panel-header);
+  --color-timeline-bg: var(--timeline-bg);
+
+  /* Sidebar */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/* Professional video editor utility classes */
+@layer utilities {
+  .panel-bg {
+    background-color: oklch(var(--panel-bg));
+  }
+
+  .panel-header {
+    background-color: oklch(var(--panel-header));
+  }
+
+  .timeline-bg {
+    background-color: oklch(var(--timeline-bg));
+  }
+
+  .video-track {
+    color: oklch(var(--video-track));
+    background-color: oklch(var(--video-track) / 0.12);
+    border-left: 2px solid oklch(var(--video-track) / 0.5);
+  }
+
+  .audio-track {
+    color: oklch(var(--audio-track));
+    background-color: oklch(var(--audio-track) / 0.12);
+    border-left: 2px solid oklch(var(--audio-track) / 0.5);
+  }
+
+  .subtitle-track {
+    color: oklch(var(--subtitle-track));
+    background-color: oklch(var(--subtitle-track) / 0.12);
+    border-left: 2px solid oklch(var(--subtitle-track) / 0.5);
+  }
+
+  .playhead {
+    background-color: oklch(var(--playhead));
+    box-shadow: 0 0 8px oklch(var(--playhead) / 0.5);
+  }
+
+  /* Smooth panel transitions */
+  .panel-transition {
+    transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Subtle glow for active elements */
+  .glow-primary {
+    box-shadow: 0 0 12px oklch(var(--primary) / 0.3);
+  }
+
+  .glow-primary-sm {
+    box-shadow: 0 0 6px oklch(var(--primary) / 0.25);
+  }
+
+  /* Text shadows for better readability on dark */
+  .text-shadow {
+    text-shadow: 0 1px 2px oklch(0 0 0 / 0.8);
+  }
+}
+
+/* Animations for professional feel */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-subtle {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.3s ease-out;
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.3s ease-out;
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }

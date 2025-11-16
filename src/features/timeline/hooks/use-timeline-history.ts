@@ -1,9 +1,15 @@
+import { useTimelineStore } from '../stores/timeline-store';
+
 export function useTimelineHistory() {
-  // TODO: Implement timeline history (undo/redo) with Zundo
+  const undo = () => useTimelineStore.temporal.getState().undo();
+  const redo = () => useTimelineStore.temporal.getState().redo();
+  const canUndo = useTimelineStore((state) => !!state.pastStates?.length);
+  const canRedo = useTimelineStore((state) => !!state.futureStates?.length);
+
   return {
-    undo: () => {},
-    redo: () => {},
-    canUndo: false,
-    canRedo: false,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
   };
 }

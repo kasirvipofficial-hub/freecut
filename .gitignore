@@ -38,3 +38,7 @@ coverage
 # Misc
 .cache
 .temp
+
+# TanStack Router auto-generated files
+# Note: Some teams commit this, uncomment if you prefer to commit
+# src/routeTree.gen.ts
