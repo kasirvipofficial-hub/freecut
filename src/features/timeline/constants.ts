@@ -1,0 +1,6 @@
+export const TIMELINE_HEADER_HEIGHT = 60;
+export const TIMELINE_RULER_HEIGHT = 30;
+export const TIMELINE_MIN_WIDTH = 800;
+
+export const GUIDELINE_SNAP_DISTANCE = 5;
+export const MAGNETIC_SNAP_DISTANCE = 10;
