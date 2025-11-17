@@ -1,37 +1,48 @@
 import type { TimelineItem } from '@/types/timeline';
 import { useTimelineZoom } from '../../hooks/use-timeline-zoom';
+import { useTimelineStore } from '../../stores/timeline-store';
 import { useSelectionStore } from '@/features/editor/stores/selection-store';
+import { useTimelineDrag } from '../../hooks/use-timeline-drag';
+import { DRAG_OPACITY } from '../../constants';
 
 export interface TimelineItemProps {
   item: TimelineItem;
+  timelineDuration?: number;
 }
 
 /**
  * Timeline Item Component
  *
- * Renders an individual item on the timeline:
+ * Renders an individual item on the timeline with drag-and-drop support:
  * - Positioned based on start frame (from)
  * - Width based on duration in frames
  * - Visual styling based on item type
  * - Selection state
  * - Click to select
+ * - Drag to move (horizontal and vertical)
+ * - Grid snapping support
  *
  * Future enhancements:
- * - Drag to move
  * - Resize handles
  * - Trim indicators
  * - Thumbnail preview
  */
-export function TimelineItem({ item }: TimelineItemProps) {
+export function TimelineItem({ item, timelineDuration = 30 }: TimelineItemProps) {
   const { timeToPixels } = useTimelineZoom();
   const selectedItemIds = useSelectionStore((s) => s.selectedItemIds);
   const selectItems = useSelectionStore((s) => s.selectItems);
 
   const isSelected = selectedItemIds.includes(item.id);
 
-  // Calculate position and width (convert frames to time)
-  const left = timeToPixels(item.from);
-  const width = timeToPixels(item.durationInFrames);
+  // Drag-and-drop functionality
+  const { isDragging, dragOffset, handleDragStart } = useTimelineDrag(item, timelineDuration);
+
+  // Get FPS for frame-to-time conversion
+  const fps = useTimelineStore((s) => s.fps);
+
+  // Calculate position and width (convert frames to seconds, then to pixels)
+  const left = timeToPixels(item.from / fps);
+  const width = timeToPixels(item.durationInFrames / fps);
 
   // Get color based on item type (using timeline theme colors)
   const getItemColor = () => {
@@ -70,16 +81,22 @@ export function TimelineItem({ item }: TimelineItemProps) {
   return (
     <div
       className={`
-        absolute top-2 h-12 rounded overflow-hidden cursor-pointer transition-all
+        absolute top-2 h-12 rounded overflow-hidden transition-all
         ${getItemColor()}
         ${isSelected ? 'ring-2 ring-primary ring-offset-1 ring-offset-background' : ''}
-        hover:brightness-110
+        ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}
+        ${!isDragging && 'hover:brightness-110'}
       `}
       style={{
         left: `${left}px`,
         width: `${width}px`,
+        transform: isDragging ? `translate(${dragOffset.x}px, ${dragOffset.y}px)` : undefined,
+        opacity: isDragging ? DRAG_OPACITY : 1,
+        transition: isDragging ? 'none' : 'all 0.2s',
+        pointerEvents: isDragging ? 'none' : 'auto',
       }}
       onClick={handleClick}
+      onMouseDown={handleDragStart}
     >
       {/* Item label */}
       <div className="px-2 py-1 text-xs font-medium text-primary-foreground truncate">

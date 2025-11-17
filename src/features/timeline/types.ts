@@ -14,4 +14,6 @@ export interface TimelineActions {
   updateItem: (id: string, updates: Partial<TimelineItem>) => void;
   removeItems: (ids: string[]) => void;
   toggleSnap: () => void;
+  moveItem: (id: string, newFrom: number, newTrackId?: string) => void;
+  moveItems: (updates: Array<{ id: string; from: number; trackId?: string }>) => void;
 }

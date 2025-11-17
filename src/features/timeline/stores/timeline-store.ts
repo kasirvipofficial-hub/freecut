@@ -36,5 +36,23 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
     items: state.items.filter((i) => !ids.includes(i.id)),
   })),
   toggleSnap: () => set((state) => ({ snapEnabled: !state.snapEnabled })),
+  moveItem: (id, newFrom, newTrackId) => set((state) => ({
+    items: state.items.map((i) =>
+      i.id === id
+        ? { ...i, from: newFrom, ...(newTrackId && { trackId: newTrackId }) }
+        : i
+    ),
+  })),
+  moveItems: (updates) => set((state) => {
+    const updateMap = new Map(updates.map((u) => [u.id, u]));
+    return {
+      items: state.items.map((i) => {
+        const update = updateMap.get(i.id);
+        return update
+          ? { ...i, from: update.from, ...(update.trackId && { trackId: update.trackId }) }
+          : i;
+      }),
+    };
+  }),
   }))
 );

@@ -13,7 +13,7 @@ import { Timeline } from '@/features/timeline/components/timeline';
 import { useTimelineShortcuts } from '@/features/timeline/hooks/use-timeline-shortcuts';
 import { useEditorHotkeys } from '@/hooks/use-editor-hotkeys';
 import { useTimelineStore } from '@/features/timeline/stores/timeline-store';
-import type { TimelineTrack, TimelineItem } from '@/types/timeline';
+import type { TimelineTrack } from '@/types/timeline';
 
 export interface EditorProps {
   projectId: string;
@@ -38,9 +38,8 @@ export interface EditorProps {
  */
 export function Editor({ projectId, project }: EditorProps) {
   const setTracks = useTimelineStore((s) => s.setTracks);
-  const addItem = useTimelineStore((s) => s.addItem);
 
-  // Initialize timeline with sample data (only runs when projectId changes)
+  // Initialize timeline with sample tracks (only runs when projectId changes)
   useEffect(() => {
     // Create sample tracks (generic containers - items have colors)
     const sampleTracks: TimelineTrack[] = [
@@ -76,43 +75,7 @@ export function Editor({ projectId, project }: EditorProps) {
       },
     ];
 
-    // Create sample items (using Remotion naming: from, durationInFrames)
-    const fps = project.fps || 30;
-    const sampleItems: TimelineItem[] = [
-      {
-        id: 'item-1',
-        trackId: 'track-1',
-        from: 0,
-        durationInFrames: 5 * fps, // 5 seconds
-        label: 'intro.mp4',
-        mediaId: 'media-1',
-        type: 'video',
-        src: '/samples/intro.mp4',
-      },
-      {
-        id: 'item-2',
-        trackId: 'track-1',
-        from: 6 * fps,
-        durationInFrames: 6 * fps, // 6 seconds
-        label: 'main-scene.mp4',
-        mediaId: 'media-2',
-        type: 'video',
-        src: '/samples/main-scene.mp4',
-      },
-      {
-        id: 'item-3',
-        trackId: 'track-2',
-        from: 0,
-        durationInFrames: 15 * fps, // 15 seconds
-        label: 'background-music.mp3',
-        mediaId: 'media-3',
-        type: 'audio',
-        src: '/samples/background-music.mp3',
-      },
-    ];
-
     setTracks(sampleTracks);
-    sampleItems.forEach((item) => addItem(item));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]); // Only re-initialize when projectId changes
 

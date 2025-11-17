@@ -10,6 +10,7 @@ import { getMediaType } from '@/features/media-library/utils/validation';
 export interface TimelineTrackProps {
   track: TimelineTrack;
   items: TimelineItemType[];
+  timelineWidth?: number;
 }
 
 /**
@@ -21,8 +22,9 @@ export interface TimelineTrackProps {
  * - Generic container that accepts any item types
  * - Drag-and-drop support for media from library
  */
-export function TimelineTrack({ track, items }: TimelineTrackProps) {
+export function TimelineTrack({ track, items, timelineWidth }: TimelineTrackProps) {
   const [isDragOver, setIsDragOver] = useState(false);
+  const [dropPreviewX, setDropPreviewX] = useState<number | null>(null);
   const trackRef = useRef<HTMLDivElement>(null);
 
   // Store selectors
@@ -40,16 +42,31 @@ export function TimelineTrack({ track, items }: TimelineTrackProps) {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
     setIsDragOver(true);
+
+    // Calculate and show drop preview position
+    if (trackRef.current) {
+      const timelineContainer = trackRef.current.closest('.timeline-container') as HTMLElement;
+      if (!timelineContainer) return;
+
+      const scrollLeft = timelineContainer.scrollLeft || 0;
+      const containerRect = timelineContainer.getBoundingClientRect();
+
+      // Calculate position in timeline space: mouse position relative to container + scroll offset
+      const offsetX = (e.clientX - containerRect.left) + scrollLeft;
+      setDropPreviewX(offsetX);
+    }
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
+    setDropPreviewX(null);
   };
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
+    setDropPreviewX(null);
 
     // Parse drag data
     try {
@@ -69,11 +86,28 @@ export function TimelineTrack({ track, items }: TimelineTrackProps) {
       }
 
       // Calculate drop position in frames
-      const trackRect = trackRef.current?.getBoundingClientRect();
-      if (!trackRect) return;
+      if (!trackRef.current) return;
 
-      const offsetX = e.clientX - trackRect.left;
+      // Get timeline container scroll position
+      const timelineContainer = trackRef.current.closest('.timeline-container') as HTMLElement;
+      if (!timelineContainer) return;
+
+      const scrollLeft = timelineContainer.scrollLeft || 0;
+      const containerRect = timelineContainer.getBoundingClientRect();
+
+      // Calculate position in timeline space: mouse position relative to container + scroll offset
+      const offsetX = (e.clientX - containerRect.left) + scrollLeft;
       const dropFrame = pixelsToFrame(offsetX);
+
+      // Debug logging
+      console.log('Drop Debug:', {
+        clientX: e.clientX,
+        containerLeft: containerRect.left,
+        scrollLeft,
+        offsetX,
+        dropFrame,
+        calculatedSeconds: offsetX / 100, // assuming 100 pixels per second zoom
+      });
 
       // Get media blob URL for playback
       // TODO: Implement blob URL cleanup when timeline items are removed
@@ -129,6 +163,7 @@ export function TimelineTrack({ track, items }: TimelineTrackProps) {
       }
 
       // Add item to timeline
+      console.log('Adding item at frame:', timelineItem.from, 'which is', timelineItem.from / fps, 'seconds');
       addItem(timelineItem);
     } catch (error) {
       console.error('Failed to handle media drop:', error);
@@ -138,22 +173,36 @@ export function TimelineTrack({ track, items }: TimelineTrackProps) {
   return (
     <div
       ref={trackRef}
+      data-track-id={track.id}
       className={`border-b border-border relative transition-colors ${
         isDragOver ? 'bg-primary/5 border-primary' : ''
       }`}
-      style={{ height: `${track.height}px` }}
+      style={{
+        height: `${track.height}px`,
+        width: timelineWidth ? `${timelineWidth}px` : '100%',
+        minWidth: timelineWidth ? `${timelineWidth}px` : '100%',
+      }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
       {/* Drop indicator */}
       {isDragOver && (
-        <div className="absolute inset-0 border-2 border-dashed border-primary pointer-events-none rounded" />
+        <>
+          <div className="absolute inset-0 border-2 border-dashed border-primary pointer-events-none rounded" />
+          {/* Drop preview line */}
+          {dropPreviewX !== null && (
+            <div
+              className="absolute top-0 bottom-0 w-0.5 bg-primary pointer-events-none z-20"
+              style={{ left: `${dropPreviewX}px` }}
+            />
+          )}
+        </>
       )}
 
       {/* Render all items for this track */}
       {trackItems.map((item) => (
-        <TimelineItem key={item.id} item={item} />
+        <TimelineItem key={item.id} item={item} timelineDuration={30} />
       ))}
     </div>
   );

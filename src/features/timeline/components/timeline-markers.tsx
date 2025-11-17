@@ -11,6 +11,7 @@ import { formatTimecode, secondsToFrames } from '@/utils/time-utils';
 
 export interface TimelineMarkersProps {
   duration: number; // Total timeline duration in seconds
+  width?: number; // Explicit width in pixels (optional)
 }
 
 interface MarkerInterval {
@@ -131,7 +132,7 @@ function calculateMarkerInterval(pixelsPerSecond: number): MarkerInterval {
  * - Viewport-aware rendering (extends to full width)
  * - Responsive to zoom changes
  */
-export function TimelineMarkers({ duration }: TimelineMarkersProps) {
+export function TimelineMarkers({ duration, width }: TimelineMarkersProps) {
   const { timeToPixels, pixelsPerSecond, pixelsToFrame } = useTimelineZoom();
   const fps = useTimelineStore((s) => s.fps);
   const setCurrentFrame = usePlaybackStore((s) => s.setCurrentFrame);
@@ -198,8 +199,9 @@ export function TimelineMarkers({ duration }: TimelineMarkersProps) {
     : markerConfig.intervalInSeconds;
 
   // Calculate timeline content width and display width
+  // If explicit width is provided, use it; otherwise calculate based on duration/viewport
   const timelineContentWidth = timeToPixels(duration);
-  const displayWidth = Math.max(timelineContentWidth, viewportWidth);
+  const displayWidth = width || Math.max(timelineContentWidth, viewportWidth);
 
   // Calculate number of markers to fill the display width
   const displayDuration = displayWidth / pixelsPerSecond;
@@ -273,6 +275,8 @@ export function TimelineMarkers({ duration }: TimelineMarkersProps) {
       style={{
         background: 'linear-gradient(to bottom, oklch(0.22 0 0 / 0.30), oklch(0.22 0 0 / 0.20), oklch(0.22 0 0 / 0.10))',
         userSelect: 'none', // Prevent text selection during drag
+        width: width ? `${width}px` : undefined,
+        minWidth: width ? `${width}px` : undefined,
       }}
     >
       {/* Markers - only render visible markers with overscan */}
@@ -287,6 +291,11 @@ export function TimelineMarkers({ duration }: TimelineMarkersProps) {
           const timeInSeconds = i * intervalInSeconds;
           const frameNumber = secondsToFrames(timeInSeconds, fps);
           const leftPosition = timeToPixels(timeInSeconds);
+
+          // If explicit width is provided, skip markers whose children would overflow
+          if (width && leftPosition + markerWidthPx > width) {
+            return null;
+          }
 
           return (
             <div

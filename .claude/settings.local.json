@@ -19,7 +19,8 @@
       "Bash(then echo \"src exists\")",
       "Bash(else echo \"src does not exist\")",
       "Bash(fi)",
-      "Bash(taskkill //F //PID 2896)"
+      "Bash(taskkill //F //PID 2896)",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": [],
     "ask": []
