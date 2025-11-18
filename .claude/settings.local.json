@@ -20,7 +20,8 @@
       "Bash(else echo \"src does not exist\")",
       "Bash(fi)",
       "Bash(taskkill //F //PID 2896)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(npx tsc:*)"
     ],
     "deny": [],
     "ask": []

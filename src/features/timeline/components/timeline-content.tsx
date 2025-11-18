@@ -3,6 +3,7 @@ import { useMemo, useRef, useEffect, useState } from 'react';
 // Stores and selectors
 import { useTimelineStore } from '../stores/timeline-store';
 import { useTimelineZoom } from '../hooks/use-timeline-zoom';
+import { usePlaybackStore } from '@/features/preview/stores/playback-store';
 
 // Components
 import { TimelineMarkers } from './timeline-markers';
@@ -29,7 +30,11 @@ export function TimelineContent({ duration }: TimelineContentProps) {
   const tracks = useTimelineStore((s) => s.tracks);
   const items = useTimelineStore((s) => s.items);
   const fps = useTimelineStore((s) => s.fps);
-  const { timeToPixels, pixelsToTime } = useTimelineZoom();
+  const { timeToPixels, pixelsToTime, frameToPixels, setZoom, zoomLevel } = useTimelineZoom({
+    minZoom: 0.1,
+    maxZoom: 2, // Match slider range
+  });
+  const currentFrame = usePlaybackStore((s) => s.currentFrame);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -91,10 +96,48 @@ export function TimelineContent({ duration }: TimelineContentProps) {
     return { actualDuration: totalDuration, timelineWidth: width };
   }, [items, duration, fps, timeToPixels, pixelsToTime, containerWidth]);
 
+  // Handle Ctrl+Scroll zoom with playhead anchoring
+  const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    // Only handle zoom when Ctrl (Windows/Linux) or Cmd (Mac) is pressed
+    if (!event.ctrlKey && !event.metaKey) {
+      return; // Allow normal scrolling
+    }
+
+    // Note: preventDefault is handled globally in App.tsx
+    const container = containerRef.current;
+    if (!container) return;
+
+    // Calculate playhead position before zoom
+    const playheadPixelsBefore = frameToPixels(currentFrame);
+    const scrollLeft = container.scrollLeft;
+    const playheadRelativeToViewport = playheadPixelsBefore - scrollLeft;
+
+    // Calculate zoom delta with medium sensitivity
+    // Negative deltaY = scroll up = zoom in, Positive deltaY = scroll down = zoom out
+    const zoomFactor = 1 - event.deltaY * 0.001;
+
+    // Apply zoom (setZoom handles min/max bounds internally)
+    const newZoomLevel = zoomLevel * zoomFactor;
+    setZoom(newZoomLevel);
+
+    // Schedule scroll adjustment after zoom is applied and DOM updates
+    requestAnimationFrame(() => {
+      if (!containerRef.current) return;
+
+      // Calculate new playhead position after zoom
+      const playheadPixelsAfter = frameToPixels(currentFrame);
+
+      // Adjust scroll to keep playhead in same visual position
+      const newScrollLeft = playheadPixelsAfter - playheadRelativeToViewport;
+      containerRef.current.scrollLeft = Math.max(0, newScrollLeft);
+    });
+  };
+
   return (
     <div
       ref={containerRef}
       className="flex-1 overflow-x-auto overflow-y-hidden relative bg-background/30 timeline-container"
+      onWheel={handleWheel}
     >
       {/* Time Ruler */}
       <div className="relative timeline-ruler" style={{ width: `${timelineWidth}px` }}>

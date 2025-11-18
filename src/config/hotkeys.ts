@@ -25,10 +25,10 @@ export const HOTKEYS = {
   REDO: 'mod+shift+z',
 
   // Zoom
-  ZOOM_IN: 'mod+=',
-  ZOOM_IN_ALT: '=',
-  ZOOM_OUT: 'mod+-',
-  ZOOM_OUT_ALT: '-',
+  ZOOM_IN: 'mod+equals',
+  ZOOM_IN_ALT: 'equals',
+  ZOOM_OUT: 'mod+minus',
+  ZOOM_OUT_ALT: 'minus',
   ZOOM_RESET: 'mod+0',
 
   // Selection

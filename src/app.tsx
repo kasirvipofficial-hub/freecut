@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { RouterProvider, createRouter } from '@tanstack/react-router';
 import { routeTree } from './routeTree.gen';
 
@@ -10,5 +11,35 @@ declare module '@tanstack/react-router' {
 }
 
 export function App() {
+  // Prevent default browser zoom application-wide
+  useEffect(() => {
+    const preventBrowserZoom = (e: WheelEvent) => {
+      // Prevent browser zoom when Ctrl/Cmd is held
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+      }
+    };
+
+    const preventKeyboardZoom = (e: KeyboardEvent) => {
+      // Prevent browser zoom shortcuts: Ctrl+=/+/-, Ctrl+0
+      // Only preventDefault (blocks browser zoom), event still propagates to react-hotkeys-hook
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === '+' || e.key === '=' || e.key === '-' || e.key === '_' || e.key === '0') {
+          e.preventDefault();
+          // DO NOT call stopPropagation() - we want react-hotkeys-hook to still receive this
+        }
+      }
+    };
+
+    // Add listeners at capture phase to intercept before browser handles them
+    document.addEventListener('wheel', preventBrowserZoom, { passive: false, capture: true });
+    document.addEventListener('keydown', preventKeyboardZoom, { capture: true });
+
+    return () => {
+      document.removeEventListener('wheel', preventBrowserZoom, { capture: true } as any);
+      document.removeEventListener('keydown', preventKeyboardZoom, { capture: true });
+    };
+  }, []);
+
   return <RouterProvider router={router} />;
 }

@@ -24,6 +24,8 @@ export interface TimelineShortcutCallbacks {
  * - C: Split item at playhead
  * - Cmd/Ctrl+Z: Undo
  * - Cmd/Ctrl+Shift+Z: Redo
+ *
+ * Note: Zoom is handled via Ctrl+Scroll only (see TimelineContent component)
  */
 export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) {
   // Access stores with granular selectors (performance optimization)
