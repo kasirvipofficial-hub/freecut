@@ -162,7 +162,7 @@ export function Timeline({ duration }: TimelineProps) {
       {/* Timeline Content */}
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Track Headers Sidebar */}
-        <div className="w-48 border-r border-border panel-bg flex-shrink-0 flex flex-col">
+        <div className="w-48 border-r border-border panel-bg flex-shrink-0 flex flex-col overflow-x-hidden">
           {/* Tracks label with controls */}
           <div className="h-11 flex items-center justify-between px-3 border-b border-border bg-secondary/20 flex-shrink-0">
             <span className="text-xs text-muted-foreground font-mono uppercase tracking-wider">
@@ -204,7 +204,7 @@ export function Timeline({ duration }: TimelineProps) {
           </div>
 
           {/* Track labels - synced scroll (no scrollbar) */}
-          <div className="flex-1 overflow-y-hidden relative">
+          <div className="flex-1 overflow-hidden relative">
             <div ref={trackHeadersContainerRef} className="space-y-px relative">
               {tracks.map((track) => (
                 <TrackHeader

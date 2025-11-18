@@ -225,7 +225,7 @@ export function TimelineContent({ duration, scrollRef }: TimelineContentProps) {
       <MarqueeOverlay marqueeState={marqueeState} />
 
       {/* Time Ruler - sticky at top */}
-      <div className="sticky top-0 z-10 timeline-ruler bg-background/30" style={{ width: `${timelineWidth}px` }}>
+      <div className="sticky top-0 z-30 timeline-ruler bg-background" style={{ width: `${timelineWidth}px` }}>
         <TimelineMarkers duration={actualDuration} width={timelineWidth} />
         <TimelinePlayhead inRuler />
       </div>
