@@ -40,5 +40,6 @@ export interface SelectionActions {
   setActiveTrack: (id: string | null) => void;
   toggleTrackSelection: (id: string) => void;
   clearSelection: () => void;
+  clearItemSelection: () => void; // Clears only items, preserves track selection
   setDragState: (dragState: SelectionState['dragState']) => void;
 }

@@ -4,6 +4,12 @@ import { useTimelineStore } from '../stores/timeline-store';
 import { useSelectionStore } from '@/features/editor/stores/selection-store';
 import { DRAG_THRESHOLD_PIXELS } from '../constants';
 
+// Shared ref for drag offset (avoids re-renders from store updates)
+export const trackDragOffsetRef = { current: 0 };
+
+// Shared ref for drop index indicator
+export const trackDropIndexRef = { current: -1 };
+
 interface DragState {
   trackId: string; // Anchor track
   startTrackIndex: number;
@@ -18,6 +24,7 @@ interface DragState {
 interface UseTrackDragReturn {
   isDragging: boolean;
   dragOffset: number;
+  dropIndex: number; // Index where tracks will be dropped (-1 if not dragging)
   handleDragStart: (e: React.MouseEvent) => void;
 }
 
@@ -32,6 +39,7 @@ interface UseTrackDragReturn {
 export function useTrackDrag(track: TimelineTrack): UseTrackDragReturn {
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
+  const [dropIndex, setDropIndex] = useState(-1);
   const dragStateRef = useRef<DragState | null>(null);
 
   // Get store state with granular selectors
@@ -61,6 +69,11 @@ export function useTrackDrag(track: TimelineTrack): UseTrackDragReturn {
   const handleDragStart = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
+
+      // Don't modify selection during Ctrl/Cmd+click - let the click handler deal with it
+      if (e.ctrlKey || e.metaKey) {
+        return;
+      }
 
       // Check if this track is in current selection
       const currentSelectedIds = selectedTrackIdsRef.current;
@@ -153,8 +166,53 @@ export function useTrackDrag(track: TimelineTrack): UseTrackDragReturn {
 
       const deltaY = e.clientY - dragStateRef.current.startMouseY;
 
-      // Update drag offset for visual preview
+      // Update drag offset for visual preview (anchor track)
       setDragOffset(deltaY);
+
+      // Update shared ref for other tracks to read (no re-renders)
+      trackDragOffsetRef.current = deltaY;
+
+      // Calculate drop index for visual indicator based on cumulative track heights
+      const allTracks = tracksRef.current;
+      if (allTracks.length > 0 && dragStateRef.current) {
+        // Calculate cumulative heights for each track boundary
+        const cumulativeHeights: number[] = [0];
+        for (let i = 0; i < allTracks.length; i++) {
+          const track = allTracks[i];
+          const lastHeight = cumulativeHeights[cumulativeHeights.length - 1];
+          if (track && lastHeight !== undefined) {
+            cumulativeHeights.push(lastHeight + track.height);
+          }
+        }
+
+        // Calculate the current position of the dragged track's center
+        const startIndex = dragStateRef.current.startTrackIndex;
+        const startTrackTop = cumulativeHeights[startIndex];
+        const draggedTrack = allTracks[startIndex];
+
+        if (startTrackTop !== undefined && draggedTrack) {
+          const currentCenterY = startTrackTop + draggedTrack.height / 2 + deltaY;
+
+          // Find which gap the center is closest to
+          let closestIndex = 0;
+          let minDistance = Infinity;
+
+          for (let i = 0; i <= allTracks.length; i++) {
+            const gapY = cumulativeHeights[i];
+            if (gapY !== undefined) {
+              const distance = Math.abs(currentCenterY - gapY);
+
+              if (distance < minDistance) {
+                minDistance = distance;
+                closestIndex = i;
+              }
+            }
+          }
+
+          setDropIndex(closestIndex);
+          trackDropIndexRef.current = closestIndex;
+        }
+      }
 
       dragStateRef.current.currentMouseY = e.clientY;
     };
@@ -164,7 +222,10 @@ export function useTrackDrag(track: TimelineTrack): UseTrackDragReturn {
       if (e.key === 'Escape' && isDragging) {
         setIsDragging(false);
         setDragOffset(0);
+        setDropIndex(-1);
         setDragState(null);
+        trackDragOffsetRef.current = 0;
+        trackDropIndexRef.current = -1;
         dragStateRef.current = null;
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
@@ -184,21 +245,58 @@ export function useTrackDrag(track: TimelineTrack): UseTrackDragReturn {
       if (allTracks.length === 0) {
         setIsDragging(false);
         setDragOffset(0);
+        setDropIndex(-1);
         setDragState(null);
+        trackDragOffsetRef.current = 0;
+        trackDropIndexRef.current = -1;
         dragStateRef.current = null;
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
         return;
       }
 
-      // Calculate how many track positions we moved
-      // Use average track height for calculation
-      const avgTrackHeight = allTracks.reduce((sum, t) => sum + t.height, 0) / allTracks.length;
-      const tracksMoved = Math.round(deltaY / avgTrackHeight);
-      const newIndex = Math.max(0, Math.min(allTracks.length - 1, dragState.startTrackIndex + tracksMoved));
+      // Calculate drop position using same logic as drop indicator
+      let newIndex = dragState.startTrackIndex;
+
+      // Calculate cumulative heights for each track boundary
+      const cumulativeHeights: number[] = [0];
+      for (let i = 0; i < allTracks.length; i++) {
+        const track = allTracks[i];
+        const lastHeight = cumulativeHeights[cumulativeHeights.length - 1];
+        if (track && lastHeight !== undefined) {
+          cumulativeHeights.push(lastHeight + track.height);
+        }
+      }
+
+      // Calculate the current position of the dragged track's center
+      const startIndex = dragState.startTrackIndex;
+      const startTrackTop = cumulativeHeights[startIndex];
+      const draggedTrack = allTracks[startIndex];
+
+      if (startTrackTop !== undefined && draggedTrack) {
+        const currentCenterY = startTrackTop + draggedTrack.height / 2 + deltaY;
+
+        // Find which gap the center is closest to
+        let closestIndex = 0;
+        let minDistance = Infinity;
+
+        for (let i = 0; i <= allTracks.length; i++) {
+          const gapY = cumulativeHeights[i];
+          if (gapY !== undefined) {
+            const distance = Math.abs(currentCenterY - gapY);
+
+            if (distance < minDistance) {
+              minDistance = distance;
+              closestIndex = i;
+            }
+          }
+        }
+
+        newIndex = closestIndex;
+      }
 
       // Only reorder if position actually changed
-      if (tracksMoved !== 0) {
+      if (newIndex !== dragState.startTrackIndex) {
         // Get IDs of tracks being dragged
         const draggedIds = dragState.draggedTracks.map((t) => t.id);
 
@@ -215,24 +313,31 @@ export function useTrackDrag(track: TimelineTrack): UseTrackDragReturn {
         if (draggedTracksData.length === 0) {
           setIsDragging(false);
           setDragOffset(0);
+          setDropIndex(-1);
           setDragState(null);
+          trackDragOffsetRef.current = 0;
+          trackDropIndexRef.current = -1;
           dragStateRef.current = null;
           document.body.style.cursor = '';
           document.body.style.userSelect = '';
           return;
         }
 
-        // Calculate correct insert index accounting for removed dragged tracks
-        // Count how many dragged tracks were before the target position
-        const draggedBeforeTarget = dragState.draggedTracks.filter(
-          (dt) => dt.initialIndex < newIndex
-        ).length;
+        // Calculate correct insert index in the non-dragged array
+        // newIndex represents a gap (0 = before first, 1 = after first, etc.)
+        // We need to adjust for dragged tracks that have been removed
+        let insertIndex = newIndex;
 
-        // Adjust insert index to account for removed tracks
-        const insertIndex = Math.max(
-          0,
-          Math.min(newIndex - draggedBeforeTarget, nonDraggedTracks.length)
-        );
+        // Count how many dragged tracks are before the target gap
+        for (let i = 0; i < newIndex && i < allTracks.length; i++) {
+          const track = allTracks[i];
+          if (track && draggedIds.includes(track.id)) {
+            insertIndex--;
+          }
+        }
+
+        // Clamp to valid range
+        insertIndex = Math.max(0, Math.min(insertIndex, nonDraggedTracks.length));
 
         const reorderedTracks = [
           ...nonDraggedTracks.slice(0, insertIndex),
@@ -253,7 +358,10 @@ export function useTrackDrag(track: TimelineTrack): UseTrackDragReturn {
       // Clean up
       setIsDragging(false);
       setDragOffset(0);
+      setDropIndex(-1);
       setDragState(null);
+      trackDragOffsetRef.current = 0;
+      trackDropIndexRef.current = -1;
       dragStateRef.current = null;
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
@@ -275,6 +383,7 @@ export function useTrackDrag(track: TimelineTrack): UseTrackDragReturn {
   return {
     isDragging,
     dragOffset,
+    dropIndex,
     handleDragStart,
   };
 }

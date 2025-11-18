@@ -1,9 +1,13 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TimelineHeader } from './timeline-header';
 import { TimelineContent } from './timeline-content';
 import { TrackHeader } from './track-header';
 import { useTimelineTracks } from '../hooks/use-timeline-tracks';
 import { useSelectionStore } from '@/features/editor/stores/selection-store';
+import { Button } from '@/components/ui/button';
+import { Plus, Minus } from 'lucide-react';
+import type { TimelineTrack } from '@/types/timeline';
+import { trackDropIndexRef } from '../hooks/use-track-drag';
 
 export interface TimelineProps {
   duration: number; // Total timeline duration in seconds
@@ -20,66 +24,227 @@ export interface TimelineProps {
  * Follows modular architecture with granular Zustand selectors
  */
 export function Timeline({ duration }: TimelineProps) {
-  const { tracks, toggleTrackLock, toggleTrackVisibility, toggleTrackMute, toggleTrackSolo } = useTimelineTracks();
+  const {
+    tracks,
+    addTrack,
+    insertTrack,
+    removeTracks,
+    toggleTrackLock,
+    toggleTrackVisibility,
+    toggleTrackMute,
+    toggleTrackSolo
+  } = useTimelineTracks();
 
   // Selection state - use granular selectors
   const activeTrackId = useSelectionStore((s) => s.activeTrackId);
   const selectedTrackIds = useSelectionStore((s) => s.selectedTrackIds);
   const setActiveTrack = useSelectionStore((s) => s.setActiveTrack);
   const toggleTrackSelection = useSelectionStore((s) => s.toggleTrackSelection);
-  const selectTracks = useSelectionStore((s) => s.selectTracks);
+
+  // Refs for syncing scroll between track headers and timeline content
+  const trackHeadersContainerRef = useRef<HTMLDivElement>(null);
+  const timelineContentRef = useRef<HTMLDivElement>(null);
+
+  // State for drop indicator (updated via RAF from drag hook)
+  const [dropIndicatorIndex, setDropIndicatorIndex] = useState(-1);
+
+  // Check if tracks are being dragged
+  const dragState = useSelectionStore((s) => s.dragState);
+  const isTrackDragging = dragState?.isDragging && dragState.draggedTrackIds && dragState.draggedTrackIds.length > 0;
 
   // Set first track as active on mount
   useEffect(() => {
-    if (tracks.length > 0 && !activeTrackId) {
+    if (tracks.length > 0 && !activeTrackId && tracks[0]) {
       setActiveTrack(tracks[0].id);
     }
   }, [tracks, activeTrackId, setActiveTrack]);
 
+  // Sync vertical scroll between track headers and timeline content using transform
+  useEffect(() => {
+    const timelineContent = timelineContentRef.current;
+    const trackHeadersContainer = trackHeadersContainerRef.current;
+
+    if (!timelineContent || !trackHeadersContainer) return;
+
+    const handleScroll = () => {
+      if (trackHeadersContainer) {
+        // Use transform to move the track headers container
+        trackHeadersContainer.style.transform = `translateY(-${timelineContent.scrollTop}px)`;
+      }
+    };
+
+    timelineContent.addEventListener('scroll', handleScroll);
+    return () => {
+      timelineContent.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  // Update drop indicator from shared ref (RAF loop)
+  useEffect(() => {
+    let rafId: number;
+    const updateDropIndicator = () => {
+      const newIndex = trackDropIndexRef.current;
+      setDropIndicatorIndex(newIndex);
+      rafId = requestAnimationFrame(updateDropIndicator);
+    };
+
+    rafId = requestAnimationFrame(updateDropIndicator);
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, []);
+
+  /**
+   * Handle adding a new track
+   * Inserts before the active track (appears above it), or at the top if no active track
+   */
+  const handleAddTrack = () => {
+    const newTrack: TimelineTrack = {
+      id: `track-${Date.now()}`,
+      name: `Track ${tracks.length + 1}`,
+      height: 64,
+      locked: false,
+      visible: true,
+      muted: false,
+      solo: false,
+      order: tracks.length,
+      items: [],
+    };
+
+    if (activeTrackId) {
+      // Insert before the active track (appears above it in the list)
+      insertTrack(newTrack, activeTrackId);
+    } else {
+      // Add at the top (beginning)
+      addTrack(newTrack);
+    }
+
+    // Set the new track as active immediately after insertion
+    // Use setTimeout to ensure state updates have propagated
+    setTimeout(() => {
+      setActiveTrack(newTrack.id);
+    }, 0);
+  };
+
+  /**
+   * Handle removing selected tracks
+   * Removes all selected tracks or the active track if none selected
+   */
+  const handleRemoveTracks = () => {
+    const tracksToRemove = selectedTrackIds.length > 0
+      ? selectedTrackIds
+      : activeTrackId
+        ? [activeTrackId]
+        : [];
+
+    if (tracksToRemove.length === 0) return;
+
+    // Don't allow removing all tracks
+    if (tracksToRemove.length >= tracks.length) {
+      console.warn('Cannot remove all tracks');
+      return;
+    }
+
+    removeTracks(tracksToRemove);
+
+    // Find the next track to select (first remaining track not being removed)
+    const remainingTrack = tracks.find((t) => !tracksToRemove.includes(t.id));
+    if (remainingTrack) {
+      setActiveTrack(remainingTrack.id);
+    }
+  };
+
   return (
-    <div className="timeline-bg h-72 border-t border-border flex flex-col flex-shrink-0">
+    <div className="timeline-bg h-full border-t border-border flex flex-col">
       {/* Timeline Header */}
       <TimelineHeader />
 
       {/* Timeline Content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Track Headers Sidebar */}
-        <div className="w-48 border-r border-border panel-bg flex-shrink-0">
-          {/* Tracks label */}
-          <div className="h-11 flex items-center px-3 border-b border-border bg-secondary/20">
+        <div className="w-48 border-r border-border panel-bg flex-shrink-0 flex flex-col">
+          {/* Tracks label with controls */}
+          <div className="h-11 flex items-center justify-between px-3 border-b border-border bg-secondary/20 flex-shrink-0">
             <span className="text-xs text-muted-foreground font-mono uppercase tracking-wider">
               Tracks
             </span>
+            <div className="flex items-center gap-1">
+              {/* Add track button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={handleAddTrack}
+                title={activeTrackId
+                  ? "Add track (inserts above selected)"
+                  : "Add track at top"}
+              >
+                <Plus className="w-3 h-3" />
+              </Button>
+              {/* Remove track button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={handleRemoveTracks}
+                disabled={tracks.length === 0 || (!activeTrackId && selectedTrackIds.length === 0)}
+                title={
+                  tracks.length === 0
+                    ? 'No tracks to remove'
+                    : !activeTrackId && selectedTrackIds.length === 0
+                    ? 'Select a track to remove'
+                    : selectedTrackIds.length > 0
+                    ? `Remove ${selectedTrackIds.length} selected track(s)`
+                    : 'Remove active track'
+                }
+              >
+                <Minus className="w-3 h-3" />
+              </Button>
+            </div>
           </div>
 
-          {/* Track labels */}
-          <div className="space-y-px">
-            {tracks.map((track) => (
-              <TrackHeader
-                key={track.id}
-                track={track}
-                isActive={activeTrackId === track.id}
-                isSelected={selectedTrackIds.includes(track.id)}
-                onToggleLock={() => toggleTrackLock(track.id)}
-                onToggleVisibility={() => toggleTrackVisibility(track.id)}
-                onToggleMute={() => toggleTrackMute(track.id)}
-                onToggleSolo={() => toggleTrackSolo(track.id)}
-                onSelect={(e) => {
-                  if (e.metaKey || e.ctrlKey) {
-                    // Multi-select with Cmd/Ctrl
-                    toggleTrackSelection(track.id);
-                  } else {
-                    // Single select - set as active
-                    setActiveTrack(track.id);
-                  }
-                }}
-              />
-            ))}
+          {/* Track labels - synced scroll (no scrollbar) */}
+          <div className="flex-1 overflow-y-hidden relative">
+            <div ref={trackHeadersContainerRef} className="space-y-px relative">
+              {tracks.map((track) => (
+                <TrackHeader
+                  key={track.id}
+                  track={track}
+                  isActive={activeTrackId === track.id}
+                  isSelected={selectedTrackIds.includes(track.id)}
+                  onToggleLock={() => toggleTrackLock(track.id)}
+                  onToggleVisibility={() => toggleTrackVisibility(track.id)}
+                  onToggleMute={() => toggleTrackMute(track.id)}
+                  onToggleSolo={() => toggleTrackSolo(track.id)}
+                  onSelect={(e) => {
+                    if (e.metaKey || e.ctrlKey) {
+                      // Multi-select with Cmd/Ctrl
+                      toggleTrackSelection(track.id);
+                    } else {
+                      // Single select - set as active
+                      setActiveTrack(track.id);
+                    }
+                  }}
+                />
+              ))}
+
+              {/* Drop indicator - shows where tracks will be dropped */}
+              {isTrackDragging && dropIndicatorIndex >= 0 && dropIndicatorIndex <= tracks.length && (
+                <div
+                  className="absolute left-0 right-0 h-0.5 bg-primary pointer-events-none z-50 shadow-lg"
+                  style={{
+                    top: dropIndicatorIndex === 0
+                      ? 0
+                      : tracks.slice(0, dropIndicatorIndex).reduce((sum, t) => sum + t.height, 0),
+                  }}
+                />
+              )}
+            </div>
           </div>
         </div>
 
         {/* Timeline Canvas */}
-        <TimelineContent duration={duration} />
+        <TimelineContent duration={duration} scrollRef={timelineContentRef} />
       </div>
     </div>
   );

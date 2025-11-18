@@ -1,7 +1,9 @@
+import { useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Eye, Lock, GripVertical, Volume2, VolumeX, Radio } from 'lucide-react';
 import type { TimelineTrack } from '@/types/timeline';
-import { useTrackDrag } from '../hooks/use-track-drag';
+import { useTrackDrag, trackDragOffsetRef } from '../hooks/use-track-drag';
+import { useSelectionStore } from '@/features/editor/stores/selection-store';
 
 export interface TrackHeaderProps {
   track: TimelineTrack;
@@ -32,28 +34,80 @@ export function TrackHeader({
 }: TrackHeaderProps) {
   // Use track drag hook
   const { isDragging, dragOffset, handleDragStart } = useTrackDrag(track);
+
+  // Get global drag state to check if this track is part of multi-drag
+  const dragState = useSelectionStore((s) => s.dragState);
+
+  // Check if this track is being dragged (anchor or part of multi-select)
+  const isPartOfDrag = dragState?.isDragging &&
+    dragState.draggedTrackIds?.includes(track.id) &&
+    !isDragging; // Not the anchor track
+
+  const isBeingDragged = isDragging || isPartOfDrag;
+
+  // Ref for transform style (updated via RAF for smooth dragging without re-renders)
+  const transformRef = useRef<HTMLDivElement>(null);
+
+  // Use RAF to update transform for tracks being dragged along (not the anchor)
+  useEffect(() => {
+    if (!isPartOfDrag || !transformRef.current) return;
+
+    let rafId: number;
+    const updateTransform = () => {
+      if (transformRef.current && isPartOfDrag) {
+        const offset = trackDragOffsetRef.current;
+        transformRef.current.style.transform = `translateY(${offset}px) scale(1.02)`;
+        transformRef.current.style.opacity = '0.5';
+        transformRef.current.style.transition = 'none';
+        transformRef.current.style.pointerEvents = 'none';
+        transformRef.current.style.zIndex = '100';
+        rafId = requestAnimationFrame(updateTransform);
+      }
+    };
+
+    rafId = requestAnimationFrame(updateTransform);
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      // Reset styles when drag ends
+      if (transformRef.current) {
+        transformRef.current.style.transition = 'none';
+        transformRef.current.style.transform = '';
+        transformRef.current.style.opacity = '';
+        transformRef.current.style.pointerEvents = '';
+        transformRef.current.style.zIndex = '';
+        // Re-enable transitions after position updates (next frame)
+        requestAnimationFrame(() => {
+          if (transformRef.current) {
+            transformRef.current.style.transition = '';
+          }
+        });
+      }
+    };
+  }, [isPartOfDrag]);
+
   return (
     <div
+      ref={transformRef}
       className={`
         flex items-center justify-between px-2 border-b border-border
-        cursor-pointer transition-colors relative
-        ${isActive ? 'bg-primary/10' : 'hover:bg-secondary/50'}
-        ${isSelected ? 'border-l-3 border-l-primary' : 'border-l-3 border-l-transparent'}
-        ${isDragging ? 'opacity-50 pointer-events-none' : ''}
+        cursor-grab active:cursor-grabbing relative
+        ${isSelected ? 'bg-primary/10' : 'hover:bg-secondary/50'}
+        ${isActive ? 'border-l-3 border-l-primary' : 'border-l-3 border-l-transparent'}
+        ${isBeingDragged ? 'opacity-50 pointer-events-none shadow-lg ring-2 ring-primary/30' : ''}
+        ${!isBeingDragged ? 'transition-all duration-150' : ''}
       `}
       style={{
         height: `${track.height}px`,
-        transform: isDragging ? `translateY(${dragOffset}px)` : undefined,
+        transform: isDragging ? `translateY(${dragOffset}px) scale(1.02)` : undefined,
         transition: isDragging ? 'none' : undefined,
+        zIndex: isBeingDragged ? 100 : undefined,
       }}
       onClick={onSelect}
+      onMouseDown={handleDragStart}
       data-track-id={track.id}
     >
-      {/* Drag Handle */}
-      <div
-        className="flex items-center gap-1 flex-1 min-w-0 cursor-grab active:cursor-grabbing"
-        onMouseDown={handleDragStart}
-      >
+      {/* Drag Handle Icon & Track Name */}
+      <div className="flex items-center gap-1 flex-1 min-w-0">
         <GripVertical className="w-4 h-4 shrink-0 text-muted-foreground" />
         <span className="text-xs font-medium font-mono whitespace-nowrap">
           {track.name}
@@ -70,6 +124,7 @@ export function TrackHeader({
             e.stopPropagation();
             onToggleVisibility();
           }}
+          onMouseDown={(e) => e.stopPropagation()}
         >
           <Eye
             className={`w-1 h-1 ${!track.visible ? 'opacity-30' : ''}`}
@@ -85,6 +140,7 @@ export function TrackHeader({
             e.stopPropagation();
             onToggleMute();
           }}
+          onMouseDown={(e) => e.stopPropagation()}
         >
           {track.muted ? (
             <VolumeX className="w-1 h-1 text-muted-foreground" />
@@ -102,6 +158,7 @@ export function TrackHeader({
             e.stopPropagation();
             onToggleSolo();
           }}
+          onMouseDown={(e) => e.stopPropagation()}
         >
           <Radio
             className={`w-1 h-1 ${track.solo ? 'text-primary' : ''}`}
@@ -117,6 +174,7 @@ export function TrackHeader({
             e.stopPropagation();
             onToggleLock();
           }}
+          onMouseDown={(e) => e.stopPropagation()}
         >
           <Lock
             className={`w-1 h-1 ${track.locked ? 'text-primary' : ''}`}

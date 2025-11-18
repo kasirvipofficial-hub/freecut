@@ -13,11 +13,11 @@ export function useTimelineTracks() {
   const setTracks = useTimelineStore((s) => s.setTracks);
 
   /**
-   * Add a new track to the timeline
+   * Add a new track to the timeline (at the top/beginning)
    */
   const addTrack = useCallback(
     (track: TimelineTrack) => {
-      setTracks([...tracks, track]);
+      setTracks([track, ...tracks]);
     },
     [tracks, setTracks]
   );
@@ -28,6 +28,43 @@ export function useTimelineTracks() {
   const removeTrack = useCallback(
     (id: string) => {
       setTracks(tracks.filter((track) => track.id !== id));
+    },
+    [tracks, setTracks]
+  );
+
+  /**
+   * Remove multiple tracks by IDs
+   */
+  const removeTracks = useCallback(
+    (ids: string[]) => {
+      setTracks(tracks.filter((track) => !ids.includes(track.id)));
+    },
+    [tracks, setTracks]
+  );
+
+  /**
+   * Insert a new track before a specific track ID (so it appears above it)
+   * If beforeTrackId is not found or null, inserts at the top
+   */
+  const insertTrack = useCallback(
+    (track: TimelineTrack, beforeTrackId: string | null = null) => {
+      if (!beforeTrackId) {
+        // Insert at the top (beginning)
+        setTracks([track, ...tracks]);
+        return;
+      }
+
+      const index = tracks.findIndex((t) => t.id === beforeTrackId);
+      if (index === -1) {
+        // Track not found, insert at the top
+        setTracks([track, ...tracks]);
+        return;
+      }
+
+      // Insert before the found track (same index position)
+      const newTracks = [...tracks];
+      newTracks.splice(index, 0, track);
+      setTracks(newTracks);
     },
     [tracks, setTracks]
   );
@@ -111,6 +148,8 @@ export function useTimelineTracks() {
     tracks,
     addTrack,
     removeTrack,
+    removeTracks,
+    insertTrack,
     updateTrack,
     reorderTracks,
     toggleTrackLock,

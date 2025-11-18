@@ -1,4 +1,4 @@
-import { useMemo, useRef, useEffect, useState } from 'react';
+import { useMemo, useRef, useEffect, useState, useCallback } from 'react';
 
 // Stores and selectors
 import { useTimelineStore } from '../stores/timeline-store';
@@ -17,6 +17,7 @@ import { MarqueeOverlay } from '@/components/marquee-overlay';
 
 export interface TimelineContentProps {
   duration: number; // Total timeline duration in seconds
+  scrollRef?: React.RefObject<HTMLDivElement | null>; // Optional ref for scroll syncing
 }
 
 /**
@@ -30,7 +31,7 @@ export interface TimelineContentProps {
  *
  * Dynamically calculates width based on furthest item
  */
-export function TimelineContent({ duration }: TimelineContentProps) {
+export function TimelineContent({ duration, scrollRef }: TimelineContentProps) {
   // Use granular selectors - Zustand v5 best practice
   const tracks = useTimelineStore((s) => s.tracks);
   const items = useTimelineStore((s) => s.items);
@@ -41,11 +42,19 @@ export function TimelineContent({ duration }: TimelineContentProps) {
   });
   const currentFrame = usePlaybackStore((s) => s.currentFrame);
   const selectItems = useSelectionStore((s) => s.selectItems);
-  const clearSelection = useSelectionStore((s) => s.clearSelection);
+  const clearItemSelection = useSelectionStore((s) => s.clearItemSelection);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const marqueeWasActiveRef = useRef(false);
+
+  // Merge external scrollRef with internal containerRef
+  const mergedRef = useCallback((node: HTMLDivElement | null) => {
+    containerRef.current = node;
+    if (scrollRef) {
+      (scrollRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+    }
+  }, [scrollRef]);
 
   // Measure container width - run after render and on resize
   useEffect(() => {
@@ -106,7 +115,7 @@ export function TimelineContent({ duration }: TimelineContentProps) {
 
   // Marquee selection hook
   const { marqueeState } = useMarqueeSelection({
-    containerRef,
+    containerRef: containerRef as React.RefObject<HTMLElement>,
     items: marqueeItems,
     onSelectionChange: (ids) => {
       selectItems(ids);
@@ -128,19 +137,19 @@ export function TimelineContent({ duration }: TimelineContentProps) {
     }
   }, [marqueeState.active]);
 
-  // Click empty space to deselect
+  // Click empty space to deselect items (but preserve track selection)
   const handleContainerClick = (e: React.MouseEvent) => {
     // Don't deselect if marquee selection just finished
     if (marqueeWasActiveRef.current) {
       return;
     }
 
-    // Deselect if NOT clicking on a timeline item
+    // Deselect items if NOT clicking on a timeline item
     const target = e.target as HTMLElement;
     const clickedOnItem = target.closest('[data-item-id]');
 
     if (!clickedOnItem) {
-      clearSelection();
+      clearItemSelection();
     }
   };
 
@@ -207,16 +216,16 @@ export function TimelineContent({ duration }: TimelineContentProps) {
 
   return (
     <div
-      ref={containerRef}
-      className="flex-1 overflow-x-auto overflow-y-hidden relative bg-background/30 timeline-container"
+      ref={mergedRef}
+      className="flex-1 overflow-auto relative bg-background/30 timeline-container"
       onWheel={handleWheel}
       onClick={handleContainerClick}
     >
       {/* Marquee selection overlay */}
       <MarqueeOverlay marqueeState={marqueeState} />
 
-      {/* Time Ruler */}
-      <div className="relative timeline-ruler" style={{ width: `${timelineWidth}px` }}>
+      {/* Time Ruler - sticky at top */}
+      <div className="sticky top-0 z-10 timeline-ruler bg-background/30" style={{ width: `${timelineWidth}px` }}>
         <TimelineMarkers duration={actualDuration} width={timelineWidth} />
         <TimelinePlayhead inRuler />
       </div>

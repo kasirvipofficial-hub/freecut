@@ -20,13 +20,11 @@ export const useSelectionStore = create<SelectionState & SelectionActions>((set)
   dragState: null,
 
   // Actions
-  selectItems: (ids) => set({
+  selectItems: (ids) => set((state) => ({
     selectedItemIds: ids,
-    selectedTrackId: null,
-    selectedTrackIds: [],
-    activeTrackId: null,
-    selectionType: ids.length > 0 ? 'item' : null,
-  }),
+    // Preserve track selection when selecting items
+    selectionType: ids.length > 0 ? 'item' : (state.selectedTrackIds.length > 0 ? 'track' : null),
+  })),
   selectTrack: (id) => set({
     selectedTrackId: id,
     activeTrackId: id,
@@ -74,5 +72,9 @@ export const useSelectionStore = create<SelectionState & SelectionActions>((set)
     activeTrackId: null,
     selectionType: null,
   }),
+  clearItemSelection: () => set((state) => ({
+    selectedItemIds: [],
+    selectionType: state.selectedTrackIds.length > 0 ? 'track' : null,
+  })),
   setDragState: (dragState) => set({ dragState }),
 }));
