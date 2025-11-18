@@ -1,8 +1,9 @@
-import { Button } from '@/components/ui/button';
-import { Layers, Eye, Lock } from 'lucide-react';
+import { useEffect } from 'react';
 import { TimelineHeader } from './timeline-header';
 import { TimelineContent } from './timeline-content';
+import { TrackHeader } from './track-header';
 import { useTimelineTracks } from '../hooks/use-timeline-tracks';
+import { useSelectionStore } from '@/features/editor/stores/selection-store';
 
 export interface TimelineProps {
   duration: number; // Total timeline duration in seconds
@@ -19,7 +20,21 @@ export interface TimelineProps {
  * Follows modular architecture with granular Zustand selectors
  */
 export function Timeline({ duration }: TimelineProps) {
-  const { tracks, toggleTrackLock, toggleTrackMute } = useTimelineTracks();
+  const { tracks, toggleTrackLock, toggleTrackVisibility, toggleTrackMute, toggleTrackSolo } = useTimelineTracks();
+
+  // Selection state - use granular selectors
+  const activeTrackId = useSelectionStore((s) => s.activeTrackId);
+  const selectedTrackIds = useSelectionStore((s) => s.selectedTrackIds);
+  const setActiveTrack = useSelectionStore((s) => s.setActiveTrack);
+  const toggleTrackSelection = useSelectionStore((s) => s.toggleTrackSelection);
+  const selectTracks = useSelectionStore((s) => s.selectTracks);
+
+  // Set first track as active on mount
+  useEffect(() => {
+    if (tracks.length > 0 && !activeTrackId) {
+      setActiveTrack(tracks[0].id);
+    }
+  }, [tracks, activeTrackId, setActiveTrack]);
 
   return (
     <div className="timeline-bg h-72 border-t border-border flex flex-col flex-shrink-0">
@@ -29,7 +44,7 @@ export function Timeline({ duration }: TimelineProps) {
       {/* Timeline Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Track Headers Sidebar */}
-        <div className="w-36 border-r border-border panel-bg flex-shrink-0">
+        <div className="w-48 border-r border-border panel-bg flex-shrink-0">
           {/* Tracks label */}
           <div className="h-11 flex items-center px-3 border-b border-border bg-secondary/20">
             <span className="text-xs text-muted-foreground font-mono uppercase tracking-wider">
@@ -40,41 +55,25 @@ export function Timeline({ duration }: TimelineProps) {
           {/* Track labels */}
           <div className="space-y-px">
             {tracks.map((track) => (
-              <div
+              <TrackHeader
                 key={track.id}
-                className="flex items-center justify-between px-3 border-b border-border group"
-                style={{ height: `${track.height}px` }}
-              >
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <Layers className="w-3.5 h-3.5 flex-shrink-0" />
-                  <span className="text-xs font-medium font-mono truncate">
-                    {track.name}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => toggleTrackMute(track.id)}
-                  >
-                    <Eye
-                      className={`w-3 h-3 ${track.muted ? 'opacity-30' : ''}`}
-                    />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => toggleTrackLock(track.id)}
-                  >
-                    <Lock
-                      className={`w-3 h-3 ${track.locked ? 'text-primary' : ''}`}
-                    />
-                  </Button>
-                </div>
-              </div>
+                track={track}
+                isActive={activeTrackId === track.id}
+                isSelected={selectedTrackIds.includes(track.id)}
+                onToggleLock={() => toggleTrackLock(track.id)}
+                onToggleVisibility={() => toggleTrackVisibility(track.id)}
+                onToggleMute={() => toggleTrackMute(track.id)}
+                onToggleSolo={() => toggleTrackSolo(track.id)}
+                onSelect={(e) => {
+                  if (e.metaKey || e.ctrlKey) {
+                    // Multi-select with Cmd/Ctrl
+                    toggleTrackSelection(track.id);
+                  } else {
+                    // Single select - set as active
+                    setActiveTrack(track.id);
+                  }
+                }}
+              />
             ))}
           </div>
         </div>

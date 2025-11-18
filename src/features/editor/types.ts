@@ -20,19 +20,25 @@ export interface EditorActions {
 
 export interface SelectionState {
   selectedItemIds: string[];
-  selectedTrackId: string | null;
+  selectedTrackId: string | null; // Deprecated: use activeTrackId
+  selectedTrackIds: string[]; // Multi-track selection
+  activeTrackId: string | null; // Single active track
   selectionType: 'item' | 'track' | null;
   // Drag state for visual feedback
   dragState: {
     isDragging: boolean;
     draggedItemIds: string[];
+    draggedTrackIds?: string[]; // For track dragging
     offset: { x: number; y: number };
   } | null;
 }
 
 export interface SelectionActions {
   selectItems: (ids: string[]) => void;
-  selectTrack: (id: string | null) => void;
+  selectTrack: (id: string | null) => void; // Deprecated: use setActiveTrack
+  selectTracks: (ids: string[], append?: boolean) => void;
+  setActiveTrack: (id: string | null) => void;
+  toggleTrackSelection: (id: string) => void;
   clearSelection: () => void;
   setDragState: (dragState: SelectionState['dragState']) => void;
 }

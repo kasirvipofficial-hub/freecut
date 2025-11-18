@@ -75,6 +75,7 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
           name: track.name,
           height: track.height,
           locked: track.locked,
+          visible: track.visible,
           muted: track.muted,
           solo: track.solo,
           color: track.color,

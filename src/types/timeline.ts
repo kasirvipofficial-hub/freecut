@@ -51,7 +51,8 @@ export interface TimelineTrack {
   name: string;
   height: number;
   locked: boolean;
-  muted: boolean;
+  visible: boolean; // Visual visibility (Eye icon)
+  muted: boolean; // Audio muting (Volume icon)
   solo: boolean;
   color?: string; // Optional - tracks are generic containers, items have colors
   order: number;

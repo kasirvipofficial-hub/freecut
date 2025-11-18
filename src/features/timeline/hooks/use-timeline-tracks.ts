@@ -72,7 +72,19 @@ export function useTimelineTracks() {
   );
 
   /**
-   * Toggle track muted state
+   * Toggle track visibility
+   */
+  const toggleTrackVisibility = useCallback(
+    (id: string) => {
+      updateTrack(id, {
+        visible: !tracks.find((t) => t.id === id)?.visible,
+      });
+    },
+    [tracks, updateTrack]
+  );
+
+  /**
+   * Toggle track audio muted state
    */
   const toggleTrackMute = useCallback(
     (id: string) => {
@@ -102,6 +114,7 @@ export function useTimelineTracks() {
     updateTrack,
     reorderTracks,
     toggleTrackLock,
+    toggleTrackVisibility,
     toggleTrackMute,
     toggleTrackSolo,
   };
