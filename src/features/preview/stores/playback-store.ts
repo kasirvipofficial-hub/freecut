@@ -12,7 +12,7 @@ import type { PlaybackState, PlaybackActions } from '../types';
 
 export const usePlaybackStore = create<PlaybackState & PlaybackActions>((set) => ({
   // State
-  currentFrame: 90, // Start at 3 seconds (30fps * 3) for visibility
+  currentFrame: 0,
   isPlaying: false,
   playbackRate: 1,
   loop: false,

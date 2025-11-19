@@ -31,7 +31,7 @@ export const Item: React.FC<ItemProps> = ({ item, muted = false }) => {
     return (
       <OffthreadVideo
         src={item.src}
-        startFrom={item.offset || 0}
+        trimBefore={item.offset || 0}
         volume={muted ? 0 : 1}
       />
     );
@@ -45,7 +45,7 @@ export const Item: React.FC<ItemProps> = ({ item, muted = false }) => {
     return (
       <Audio
         src={item.src}
-        startFrom={item.offset || 0}
+        trimBefore={item.offset || 0}
         volume={muted ? 0 : 1}
       />
     );

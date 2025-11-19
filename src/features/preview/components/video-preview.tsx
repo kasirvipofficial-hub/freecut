@@ -180,6 +180,8 @@ export function VideoPreview({ project }: VideoPreviewProps) {
             durationInFrames={totalFrames}
             compositionWidth={project.width}
             compositionHeight={project.height}
+            bufferStateDelayInMilliseconds={0}
+            acknowledgeRemotionLicense={true}
             fps={fps}
             style={{
               width: '100%',
