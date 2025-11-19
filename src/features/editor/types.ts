@@ -24,6 +24,7 @@ export interface SelectionState {
   selectedTrackIds: string[]; // Multi-track selection
   activeTrackId: string | null; // Single active track
   selectionType: 'item' | 'track' | null;
+  activeTool: 'select' | 'razor'; // Active timeline tool
   // Drag state for visual feedback
   dragState: {
     isDragging: boolean;
@@ -42,4 +43,5 @@ export interface SelectionActions {
   clearSelection: () => void;
   clearItemSelection: () => void; // Clears only items, preserves track selection
   setDragState: (dragState: SelectionState['dragState']) => void;
+  setActiveTool: (tool: SelectionState['activeTool']) => void;
 }

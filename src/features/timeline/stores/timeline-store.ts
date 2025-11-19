@@ -140,6 +140,64 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
     }),
   })),
 
+  // Split item at the specified frame
+  splitItem: (id, splitFrame) => set((state) => {
+    const item = state.items.find((i) => i.id === id);
+    if (!item) return state;
+
+    // Validate split position is within item bounds
+    if (splitFrame <= item.from || splitFrame >= item.from + item.durationInFrames) {
+      console.warn('Split frame must be within item bounds');
+      return state;
+    }
+
+    // Calculate durations for left and right items
+    const leftDuration = splitFrame - item.from;
+    const rightDuration = item.from + item.durationInFrames - splitFrame;
+
+    // Ensure minimum duration of 1 frame
+    if (leftDuration < 1 || rightDuration < 1) {
+      console.warn('Split would create item with less than 1 frame duration');
+      return state;
+    }
+
+    // Create base properties for both items
+    const currentTrimStart = item.trimStart || 0;
+    const currentSourceStart = item.sourceStart || 0;
+
+    // Left item: keeps original from, new duration
+    const leftItem: typeof item = {
+      ...item,
+      id: crypto.randomUUID(),
+      durationInFrames: leftDuration,
+      // Trim properties stay the same
+    };
+
+    // Right item: new from, new duration, adjusted trim properties
+    const rightItem: typeof item = {
+      ...item,
+      id: crypto.randomUUID(),
+      from: splitFrame,
+      durationInFrames: rightDuration,
+      // Adjust trim/source properties to account for split
+      trimStart: currentTrimStart + leftDuration,
+      sourceStart: currentSourceStart + leftDuration,
+    };
+
+    // Update offset for video/audio items (Remotion compatibility)
+    if (item.type === 'video' || item.type === 'audio') {
+      (leftItem as any).offset = leftItem.trimStart || 0;
+      (rightItem as any).offset = rightItem.trimStart || 0;
+    }
+
+    // Replace original item with the two new items
+    return {
+      items: state.items
+        .filter((i) => i.id !== id)
+        .concat([leftItem, rightItem]),
+    };
+  }),
+
   // Save timeline to project in IndexedDB
   saveTimeline: async (projectId) => {
     const state = useTimelineStore.getState();

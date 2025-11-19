@@ -10,9 +10,11 @@ import {
   ZoomIn,
   ZoomOut,
   Grid3x3,
+  Scissors,
 } from 'lucide-react';
 import { useTimelineZoom } from '../../hooks/use-timeline-zoom';
 import { useTimelineStore } from '../../stores/timeline-store';
+import { useSelectionStore } from '@/features/editor/stores/selection-store';
 
 export interface TimelineHeaderProps {}
 
@@ -29,6 +31,8 @@ export function TimelineHeader(_props: TimelineHeaderProps) {
   const { zoomLevel, zoomIn, zoomOut, setZoom } = useTimelineZoom();
   const snapEnabled = useTimelineStore((s) => s.snapEnabled);
   const toggleSnap = useTimelineStore((s) => s.toggleSnap);
+  const activeTool = useSelectionStore((s) => s.activeTool);
+  const setActiveTool = useSelectionStore((s) => s.setActiveTool);
 
   return (
     <div className="h-11 flex items-center justify-between px-4 border-b border-border">
@@ -85,6 +89,28 @@ export function TimelineHeader(_props: TimelineHeaderProps) {
 
       {/* Timeline Tools */}
       <div className="flex items-center gap-2">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`h-7 text-xs focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 active:scale-100 ${
+                activeTool === 'razor' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''
+              }`}
+              onClick={(e) => {
+                e.currentTarget.blur();
+                setActiveTool(activeTool === 'razor' ? 'select' : 'razor');
+              }}
+            >
+              <Scissors className="w-3 h-3 mr-1.5" />
+              Razor
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {activeTool === 'razor' ? 'Razor Tool Active (C)' : 'Activate Razor Tool (C)'}
+          </TooltipContent>
+        </Tooltip>
+
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

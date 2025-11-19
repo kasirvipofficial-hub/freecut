@@ -17,6 +17,7 @@ export const useSelectionStore = create<SelectionState & SelectionActions>((set)
   selectedTrackIds: [],
   activeTrackId: null,
   selectionType: null,
+  activeTool: 'select',
   dragState: null,
 
   // Actions
@@ -77,4 +78,5 @@ export const useSelectionStore = create<SelectionState & SelectionActions>((set)
     selectionType: state.selectedTrackIds.length > 0 ? 'track' : null,
   })),
   setDragState: (dragState) => set({ dragState }),
+  setActiveTool: (tool) => set({ activeTool: tool }),
 }));

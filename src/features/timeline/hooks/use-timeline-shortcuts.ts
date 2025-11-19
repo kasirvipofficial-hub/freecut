@@ -36,6 +36,8 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
 
   const selectedItemIds = useSelectionStore((s) => s.selectedItemIds);
   const clearSelection = useSelectionStore((s) => s.clearSelection);
+  const activeTool = useSelectionStore((s) => s.activeTool);
+  const setActiveTool = useSelectionStore((s) => s.setActiveTool);
   const removeItems = useTimelineStore((s) => s.removeItems);
 
   // Playback: Space - Play/Pause (global shortcut)
@@ -172,17 +174,19 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
     [clearSelection]
   );
 
-  // Editing: C - Split item at playhead
+  // Tool: C - Toggle Razor Tool
   useHotkeys(
-    HOTKEYS.SPLIT_ITEM,
+    HOTKEYS.RAZOR_TOOL,
     (event) => {
       event.preventDefault();
+      // Toggle razor tool
+      setActiveTool(activeTool === 'razor' ? 'select' : 'razor');
       if (callbacks.onSplit) {
         callbacks.onSplit();
       }
     },
     HOTKEY_OPTIONS,
-    [callbacks]
+    [activeTool, setActiveTool, callbacks]
   );
 
   // History: Cmd/Ctrl+Z - Undo

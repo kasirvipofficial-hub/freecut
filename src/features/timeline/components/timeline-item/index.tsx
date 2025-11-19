@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import type { TimelineItem } from '@/types/timeline';
 import { useTimelineZoom } from '../../hooks/use-timeline-zoom';
 import { useTimelineStore } from '../../stores/timeline-store';
@@ -32,12 +32,17 @@ export interface TimelineItemProps {
  * - Stores trimStart, trimEnd, sourceStart, sourceEnd for each item
  */
 export function TimelineItem({ item, timelineDuration = 30, trackLocked = false }: TimelineItemProps) {
-  const { timeToPixels } = useTimelineZoom();
+  const { timeToPixels, pixelsToFrame } = useTimelineZoom();
   const selectedItemIds = useSelectionStore((s) => s.selectedItemIds);
   const selectItems = useSelectionStore((s) => s.selectItems);
   const dragState = useSelectionStore((s) => s.dragState);
+  const activeTool = useSelectionStore((s) => s.activeTool);
+  const splitItem = useTimelineStore((s) => s.splitItem);
 
   const isSelected = selectedItemIds.includes(item.id);
+
+  // Razor tool hover tracking
+  const [hoverX, setHoverX] = useState<number | null>(null);
 
   // Drag-and-drop functionality (local state for anchor item) - disabled if track is locked
   const { isDragging, dragOffset, handleDragStart } = useTimelineDrag(item, timelineDuration, trackLocked);
@@ -182,11 +187,24 @@ export function TimelineItem({ item, timelineDuration = 30, trackLocked = false 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    // Don't allow selection on locked tracks
+    // Don't allow interaction on locked tracks
     if (trackLocked) {
       return;
     }
 
+    // Razor tool: split item at click position
+    if (activeTool === 'razor') {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickOffsetFrames = pixelsToFrame(clickX);
+      const splitFrame = Math.round(item.from + clickOffsetFrames);
+
+      // Perform split
+      splitItem(item.id, splitFrame);
+      return;
+    }
+
+    // Selection tool: handle item selection
     if (e.metaKey || e.ctrlKey) {
       // Multi-select: add to selection
       if (isSelected) {
@@ -200,6 +218,26 @@ export function TimelineItem({ item, timelineDuration = 30, trackLocked = false 
     }
   };
 
+  const handleMouseMove = (e: React.MouseEvent) => {
+    // Only track hover position when razor tool is active
+    if (activeTool === 'razor' && !trackLocked) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      setHoverX(x);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setHoverX(null);
+  };
+
+  // Calculate snap-to-frame position for split indicator
+  const snapToFrameX = hoverX !== null ? (() => {
+    const hoverOffsetFrames = pixelsToFrame(hoverX);
+    const snappedFrame = Math.round(hoverOffsetFrames);
+    return timeToPixels(snappedFrame / fps);
+  })() : null;
+
   return (
     <div
       ref={transformRef}
@@ -208,7 +246,7 @@ export function TimelineItem({ item, timelineDuration = 30, trackLocked = false 
         absolute top-2 h-12 rounded overflow-hidden transition-all
         ${getItemColor()}
         ${isSelected && !trackLocked ? 'ring-2 ring-primary ring-offset-1 ring-offset-background' : ''}
-        ${trackLocked ? 'cursor-not-allowed opacity-60' : isBeingDragged ? 'cursor-grabbing' : 'cursor-grab'}
+        ${trackLocked ? 'cursor-not-allowed opacity-60' : activeTool === 'razor' ? 'cursor-crosshair' : isBeingDragged ? 'cursor-grabbing' : 'cursor-grab'}
         ${!isBeingDragged && !trackLocked && 'hover:brightness-110'}
       `}
       style={{
@@ -222,11 +260,21 @@ export function TimelineItem({ item, timelineDuration = 30, trackLocked = false 
       }}
       onClick={handleClick}
       onMouseDown={trackLocked || isTrimming ? undefined : handleDragStart}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
     >
       {/* Item label */}
       <div className="px-2 py-1 text-xs font-medium text-primary-foreground truncate">
         {item.label}
       </div>
+
+      {/* Split indicator - shows when hovering with razor tool */}
+      {activeTool === 'razor' && snapToFrameX !== null && !trackLocked && (
+        <div
+          className="absolute top-0 bottom-0 w-0.5 bg-red-500 pointer-events-none z-10"
+          style={{ left: `${snapToFrameX}px` }}
+        />
+      )}
 
       {/* Trim handles - disabled on locked tracks */}
       {isSelected && !trackLocked && (
