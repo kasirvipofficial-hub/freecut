@@ -3,6 +3,8 @@ import { temporal } from 'zundo';
 import type { TimelineState, TimelineActions } from '../types';
 import { getProject, updateProject } from '@/lib/storage/indexeddb';
 import type { ProjectTimeline } from '@/types/project';
+import { usePlaybackStore } from '@/features/preview/stores/playback-store';
+import { useZoomStore } from './zoom-store';
 
 // IMPORTANT: Always use granular selectors to prevent unnecessary re-renders!
 //
@@ -201,6 +203,8 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
   // Save timeline to project in IndexedDB
   saveTimeline: async (projectId) => {
     const state = useTimelineStore.getState();
+    const currentFrame = usePlaybackStore.getState().currentFrame;
+    const zoomLevel = useZoomStore.getState().level;
 
     try {
       // Get the current project
@@ -254,6 +258,9 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
           }
           return baseItem as any;
         }),
+        // Save playback and view state
+        currentFrame,
+        zoomLevel,
       };
 
       // Update project with timeline data
@@ -283,12 +290,24 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
           })),
           items: project.timeline.items as any, // Type assertion needed due to serialization
         });
+
+        // Restore playback and view state
+        if (project.timeline.currentFrame !== undefined) {
+          usePlaybackStore.getState().setCurrentFrame(project.timeline.currentFrame);
+        }
+        if (project.timeline.zoomLevel !== undefined) {
+          useZoomStore.getState().setZoomLevel(project.timeline.zoomLevel);
+        }
       } else {
         // Initialize with empty state for new projects
         set({
           tracks: [],
           items: [],
         });
+
+        // Reset playback and view state for new projects
+        usePlaybackStore.getState().setCurrentFrame(0);
+        useZoomStore.getState().setZoomLevel(1);
       }
     } catch (error) {
       console.error('Failed to load timeline:', error);

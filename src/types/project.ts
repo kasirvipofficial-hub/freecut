@@ -16,6 +16,7 @@ export interface ProjectTimeline {
     name: string;
     height: number;
     locked: boolean;
+    visible: boolean;
     muted: boolean;
     solo: boolean;
     color?: string;
@@ -41,6 +42,9 @@ export interface ProjectTimeline {
     shapeType?: 'rectangle' | 'circle' | 'triangle' | 'solid';
     fillColor?: string;
   }>;
+  // Playback and view state
+  currentFrame?: number;
+  zoomLevel?: number;
 }
 
 export interface ProjectResolution {

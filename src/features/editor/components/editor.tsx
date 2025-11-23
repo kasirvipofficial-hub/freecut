@@ -13,7 +13,8 @@ import { Timeline } from '@/features/timeline/components/timeline';
 import { useTimelineShortcuts } from '@/features/timeline/hooks/use-timeline-shortcuts';
 import { useEditorHotkeys } from '@/hooks/use-editor-hotkeys';
 import { useTimelineStore } from '@/features/timeline/stores/timeline-store';
-import type { TimelineTrack } from '@/types/timeline';
+import { usePlaybackStore } from '@/features/preview/stores/playback-store';
+import { useZoomStore } from '@/features/timeline/stores/zoom-store';
 import type { ProjectTimeline } from '@/types/project';
 
 export interface EditorProps {
@@ -42,6 +43,8 @@ export function Editor({ projectId, project }: EditorProps) {
   // Initialize timeline from project data (or create default tracks for new projects)
   useEffect(() => {
     const { setTracks } = useTimelineStore.getState();
+    const { setCurrentFrame } = usePlaybackStore.getState();
+    const { setZoomLevel } = useZoomStore.getState();
 
     if (project.timeline) {
       // Load timeline from project data (router already loaded it)
@@ -55,6 +58,19 @@ export function Editor({ projectId, project }: EditorProps) {
         tracks: tracksWithItems,
         items: project.timeline.items as any, // Type assertion needed for serialization
       });
+
+      // Restore playback and view state
+      if (project.timeline.currentFrame !== undefined) {
+        setCurrentFrame(project.timeline.currentFrame);
+      } else {
+        setCurrentFrame(0);
+      }
+
+      if (project.timeline.zoomLevel !== undefined) {
+        setZoomLevel(project.timeline.zoomLevel);
+      } else {
+        setZoomLevel(1);
+      }
     } else {
       // Initialize with default tracks for new projects
       setTracks([
@@ -63,6 +79,7 @@ export function Editor({ projectId, project }: EditorProps) {
           name: 'Track 1',
           height: 64,
           locked: false,
+          visible: true,
           muted: false,
           solo: false,
           order: 0,
@@ -73,6 +90,7 @@ export function Editor({ projectId, project }: EditorProps) {
           name: 'Track 2',
           height: 64,
           locked: false,
+          visible: true,
           muted: false,
           solo: false,
           order: 1,
@@ -83,12 +101,17 @@ export function Editor({ projectId, project }: EditorProps) {
           name: 'Track 3',
           height: 56,
           locked: false,
+          visible: true,
           muted: false,
           solo: false,
           order: 2,
           items: [],
         },
       ]);
+
+      // Reset playback and view state for new projects
+      setCurrentFrame(0);
+      setZoomLevel(1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, project.timeline]); // Re-initialize when projectId or timeline data changes
