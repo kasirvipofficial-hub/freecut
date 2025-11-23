@@ -106,9 +106,9 @@ export function convertTimelineToRemotion(
     items: processedItems.filter(item => item.trackId === track.id),
   }));
 
-  // Sort tracks by order (ascending) so they render in correct z-index
-  // Lower order values render first (bottom), higher values render on top
-  const sortedTracks = tracksWithItems.sort((a, b) => a.order - b.order);
+  // Sort tracks in descending order so Track 1 (order: 0) renders last and appears on top
+  // This matches the preview behavior in video-preview.tsx
+  const sortedTracks = tracksWithItems.sort((a, b) => b.order - a.order);
 
   return {
     fps,
