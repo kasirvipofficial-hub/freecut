@@ -43,22 +43,30 @@ export async function extractVideoMetadata(
   try {
     const mb = await getMediabunny();
 
-    // Validate video can be decoded
-    const canDecode = await mb.canDecode(file);
-    if (!canDecode) {
-      throw new Error('Video format not supported by browser');
+    // Create Input with BlobSource for the File object
+    const input = new mb.Input({
+      formats: mb.ALL_FORMATS,
+      source: new mb.BlobSource(file),
+    });
+
+    // Get metadata
+    const durationInSeconds = await input.computeDuration();
+    const videoTrack = await input.getPrimaryVideoTrack();
+
+    if (!videoTrack) {
+      throw new Error('No video track found in file');
     }
 
-    // Get video metadata
-    const metadata = await mb.getMetadata(file);
+    // Get packet stats to compute FPS (read at most 50 packets)
+    const packetStats = await videoTrack.computePacketStats(50);
 
     return {
-      duration: metadata.duration || 0,
-      width: metadata.width || 1920,
-      height: metadata.height || 1080,
-      fps: metadata.fps || 30,
-      codec: metadata.codec || 'unknown',
-      bitrate: metadata.bitrate || 0,
+      duration: durationInSeconds || 0,
+      width: videoTrack.displayWidth || 1920,
+      height: videoTrack.displayHeight || 1080,
+      fps: packetStats?.averagePacketRate || 30,
+      codec: videoTrack.codec || 'unknown',
+      bitrate: 0, // Not directly available from mediabunny API
     };
   } catch (error) {
     console.warn('Failed to extract video metadata with mediabunny:', error);
@@ -118,14 +126,21 @@ export async function extractAudioMetadata(
   try {
     const mb = await getMediabunny();
 
-    // Get audio metadata
-    const metadata = await mb.getMetadata(file);
+    // Create Input with BlobSource for the File object
+    const input = new mb.Input({
+      formats: mb.ALL_FORMATS,
+      source: new mb.BlobSource(file),
+    });
+
+    // Get metadata
+    const durationInSeconds = await input.computeDuration();
+    const audioTrack = await input.getPrimaryAudioTrack();
 
     return {
-      duration: metadata.duration || 0,
-      channels: metadata.channels,
-      sampleRate: metadata.sampleRate,
-      bitrate: metadata.bitrate,
+      duration: durationInSeconds || 0,
+      channels: audioTrack?.channels,
+      sampleRate: audioTrack?.sampleRate,
+      bitrate: 0, // Not directly available from mediabunny API
     };
   } catch (error) {
     console.warn('Failed to extract audio metadata with mediabunny:', error);
