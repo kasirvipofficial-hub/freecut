@@ -8,6 +8,7 @@ export interface TimelineState {
   snapEnabled: boolean;
   inPoint: number | null;
   outPoint: number | null;
+  isDirty: boolean; // Track unsaved changes
 }
 
 export interface TimelineActions {
@@ -27,4 +28,6 @@ export interface TimelineActions {
   saveTimeline: (projectId: string) => Promise<void>;
   loadTimeline: (projectId: string) => Promise<void>;
   clearTimeline: () => void;
+  markDirty: () => void;
+  markClean: () => void;
 }

@@ -2,6 +2,13 @@
  * Thumbnail generation utilities for video projects
  */
 
+import { mediaLibraryService } from '@/features/media-library/services/media-library-service';
+import {
+  generateVideoThumbnail as generateVideoThumbnailFromMediaLib,
+  generateImageThumbnail as generateImageThumbnailFromMediaLib,
+} from '@/features/media-library/utils/thumbnail-generator';
+import type { TimelineItem } from '@/types/timeline';
+
 export interface ThumbnailOptions {
   width?: number;
   height?: number;
@@ -298,5 +305,133 @@ export function resizeThumbnail(
 
     img.onerror = () => reject(new Error('Failed to load image'));
     img.src = dataURL;
+  });
+}
+
+/**
+ * Find the topmost visual item (video/image) at a given frame position
+ * Returns the item from the highest track index (topmost layer)
+ */
+function findTopmostVisualItemAtFrame(
+  items: TimelineItem[],
+  tracks: Array<{ id: string; order?: number }>,
+  frame: number
+): TimelineItem | null {
+  // Create a map of track order (higher order = on top)
+  const trackOrderMap = new Map<string, number>();
+  tracks.forEach((track, index) => {
+    trackOrderMap.set(track.id, track.order ?? index);
+  });
+
+  // Filter to visual items at the current frame
+  const visualItems = items.filter((item) => {
+    // Only consider video and image items
+    if (item.type !== 'video' && item.type !== 'image') {
+      return false;
+    }
+    // Check if frame is within item bounds
+    const itemStart = item.from;
+    const itemEnd = item.from + item.durationInFrames;
+    return frame >= itemStart && frame < itemEnd;
+  });
+
+  if (visualItems.length === 0) {
+    return null;
+  }
+
+  // Sort by track order (descending) to get topmost first
+  visualItems.sort((a, b) => {
+    const orderA = trackOrderMap.get(a.trackId) ?? 0;
+    const orderB = trackOrderMap.get(b.trackId) ?? 0;
+    return orderB - orderA; // Higher order = topmost
+  });
+
+  return visualItems[0] ?? null;
+}
+
+/**
+ * Generate a project thumbnail from the current playhead position
+ *
+ * Finds the topmost video/image at the playhead and generates a thumbnail
+ * from the corresponding frame in the source media.
+ *
+ * @param items - Timeline items array
+ * @param tracks - Timeline tracks array (for determining layer order)
+ * @param currentFrame - Current playhead position in frames
+ * @param fps - Project frames per second
+ * @returns Thumbnail data URL or null if no visual media at playhead
+ */
+export async function generatePlayheadThumbnail(
+  items: TimelineItem[],
+  tracks: Array<{ id: string; order?: number }>,
+  currentFrame: number,
+  fps: number
+): Promise<string | null> {
+  // Find the topmost video/image item at the current frame
+  const item = findTopmostVisualItemAtFrame(items, tracks, currentFrame);
+
+  if (!item) {
+    return null;
+  }
+
+  // Need mediaId to fetch the source file
+  if (!item.mediaId) {
+    return null;
+  }
+
+  try {
+    // Get the media file from OPFS
+    const mediaBlob = await mediaLibraryService.getMediaFile(item.mediaId);
+    if (!mediaBlob) {
+      return null;
+    }
+
+    // Convert Blob to File for the media library thumbnail generators
+    const media = await mediaLibraryService.getMedia(item.mediaId);
+    const file = new File([mediaBlob], media?.fileName || 'media', {
+      type: mediaBlob.type,
+    });
+
+    if (item.type === 'video') {
+      // Calculate the time within the source video
+      // Frame position within the clip
+      const frameInClip = currentFrame - item.from;
+      // Account for trim/offset (sourceStart defaults to 0)
+      const sourceStart = item.sourceStart ?? 0;
+      const frameInSource = sourceStart + frameInClip;
+      // Convert to seconds
+      const timeInSeconds = frameInSource / fps;
+
+      // Use the media library's thumbnail generator
+      const thumbnailBlob = await generateVideoThumbnailFromMediaLib(file, {
+        timestamp: timeInSeconds,
+      });
+
+      // Convert Blob to data URL
+      return await blobToDataURL(thumbnailBlob);
+    } else if (item.type === 'image') {
+      // Use the media library's image thumbnail generator
+      const thumbnailBlob = await generateImageThumbnailFromMediaLib(file);
+
+      // Convert Blob to data URL
+      return await blobToDataURL(thumbnailBlob);
+    }
+
+    return null;
+  } catch (error) {
+    console.warn('Failed to generate playhead thumbnail:', error);
+    return null;
+  }
+}
+
+/**
+ * Convert Blob to data URL
+ */
+function blobToDataURL(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
   });
 }

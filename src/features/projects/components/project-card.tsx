@@ -99,6 +99,7 @@ export function ProjectCard({ project, onEdit }: ProjectCardProps) {
       >
         {project.thumbnail ? (
           <img
+            key={project.updatedAt} // Force re-render when project is updated
             src={project.thumbnail}
             alt={project.name}
             className="w-full h-full object-cover"

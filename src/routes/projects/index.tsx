@@ -23,14 +23,11 @@ import type { ImportProgress } from '@/features/project-bundle/types/bundle';
 export const Route = createFileRoute('/projects/')({
   component: ProjectsIndex,
   // Clean up any media blob URLs when returning to projects page
-  beforeLoad: () => {
+  beforeLoad: async () => {
     cleanupBlobUrls();
-  },
-  loader: async () => {
-    // Load projects from IndexedDB into store
+    // Always reload projects from IndexedDB to get fresh data (thumbnails may have changed)
     const { loadProjects } = useProjectStore.getState();
     await loadProjects();
-    return null;
   },
 });
 

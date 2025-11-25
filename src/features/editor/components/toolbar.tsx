@@ -1,4 +1,5 @@
-import { Link } from '@tanstack/react-router';
+import { useState } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -20,6 +21,7 @@ import {
   FolderArchive,
   ChevronDown,
 } from 'lucide-react';
+import { UnsavedChangesDialog } from './unsaved-changes-dialog';
 
 export interface ToolbarProps {
   projectId: string;
@@ -30,26 +32,55 @@ export interface ToolbarProps {
     height: number;
     fps: number;
   };
-  onSave?: () => void;
+  isDirty?: boolean;
+  onSave?: () => Promise<void>;
   onExport?: () => void;
   onExportBundle?: () => void;
 }
 
-export function Toolbar({ project, onSave, onExport, onExportBundle }: ToolbarProps) {
+export function Toolbar({ project, isDirty = false, onSave, onExport, onExportBundle }: ToolbarProps) {
+  const navigate = useNavigate();
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+
+  const handleBackClick = () => {
+    if (isDirty) {
+      setShowUnsavedDialog(true);
+    } else {
+      navigate({ to: '/projects' });
+    }
+  };
+
+  const handleSave = async () => {
+    if (onSave) {
+      await onSave();
+    }
+  };
+
   return (
     <div className="panel-header h-14 border-b border-border flex items-center px-4 gap-3 flex-shrink-0">
       {/* Project Info */}
       <div className="flex items-center gap-3">
         <Tooltip>
           <TooltipTrigger asChild>
-            <Link to="/projects">
-              <Button variant="ghost" size="icon" className="h-9 w-9">
-                <ArrowLeft className="w-4 h-4" />
-              </Button>
-            </Link>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9"
+              onClick={handleBackClick}
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
           </TooltipTrigger>
           <TooltipContent>Back to Projects</TooltipContent>
         </Tooltip>
+
+        {/* Unsaved Changes Dialog */}
+        <UnsavedChangesDialog
+          open={showUnsavedDialog}
+          onOpenChange={setShowUnsavedDialog}
+          onSave={handleSave}
+          projectName={project?.name}
+        />
 
         <Separator orientation="vertical" className="h-6" />
 
@@ -67,7 +98,7 @@ export function Toolbar({ project, onSave, onExport, onExportBundle }: ToolbarPr
 
       {/* Save & Export */}
       <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" className="gap-2" onClick={onSave}>
+        <Button variant="outline" size="sm" className="gap-2" onClick={handleSave}>
           <Save className="w-4 h-4" />
           Save
         </Button>

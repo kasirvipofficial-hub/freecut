@@ -40,16 +40,11 @@ export async function generateVideoThumbnail(
     canvas.width = opts.width;
     canvas.height = opts.height;
 
-    video.preload = 'metadata';
+    video.preload = 'auto'; // Load more data for better seeking
     video.muted = true;
+    video.playsInline = true;
 
-    video.onloadedmetadata = () => {
-      // Seek to timestamp (ensure it's within video duration)
-      const seekTime = Math.min(opts.timestamp, video.duration - 0.1);
-      video.currentTime = Math.max(0, seekTime);
-    };
-
-    video.onseeked = () => {
+    const drawFrame = () => {
       try {
         // Draw video frame to canvas
         ctx.drawImage(video, 0, 0, opts.width, opts.height);
@@ -71,6 +66,25 @@ export async function generateVideoThumbnail(
         URL.revokeObjectURL(video.src);
         reject(error);
       }
+    };
+
+    video.onloadedmetadata = () => {
+      // Seek to timestamp (ensure it's within video duration)
+      const seekTime = Math.min(opts.timestamp, video.duration - 0.1);
+      video.currentTime = Math.max(0, seekTime);
+    };
+
+    video.onseeked = () => {
+      // Wait a frame for the video to render the new position
+      requestAnimationFrame(() => {
+        // Double-check video is ready to render
+        if (video.readyState >= 2) {
+          drawFrame();
+        } else {
+          // Wait for enough data to render
+          video.oncanplay = drawFrame;
+        }
+      });
     };
 
     video.onerror = () => {

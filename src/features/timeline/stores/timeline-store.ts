@@ -5,6 +5,7 @@ import { getProject, updateProject } from '@/lib/storage/indexeddb';
 import type { ProjectTimeline } from '@/types/project';
 import { usePlaybackStore } from '@/features/preview/stores/playback-store';
 import { useZoomStore } from './zoom-store';
+import { generatePlayheadThumbnail } from '@/features/projects/utils/thumbnail-generator';
 
 // IMPORTANT: Always use granular selectors to prevent unnecessary re-renders!
 //
@@ -31,15 +32,18 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
   snapEnabled: true,
   inPoint: null,
   outPoint: null,
+  isDirty: false,
 
   // Actions
-  setTracks: (tracks) => set({ tracks }),
-  addItem: (item) => set((state) => ({ items: [...state.items, item as any] })),
+  setTracks: (tracks) => set({ tracks, isDirty: true }),
+  addItem: (item) => set((state) => ({ items: [...state.items, item as any], isDirty: true })),
   updateItem: (id, updates) => set((state) => ({
     items: state.items.map((i) => (i.id === id ? { ...i, ...updates } : i)),
+    isDirty: true,
   })),
   removeItems: (ids) => set((state) => ({
     items: state.items.filter((i) => !ids.includes(i.id)),
+    isDirty: true,
   })),
   toggleSnap: () => set((state) => ({ snapEnabled: !state.snapEnabled })),
   moveItem: (id, newFrom, newTrackId) => set((state) => ({
@@ -48,6 +52,7 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
         ? { ...i, from: newFrom, ...(newTrackId && { trackId: newTrackId }) }
         : i
     ),
+    isDirty: true,
   })),
   moveItems: (updates) => set((state) => {
     const updateMap = new Map(updates.map((u) => [u.id, u]));
@@ -58,6 +63,7 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
           ? { ...i, from: update.from, ...(update.trackId && { trackId: update.trackId }) }
           : i;
       }),
+      isDirty: true,
     };
   }),
 
@@ -107,6 +113,7 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
 
       return { ...item, ...updates };
     }),
+    isDirty: true,
   })),
 
   // Trim item from end: increases trimEnd and adjusts duration
@@ -142,6 +149,7 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
         durationInFrames: newDuration,
       };
     }),
+    isDirty: true,
   })),
 
   // Split item at the specified frame
@@ -202,6 +210,7 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
       items: state.items
         .filter((i) => i.id !== id)
         .concat([leftItem, rightItem]),
+      isDirty: true,
     };
   }),
 
@@ -214,28 +223,28 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
 
     // If out-point doesn't exist, set it to the last frame
     if (state.outPoint === null) {
-      return { inPoint: frame, outPoint: Math.max(maxEndFrame, frame + 1) };
+      return { inPoint: frame, outPoint: Math.max(maxEndFrame, frame + 1), isDirty: true };
     }
 
     // If out-point exists and in-point would exceed it, move out-point to last frame
     if (frame >= state.outPoint) {
-      return { inPoint: frame, outPoint: Math.max(maxEndFrame, frame + 1) };
+      return { inPoint: frame, outPoint: Math.max(maxEndFrame, frame + 1), isDirty: true };
     }
-    return { inPoint: frame };
+    return { inPoint: frame, isDirty: true };
   }),
   setOutPoint: (frame) => set((state) => {
     // If in-point doesn't exist, set it to frame 0
     if (state.inPoint === null) {
-      return { inPoint: 0, outPoint: frame };
+      return { inPoint: 0, outPoint: frame, isDirty: true };
     }
 
     // If in-point exists and out-point would go before it, move in-point to frame 0
     if (frame <= state.inPoint) {
-      return { inPoint: 0, outPoint: frame };
+      return { inPoint: 0, outPoint: frame, isDirty: true };
     }
-    return { outPoint: frame };
+    return { outPoint: frame, isDirty: true };
   }),
-  clearInOutPoints: () => set({ inPoint: null, outPoint: null }),
+  clearInOutPoints: () => set({ inPoint: null, outPoint: null, isDirty: true }),
 
   // Save timeline to project in IndexedDB
   saveTimeline: async (projectId) => {
@@ -304,10 +313,33 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
         ...(state.outPoint !== null && { outPoint: state.outPoint }),
       };
 
-      // Update project with timeline data
+      // Generate thumbnail from playhead position (non-blocking)
+      // Only update if there's visual content at playhead
+      let thumbnail: string | undefined;
+      try {
+        const fps = project.metadata?.fps || 30;
+        const playheadThumbnail = await generatePlayheadThumbnail(
+          state.items,
+          state.tracks,
+          currentFrame,
+          fps
+        );
+        if (playheadThumbnail) {
+          thumbnail = playheadThumbnail;
+        }
+      } catch (thumbError) {
+        // Thumbnail generation failure shouldn't block save
+        console.warn('Failed to generate playhead thumbnail:', thumbError);
+      }
+
+      // Update project with timeline data and thumbnail (if generated)
       await updateProject(projectId, {
         timeline: timelineData,
+        ...(thumbnail && { thumbnail }),
       });
+
+      // Mark as clean after successful save
+      set({ isDirty: false });
     } catch (error) {
       console.error('Failed to save timeline:', error);
       throw error;
@@ -333,6 +365,7 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
           // Restore in/out points
           inPoint: project.timeline.inPoint ?? null,
           outPoint: project.timeline.outPoint ?? null,
+          isDirty: false, // Fresh load is clean
         });
 
         // Restore playback and view state
@@ -349,6 +382,7 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
           items: [],
           inPoint: null,
           outPoint: null,
+          isDirty: false, // New project starts clean
         });
 
         // Reset playback and view state for new projects
@@ -366,6 +400,11 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
     tracks: [],
     items: [],
     scrollPosition: 0,
+    isDirty: false,
   }),
+
+  // Dirty state management
+  markDirty: () => set({ isDirty: true }),
+  markClean: () => set({ isDirty: false }),
   }))
 );

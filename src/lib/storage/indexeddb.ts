@@ -264,7 +264,7 @@ export async function updateProject(
       ...existing,
       ...updates,
       id, // Ensure ID doesn't change
-      updatedAt: new Date().toISOString(), // Update timestamp
+      updatedAt: Date.now(), // Update timestamp
     };
 
     await db.put('projects', updated);

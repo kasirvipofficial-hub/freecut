@@ -2,10 +2,11 @@ export interface Project {
   id: string;
   name: string;
   description: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: number;
+  updatedAt: number;
   duration: number;
-  thumbnailUrl?: string;
+  thumbnail?: string; // Data URL of project thumbnail (from playhead)
+  thumbnailUrl?: string; // External URL (deprecated, use thumbnail)
   metadata: ProjectResolution;
   timeline?: ProjectTimeline;
 }

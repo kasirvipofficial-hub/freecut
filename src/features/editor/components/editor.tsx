@@ -135,6 +135,9 @@ export function Editor({ projectId, project }: EditorProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, project.timeline]); // Re-initialize when projectId or timeline data changes
 
+  // Track unsaved changes
+  const isDirty = useTimelineStore((s) => s.isDirty);
+
   // Save timeline to project
   const handleSave = async () => {
     const { saveTimeline } = useTimelineStore.getState();
@@ -145,6 +148,7 @@ export function Editor({ projectId, project }: EditorProps) {
     } catch (error) {
       console.error('Failed to save project:', error);
       // TODO: Show error toast notification
+      throw error; // Re-throw so callers know save failed
     }
   };
 
@@ -201,6 +205,7 @@ export function Editor({ projectId, project }: EditorProps) {
         <Toolbar
           projectId={projectId}
           project={project}
+          isDirty={isDirty}
           onSave={handleSave}
           onExport={handleExport}
           onExportBundle={handleExportBundle}
