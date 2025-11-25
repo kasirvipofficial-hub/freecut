@@ -168,13 +168,16 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
     // Create base properties for both items
     const currentTrimStart = item.trimStart || 0;
     const currentSourceStart = item.sourceStart || 0;
+    const currentTrimEnd = item.trimEnd || 0;
 
-    // Left item: keeps original from, new duration
+    // Left item: keeps original from, new duration, updated end trim
     const leftItem: typeof item = {
       ...item,
       id: crypto.randomUUID(),
       durationInFrames: leftDuration,
-      // Trim properties stay the same
+      // Update sourceEnd and trimEnd for left item
+      sourceEnd: currentSourceStart + leftDuration,
+      trimEnd: currentTrimEnd + rightDuration,
     };
 
     // Right item: new from, new duration, adjusted trim properties
