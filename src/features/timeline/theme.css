@@ -12,12 +12,17 @@
 
 @theme {
   /* Timeline item type colors - OKLCH format */
-  --color-timeline-video: oklch(0.7 0.0765 276.35);  
-  --color-timeline-audio: oklch(0.7 0.1209 301.76);      
+  --color-timeline-video: oklch(0.7 0.0765 276.35);
+  --color-timeline-audio: oklch(0.7 0.1209 301.76);
   --color-timeline-image: oklch(0.62 0.17 250);      /* Blue (same as video) */
   --color-timeline-text: oklch(0.65 0.15 290);       /* Purple */
   --color-timeline-shape: oklch(0.68 0.19 45);       /* Orange */
 
   /* Playhead color */
   --color-timeline-playhead: oklch(0.68 0.19 45);    /* Orange (matches primary) */
+}
+
+/* Scissors cursor for razor/cut tool - uses Lucide scissors icon */
+.cursor-scissors {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='6' cy='6' r='3'/%3E%3Cpath d='M8.12 8.12 12 12'/%3E%3Cpath d='M20 4 8.12 15.88'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Cpath d='M14.8 14.8 20 20'/%3E%3C/svg%3E") 12 12, crosshair !important;
 }

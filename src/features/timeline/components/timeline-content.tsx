@@ -14,6 +14,7 @@ import { TimelineMarkers } from './timeline-markers';
 import { TimelinePlayhead } from './timeline-playhead';
 import { TimelineTrack } from './timeline-track';
 import { TimelineGuidelines } from './timeline-guidelines';
+import { TimelineSplitIndicator } from './timeline-split-indicator';
 import { MarqueeOverlay } from '@/components/marquee-overlay';
 
 export interface TimelineContentProps {
@@ -50,6 +51,11 @@ export function TimelineContent({ duration, scrollRef, onZoomHandlersReady }: Ti
   const selectItems = useSelectionStore((s) => s.selectItems);
   const clearItemSelection = useSelectionStore((s) => s.clearItemSelection);
   const dragState = useSelectionStore((s) => s.dragState);
+  const activeTool = useSelectionStore((s) => s.activeTool);
+
+  // Track cursor position for razor tool - only when hovering over an item
+  const [razorCursorX, setRazorCursorX] = useState<number | null>(null);
+  const [isHoveringItem, setIsHoveringItem] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -172,6 +178,33 @@ export function TimelineContent({ duration, scrollRef, onZoomHandlersReady }: Ti
       clearItemSelection();
     }
   };
+
+  // Track cursor position for razor tool split indicator - only over items
+  const handleMouseMoveForRazor = useCallback((e: React.MouseEvent) => {
+    if (activeTool !== 'razor') {
+      if (razorCursorX !== null) setRazorCursorX(null);
+      if (isHoveringItem) setIsHoveringItem(false);
+      return;
+    }
+
+    // Check if we're hovering over a timeline item
+    const target = e.target as HTMLElement;
+    const itemElement = target.closest('[data-item-id]');
+
+    if (itemElement) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setRazorCursorX(e.clientX - rect.left);
+      if (!isHoveringItem) setIsHoveringItem(true);
+    } else {
+      if (razorCursorX !== null) setRazorCursorX(null);
+      if (isHoveringItem) setIsHoveringItem(false);
+    }
+  }, [activeTool, razorCursorX, isHoveringItem]);
+
+  const handleMouseLeaveForRazor = useCallback(() => {
+    setRazorCursorX(null);
+    setIsHoveringItem(false);
+  }, []);
 
   // Calculate the actual timeline duration and width based on content
   const { actualDuration, timelineWidth } = useMemo(() => {
@@ -304,7 +337,12 @@ export function TimelineContent({ duration, scrollRef, onZoomHandlersReady }: Ti
       </div>
 
       {/* Track lanes */}
-      <div className="relative timeline-tracks" style={{ width: `${timelineWidth}px` }}>
+      <div
+        className="relative timeline-tracks"
+        style={{ width: `${timelineWidth}px` }}
+        onMouseMove={handleMouseMoveForRazor}
+        onMouseLeave={handleMouseLeaveForRazor}
+      >
         {tracks.map((track) => (
           <TimelineTrack key={track.id} track={track} items={items} timelineWidth={timelineWidth} />
         ))}
@@ -314,6 +352,11 @@ export function TimelineContent({ duration, scrollRef, onZoomHandlersReady }: Ti
           <TimelineGuidelines
             activeSnapTarget={dragState.activeSnapTarget ?? null}
           />
+        )}
+
+        {/* Split indicator (shown in razor mode when hovering over an item) */}
+        {activeTool === 'razor' && isHoveringItem && (
+          <TimelineSplitIndicator cursorX={razorCursorX} />
         )}
 
         {/* Playhead line through all tracks */}

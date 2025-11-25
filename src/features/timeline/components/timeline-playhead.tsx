@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 
 // Stores and selectors
 import { usePlaybackStore } from '@/features/preview/stores/playback-store';
+import { useSelectionStore } from '@/features/editor/stores/selection-store';
 
 // Utilities and hooks
 import { useTimelineZoom } from '../hooks/use-timeline-zoom';
@@ -26,6 +27,7 @@ export function TimelinePlayhead({ inRuler = false }: TimelinePlayheadProps) {
   const { frameToPixels, pixelsToFrame } = useTimelineZoom();
 
   const [isDragging, setIsDragging] = useState(false);
+  const activeTool = useSelectionStore((s) => s.activeTool);
   const playheadRef = useRef<HTMLDivElement>(null);
 
   // Use refs to avoid stale closures
@@ -106,8 +108,8 @@ export function TimelinePlayhead({ inRuler = false }: TimelinePlayheadProps) {
           style={{
             left: '-6px', // Center the 14px wide area on the 2px line
             width: '14px',
-            cursor: isDragging ? 'grabbing' : 'grab',
-            pointerEvents: 'auto',
+            cursor: activeTool === 'razor' ? 'default' : isDragging ? 'grabbing' : 'grab',
+            pointerEvents: activeTool === 'razor' ? 'none' : 'auto', // Pass through clicks in razor mode
             backgroundColor: 'transparent',
           }}
           onMouseDown={handleMouseDown}
@@ -134,7 +136,7 @@ export function TimelinePlayhead({ inRuler = false }: TimelinePlayheadProps) {
               width: '20px',
               height: '20px',
               transform: 'translateX(-50%)',
-              cursor: isDragging ? 'grabbing' : 'grab',
+              cursor: activeTool === 'razor' ? 'default' : isDragging ? 'grabbing' : 'grab',
               pointerEvents: 'auto',
               backgroundColor: 'transparent',
             }}
