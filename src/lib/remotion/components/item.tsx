@@ -72,7 +72,7 @@ export const Item: React.FC<ItemProps> = ({ item, muted = false }) => {
         <OffthreadVideo
           src={item.src}
           trimBefore={safeTrimBefore > 0 ? safeTrimBefore : undefined}
-          volume={muted ? 0 : 1}
+          volume={() => (muted ? 0 : 1)}
           playbackRate={playbackRate}
           pauseWhenBuffering
         />
@@ -109,7 +109,7 @@ export const Item: React.FC<ItemProps> = ({ item, muted = false }) => {
       <Audio
         src={item.src}
         trimBefore={trimBefore > 0 ? trimBefore : undefined}
-        volume={muted ? 0 : 1}
+        volume={() => (muted ? 0 : 1)}
         playbackRate={playbackRate}
       />
     );
