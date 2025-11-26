@@ -142,13 +142,33 @@ export function Timeline({ duration }: TimelineProps) {
   }, []);
 
   /**
+   * Generate a unique track name by finding the next available number
+   */
+  const getNextTrackName = () => {
+    // Extract existing track numbers from names like "Track 1", "Track 2", etc.
+    const existingNumbers = tracks
+      .map(t => {
+        const match = t.name.match(/^Track (\d+)$/);
+        return match && match[1] ? parseInt(match[1], 10) : 0;
+      })
+      .filter(n => n > 0);
+
+    // Find the smallest available number starting from 1
+    let nextNumber = 1;
+    while (existingNumbers.includes(nextNumber)) {
+      nextNumber++;
+    }
+    return `Track ${nextNumber}`;
+  };
+
+  /**
    * Handle adding a new track
    * Inserts before the active track (appears above it), or at the top if no active track
    */
   const handleAddTrack = () => {
     const newTrack: TimelineTrack = {
       id: `track-${Date.now()}`,
-      name: `Track ${tracks.length + 1}`,
+      name: getNextTrackName(),
       height: DEFAULT_TRACK_HEIGHT,
       locked: false,
       visible: true,

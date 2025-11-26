@@ -11,7 +11,7 @@ import { generateStableKey } from '../utils/generate-stable-key';
  * - Media items (video/audio) rendered at composition level for stable keys
  *   This prevents remounting when items are split or moved across tracks
  * - Non-media items (text, images, shapes) rendered per-track
- * - Z-index based on track order for proper layering
+ * - Z-index based on track order for proper layering (top track = highest z-index)
  * - Respects track visibility, mute, and solo states
  * - Pre-mounts media items 2 seconds early for smooth transitions
  */
@@ -20,6 +20,9 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks }) => {
   const currentFrame = useCurrentFrame();
   const hasSoloTracks = tracks.some((track) => track.solo);
 
+  // Calculate max order for z-index inversion (top track should have highest z-index)
+  const maxOrder = Math.max(...tracks.map((t) => t.order ?? 0), 0);
+
   // Filter visible tracks
   const visibleTracks = tracks.filter((track) => {
     if (hasSoloTracks) return track.solo;
@@ -27,12 +30,13 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks }) => {
   });
 
   // Collect ALL media items (video/audio) from visible tracks with z-index and mute state
+  // Invert z-index: top track (order=0) gets highest z-index, bottom track gets lowest
   const mediaItems = visibleTracks.flatMap((track) =>
     track.items
       .filter((item) => item.type === 'video' || item.type === 'audio')
       .map((item) => ({
         ...item,
-        zIndex: track.order,
+        zIndex: maxOrder - (track.order ?? 0),
         muted: track.muted,
       }))
   );
@@ -85,10 +89,11 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks }) => {
 
       {/* NON-MEDIA LAYERS - Track-based rendering for text/shapes/images */}
       {/* z-index: 1001+ range so they appear above clearing layer */}
+      {/* Invert z-index: top track (order=0) gets highest z-index */}
       {nonMediaByTrack
         .filter((track) => track.items.length > 0)
         .map((track) => (
-          <AbsoluteFill key={track.id} style={{ zIndex: 1001 + track.order }}>
+          <AbsoluteFill key={track.id} style={{ zIndex: 1001 + (maxOrder - (track.order ?? 0)) }}>
             {track.items.map((item) => (
               <Sequence
                 key={item.id}

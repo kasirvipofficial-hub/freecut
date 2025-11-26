@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo, memo, useCallback } from 'react';
+import { useRef, useEffect, useMemo, memo, useCallback, useState } from 'react';
 import type { TimelineItem as TimelineItemType } from '@/types/timeline';
 import { useTimelineZoom } from '../../hooks/use-timeline-zoom';
 import { useTimelineStore } from '../../stores/timeline-store';
@@ -7,6 +7,9 @@ import { useTimelineDrag, dragOffsetRef } from '../../hooks/use-timeline-drag';
 import { useTimelineTrim } from '../../hooks/use-timeline-trim';
 import { useRateStretch } from '../../hooks/use-rate-stretch';
 import { DRAG_OPACITY } from '../../constants';
+
+// Width in pixels for edge hover detection (trim/rate-stretch handles)
+const EDGE_HOVER_ZONE = 8;
 
 export interface TimelineItemProps {
   item: TimelineItemType;
@@ -41,6 +44,9 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
 
   const isSelected = selectedItemIds.includes(item.id);
 
+  // Track which edge is being hovered for showing trim/rate-stretch handles
+  const [hoveredEdge, setHoveredEdge] = useState<'start' | 'end' | null>(null);
+
   // Drag-and-drop functionality (local state for anchor item) - disabled if track is locked
   const { isDragging, dragOffset, handleDragStart } = useTimelineDrag(item, timelineDuration, trackLocked);
 
@@ -48,7 +54,7 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
   const { isTrimming, trimHandle, trimDelta, handleTrimStart } = useTimelineTrim(item, trackLocked);
 
   // Rate stretch functionality - disabled if track is locked
-  const { isStretching, handleStretchStart, getVisualFeedback } = useRateStretch(item, trackLocked);
+  const { isStretching, stretchHandle, handleStretchStart, getVisualFeedback } = useRateStretch(item, trackLocked);
 
   // Granular selector: only re-render when THIS item's drag participation changes
   const isPartOfMultiDrag = useSelectionStore(
@@ -245,12 +251,32 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
     }
   };
 
-  // Determine cursor class based on tool and state
+  // Handle mouse move to detect edge hover for trim/rate-stretch handles
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (trackLocked || activeTool === 'razor') {
+      setHoveredEdge(null);
+      return;
+    }
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const itemWidth = rect.width;
+
+    if (x <= EDGE_HOVER_ZONE) {
+      setHoveredEdge('start');
+    } else if (x >= itemWidth - EDGE_HOVER_ZONE) {
+      setHoveredEdge('end');
+    } else {
+      setHoveredEdge(null);
+    }
+  }, [trackLocked, activeTool]);
+
+  // Determine cursor class based on tool, state, and edge hover
   const cursorClass = trackLocked
     ? 'cursor-not-allowed opacity-60'
     : activeTool === 'razor'
     ? 'cursor-scissors'
-    : activeTool === 'rate-stretch'
+    : hoveredEdge !== null && (activeTool === 'select' || activeTool === 'rate-stretch')
     ? 'cursor-ew-resize'
     : isBeingDragged
     ? 'cursor-grabbing'
@@ -263,7 +289,6 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
       className={`
         absolute top-2 h-12 rounded overflow-hidden transition-all
         ${itemColorClasses}
-        ${isSelected && !trackLocked ? 'ring-2 ring-primary ring-offset-1 ring-offset-background' : ''}
         ${cursorClass}
         ${!isBeingDragged && !isStretching && !trackLocked && 'hover:brightness-110'}
       `}
@@ -277,8 +302,17 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
         pointerEvents: isDragging ? 'none' : 'auto',
       }}
       onClick={handleClick}
-      onMouseDown={trackLocked || isTrimming || isStretching || activeTool === 'razor' || activeTool === 'rate-stretch' ? undefined : handleDragStart}
+      onMouseDown={trackLocked || isTrimming || isStretching || activeTool === 'razor' || activeTool === 'rate-stretch' || hoveredEdge !== null ? undefined : handleDragStart}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => setHoveredEdge(null)}
     >
+      {/* Selection indicator - inset to prevent overlap with adjacent clips */}
+      {isSelected && !trackLocked && (
+        <div
+          className="absolute inset-0 rounded pointer-events-none z-20 ring-2 ring-inset ring-primary"
+        />
+      )}
+
       {/* Item label */}
       <div className="px-2 py-1 text-xs font-medium text-primary-foreground truncate">
         {item.label}
@@ -300,35 +334,43 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
         </div>
       )}
 
-      {/* Trim handles - disabled on locked tracks and when in razor/rate-stretch mode */}
-      {isSelected && !trackLocked && activeTool === 'select' && (
+      {/* Trim handles - show on edge hover or while actively trimming */}
+      {!trackLocked && activeTool === 'select' && (
         <>
-          {/* Left trim handle */}
-          <div
-            className="absolute left-0 top-0 bottom-0 w-1 bg-primary cursor-ew-resize"
-            onMouseDown={(e) => handleTrimStart(e, 'start')}
-          />
-          {/* Right trim handle */}
-          <div
-            className="absolute right-0 top-0 bottom-0 w-1 bg-primary cursor-ew-resize"
-            onMouseDown={(e) => handleTrimStart(e, 'end')}
-          />
+          {/* Left trim handle - w-2 (8px) matches EDGE_HOVER_ZONE */}
+          {(hoveredEdge === 'start' || (isTrimming && trimHandle === 'start')) && (
+            <div
+              className="absolute left-0 top-0 bottom-0 w-2 bg-primary cursor-ew-resize"
+              onMouseDown={(e) => handleTrimStart(e, 'start')}
+            />
+          )}
+          {/* Right trim handle - w-2 (8px) matches EDGE_HOVER_ZONE */}
+          {(hoveredEdge === 'end' || (isTrimming && trimHandle === 'end')) && (
+            <div
+              className="absolute right-0 top-0 bottom-0 w-2 bg-primary cursor-ew-resize"
+              onMouseDown={(e) => handleTrimStart(e, 'end')}
+            />
+          )}
         </>
       )}
 
-      {/* Rate stretch handles - only for video/audio items in rate-stretch mode */}
-      {isSelected && !trackLocked && activeTool === 'rate-stretch' && isMediaItem && (
+      {/* Rate stretch handles - show on edge hover or while actively stretching */}
+      {!trackLocked && activeTool === 'rate-stretch' && isMediaItem && (
         <>
-          {/* Left stretch handle */}
-          <div
-            className="absolute left-0 top-0 bottom-0 w-1 bg-orange-500 cursor-ew-resize"
-            onMouseDown={(e) => handleStretchStart(e, 'start')}
-          />
-          {/* Right stretch handle */}
-          <div
-            className="absolute right-0 top-0 bottom-0 w-1 bg-orange-500 cursor-ew-resize"
-            onMouseDown={(e) => handleStretchStart(e, 'end')}
-          />
+          {/* Left stretch handle - w-2 (8px) matches EDGE_HOVER_ZONE */}
+          {(hoveredEdge === 'start' || (isStretching && stretchHandle === 'start')) && (
+            <div
+              className="absolute left-0 top-0 bottom-0 w-2 bg-orange-500 cursor-ew-resize"
+              onMouseDown={(e) => handleStretchStart(e, 'start')}
+            />
+          )}
+          {/* Right stretch handle - w-2 (8px) matches EDGE_HOVER_ZONE */}
+          {(hoveredEdge === 'end' || (isStretching && stretchHandle === 'end')) && (
+            <div
+              className="absolute right-0 top-0 bottom-0 w-2 bg-orange-500 cursor-ew-resize"
+              onMouseDown={(e) => handleStretchStart(e, 'end')}
+            />
+          )}
         </>
       )}
     </div>

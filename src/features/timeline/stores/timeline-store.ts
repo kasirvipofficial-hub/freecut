@@ -419,11 +419,18 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
 
       if (project.timeline) {
         // Restore tracks and items from project
-        set({
-          tracks: project.timeline.tracks.map(track => ({
+        // Sort tracks by order property to preserve user's track arrangement
+        // Use original array index as fallback for tracks without order property
+        const sortedTracks = project.timeline.tracks
+          .map((track, index) => ({ track, originalIndex: index }))
+          .sort((a, b) => (a.track.order ?? a.originalIndex) - (b.track.order ?? b.originalIndex))
+          .map(({ track }) => ({
             ...track,
             items: [], // Items are stored separately
-          })),
+          }));
+
+        set({
+          tracks: sortedTracks,
           items: project.timeline.items as any, // Type assertion needed due to serialization
           // Restore in/out points
           inPoint: project.timeline.inPoint ?? null,

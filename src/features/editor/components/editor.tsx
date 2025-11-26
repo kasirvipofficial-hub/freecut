@@ -61,9 +61,16 @@ export function Editor({ projectId, project }: EditorProps) {
         items: [], // Items are stored separately in the store
       }));
 
+      // Sort tracks by order property to preserve user's track arrangement
+      // Use original array index as fallback for tracks without order property
+      const sortedTracks = tracksWithItems
+        .map((track, index) => ({ track, originalIndex: index }))
+        .sort((a, b) => (a.track.order ?? a.originalIndex) - (b.track.order ?? b.originalIndex))
+        .map(({ track }) => track);
+
       // Set both tracks and items from project data
       useTimelineStore.setState({
-        tracks: tracksWithItems,
+        tracks: sortedTracks,
         items: project.timeline.items as any, // Type assertion needed for serialization
         inPoint: project.timeline.inPoint ?? null,
         outPoint: project.timeline.outPoint ?? null,
