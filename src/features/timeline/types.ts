@@ -1,8 +1,9 @@
-import type { TimelineTrack, TimelineItem } from '@/types/timeline';
+import type { TimelineTrack, TimelineItem, ProjectMarker } from '@/types/timeline';
 
 export interface TimelineState {
   tracks: TimelineTrack[];
   items: TimelineItem[];
+  markers: ProjectMarker[];
   fps: number;
   scrollPosition: number;
   snapEnabled: boolean;
@@ -27,6 +28,10 @@ export interface TimelineActions {
   setInPoint: (frame: number) => void;
   setOutPoint: (frame: number) => void;
   clearInOutPoints: () => void;
+  // Marker actions
+  addMarker: (frame: number, color?: string, label?: string) => void;
+  updateMarker: (id: string, updates: Partial<Omit<ProjectMarker, 'id'>>) => void;
+  removeMarker: (id: string) => void;
   saveTimeline: (projectId: string) => Promise<void>;
   loadTimeline: (projectId: string) => Promise<void>;
   clearTimeline: () => void;

@@ -51,6 +51,13 @@ export interface ProjectTimeline {
   // In/Out markers
   inPoint?: number;
   outPoint?: number;
+  // Project markers
+  markers?: Array<{
+    id: string;
+    frame: number;
+    label?: string;
+    color: string;
+  }>;
 }
 
 export interface ProjectResolution {

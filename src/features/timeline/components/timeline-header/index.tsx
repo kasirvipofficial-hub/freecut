@@ -18,6 +18,7 @@ import {
   MousePointer2,
   Undo2,
   Redo2,
+  Flag,
 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { useTimelineZoom } from '../../hooks/use-timeline-zoom';
@@ -49,6 +50,7 @@ export function TimelineHeader({ onZoomChange, onZoomIn, onZoomOut }: TimelineHe
   const setInPoint = useTimelineStore((s) => s.setInPoint);
   const setOutPoint = useTimelineStore((s) => s.setOutPoint);
   const clearInOutPoints = useTimelineStore((s) => s.clearInOutPoints);
+  const addMarker = useTimelineStore((s) => s.addMarker);
   const currentFrame = usePlaybackStore((s) => s.currentFrame);
   const activeTool = useSelectionStore((s) => s.activeTool);
   const setActiveTool = useSelectionStore((s) => s.setActiveTool);
@@ -199,6 +201,20 @@ export function TimelineHeader({ onZoomChange, onZoomIn, onZoomOut }: TimelineHe
               </Button>
             </TooltipTrigger>
             <TooltipContent>Clear In/Out Points</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => addMarker(currentFrame)}
+              >
+                <Flag className="w-3.5 h-3.5" style={{ color: 'oklch(0.65 0.20 250)' }} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Add Marker (M)</TooltipContent>
           </Tooltip>
         </div>
 

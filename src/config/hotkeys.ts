@@ -58,6 +58,11 @@ export const HOTKEYS = {
   FULLSCREEN_PREVIEW: 'f',
   TOGGLE_TIMELINE_ZOOM: '`',
   TOGGLE_SNAP: 's',
+
+  // Markers
+  ADD_MARKER: 'm',
+  PREVIOUS_MARKER: '[',
+  NEXT_MARKER: ']',
 } as const;
 
 export type HotkeyKey = keyof typeof HOTKEYS;
@@ -119,6 +124,11 @@ export const HOTKEY_DESCRIPTIONS: Record<HotkeyKey, string> = {
   FULLSCREEN_PREVIEW: 'Fullscreen preview',
   TOGGLE_TIMELINE_ZOOM: 'Toggle timeline zoom',
   TOGGLE_SNAP: 'Toggle snap',
+
+  // Markers
+  ADD_MARKER: 'Add marker at playhead',
+  PREVIOUS_MARKER: 'Jump to previous marker',
+  NEXT_MARKER: 'Jump to next marker',
 };
 
 /**

@@ -42,6 +42,8 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
   const removeItems = useTimelineStore((s) => s.removeItems);
   const toggleSnap = useTimelineStore((s) => s.toggleSnap);
   const items = useTimelineStore((s) => s.items);
+  const markers = useTimelineStore((s) => s.markers);
+  const addMarker = useTimelineStore((s) => s.addMarker);
 
   // Calculate all unique clip edges (start and end frames) sorted ascending
   const clipEdges = useMemo(() => {
@@ -299,5 +301,53 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
     },
     HOTKEY_OPTIONS,
     [toggleSnap]
+  );
+
+  // Markers: M - Add marker at playhead
+  useHotkeys(
+    HOTKEYS.ADD_MARKER,
+    (event) => {
+      event.preventDefault();
+      addMarker(currentFrame);
+    },
+    HOTKEY_OPTIONS,
+    [addMarker, currentFrame]
+  );
+
+  // Markers: [ - Jump to previous marker
+  useHotkeys(
+    HOTKEYS.PREVIOUS_MARKER,
+    (event) => {
+      event.preventDefault();
+      // Find the previous marker before current frame
+      let previousMarker: number | undefined;
+      for (let i = markers.length - 1; i >= 0; i--) {
+        const marker = markers[i];
+        if (marker && marker.frame < currentFrame) {
+          previousMarker = marker.frame;
+          break;
+        }
+      }
+      if (previousMarker !== undefined) {
+        setCurrentFrame(previousMarker);
+      }
+    },
+    HOTKEY_OPTIONS,
+    [setCurrentFrame, currentFrame, markers]
+  );
+
+  // Markers: ] - Jump to next marker
+  useHotkeys(
+    HOTKEYS.NEXT_MARKER,
+    (event) => {
+      event.preventDefault();
+      // Find the next marker after current frame
+      const nextMarker = markers.find((m) => m.frame > currentFrame);
+      if (nextMarker) {
+        setCurrentFrame(nextMarker.frame);
+      }
+    },
+    HOTKEY_OPTIONS,
+    [setCurrentFrame, currentFrame, markers]
   );
 }

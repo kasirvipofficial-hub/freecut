@@ -1,0 +1,142 @@
+// React and external libraries
+import { useState, useCallback, useEffect, useRef } from 'react';
+
+// Stores and selectors
+import { useTimelineStore } from '../stores/timeline-store';
+
+// Utilities and hooks
+import { useTimelineZoom } from '../hooks/use-timeline-zoom';
+
+// Types
+import type { ProjectMarker } from '@/types/timeline';
+
+/**
+ * Timeline Project Markers Component
+ *
+ * Renders user-created markers on the timeline ruler
+ * - Triangle handles pointing down (like playhead diamond but inverted)
+ * - Vertical line across the ruler
+ * - Draggable for repositioning
+ * - Shows label tooltip on hover
+ */
+export function TimelineProjectMarkers() {
+  const markers = useTimelineStore((s) => s.markers);
+  const updateMarker = useTimelineStore((s) => s.updateMarker);
+  const { frameToPixels, pixelsToFrame } = useTimelineZoom();
+
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Use refs to avoid stale closures
+  const pixelsToFrameRef = useRef(pixelsToFrame);
+  const updateMarkerRef = useRef(updateMarker);
+
+  // Update refs when functions change
+  useEffect(() => {
+    pixelsToFrameRef.current = pixelsToFrame;
+    updateMarkerRef.current = updateMarker;
+  }, [pixelsToFrame, updateMarker]);
+
+  // Handle drag start
+  const handleMouseDown = useCallback((e: React.MouseEvent, markerId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDraggingId(markerId);
+  }, []);
+
+  // Handle dragging
+  useEffect(() => {
+    if (!draggingId) return;
+
+    const originalCursor = document.body.style.cursor;
+    document.body.style.cursor = 'grabbing';
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const container = containerRef.current?.closest('.timeline-ruler');
+      if (!container) return;
+
+      const rect = container.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const frame = Math.max(0, pixelsToFrameRef.current(x));
+
+      updateMarkerRef.current(draggingId, { frame });
+    };
+
+    const handleMouseUp = () => {
+      setDraggingId(null);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = originalCursor;
+    };
+  }, [draggingId]);
+
+  if (markers.length === 0) return null;
+
+  return (
+    <div ref={containerRef} className="absolute inset-0 pointer-events-none">
+      {markers.map((marker) => (
+        <MarkerIndicator
+          key={marker.id}
+          marker={marker}
+          leftPosition={frameToPixels(marker.frame)}
+          isDragging={draggingId === marker.id}
+          onMouseDown={(e) => handleMouseDown(e, marker.id)}
+        />
+      ))}
+    </div>
+  );
+}
+
+interface MarkerIndicatorProps {
+  marker: ProjectMarker;
+  leftPosition: number;
+  isDragging: boolean;
+  onMouseDown: (e: React.MouseEvent) => void;
+}
+
+function MarkerIndicator({ marker, leftPosition, isDragging, onMouseDown }: MarkerIndicatorProps) {
+  return (
+    <div
+      className="absolute pointer-events-auto"
+      style={{
+        left: `${leftPosition}px`,
+        top: '-2px',
+        transform: 'translateX(-50%)',
+        cursor: isDragging ? 'grabbing' : 'grab',
+        zIndex: 15,
+      }}
+      onMouseDown={onMouseDown}
+      title={marker.label || `Marker at frame ${marker.frame}`}
+    >
+      {/* Invisible larger hit area */}
+      <div
+        className="absolute"
+        style={{
+          top: '-4px',
+          left: '50%',
+          width: '20px',
+          height: '20px',
+          transform: 'translateX(-50%)',
+          backgroundColor: 'transparent',
+        }}
+      />
+      {/* Visible triangle (CSS triangle pointing down) */}
+      <div
+        style={{
+          width: 0,
+          height: 0,
+          borderLeft: '8px solid transparent',
+          borderRight: '8px solid transparent',
+          borderTop: `12px solid ${marker.color}`,
+          filter: `drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3))`,
+        }}
+      />
+    </div>
+  );
+}

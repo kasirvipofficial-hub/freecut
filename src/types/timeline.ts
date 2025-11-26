@@ -80,9 +80,18 @@ export interface SnapTarget {
   label?: string;
 }
 
-export interface Marker {
+// Ruler tick markers (for time ruler display)
+export interface RulerMarker {
   time: number;
   position: number;
   label: string;
   major: boolean;
+}
+
+// Project markers (user-created timeline markers)
+export interface ProjectMarker {
+  id: string;
+  frame: number;
+  label?: string;
+  color: string;
 }

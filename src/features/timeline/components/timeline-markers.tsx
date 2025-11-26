@@ -7,6 +7,7 @@ import { usePlaybackStore } from '@/features/preview/stores/playback-store';
 
 // Components
 import { TimelineInOutMarkers } from './timeline-in-out-markers';
+import { TimelineProjectMarkers } from './timeline-project-markers';
 
 // Utilities and hooks
 import { useTimelineZoom } from '../hooks/use-timeline-zoom';
@@ -436,6 +437,9 @@ export const TimelineMarkers = memo(function TimelineMarkers({ duration, width }
 
       {/* In/Out markers */}
       <TimelineInOutMarkers />
+
+      {/* Project markers */}
+      <TimelineProjectMarkers />
     </div>
   );
 });

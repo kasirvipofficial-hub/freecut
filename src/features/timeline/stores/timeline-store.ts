@@ -23,11 +23,15 @@ import { generatePlayheadThumbnail } from '@/features/projects/utils/thumbnail-g
 // const redo = useTimelineStore.temporal.getState().redo;
 // const canUndo = useTimelineStore((state) => state.pastStates.length > 0);
 
+// Default marker color (blue)
+const DEFAULT_MARKER_COLOR = 'oklch(0.65 0.20 250)';
+
 export const useTimelineStore = create<TimelineState & TimelineActions>()(
   temporal((set) => ({
   // State
   tracks: [],
   items: [],
+  markers: [],
   fps: 30,
   scrollPosition: 0,
   snapEnabled: true,
@@ -364,6 +368,29 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
   }),
   clearInOutPoints: () => set({ inPoint: null, outPoint: null, isDirty: true }),
 
+  // Marker actions
+  addMarker: (frame, color = DEFAULT_MARKER_COLOR, label) => set((state) => ({
+    markers: [...state.markers, {
+      id: crypto.randomUUID(),
+      frame,
+      color,
+      ...(label && { label }),
+    }].sort((a, b) => a.frame - b.frame), // Keep markers sorted by frame
+    isDirty: true,
+  })),
+
+  updateMarker: (id, updates) => set((state) => ({
+    markers: state.markers
+      .map((m) => (m.id === id ? { ...m, ...updates } : m))
+      .sort((a, b) => a.frame - b.frame), // Re-sort if frame changed
+    isDirty: true,
+  })),
+
+  removeMarker: (id) => set((state) => ({
+    markers: state.markers.filter((m) => m.id !== id),
+    isDirty: true,
+  })),
+
   // Save timeline to project in IndexedDB
   saveTimeline: async (projectId) => {
     const state = useTimelineStore.getState();
@@ -429,6 +456,15 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
         // Save in/out points
         ...(state.inPoint !== null && { inPoint: state.inPoint }),
         ...(state.outPoint !== null && { outPoint: state.outPoint }),
+        // Save project markers
+        ...(state.markers.length > 0 && {
+          markers: state.markers.map(m => ({
+            id: m.id,
+            frame: m.frame,
+            color: m.color,
+            ...(m.label && { label: m.label }),
+          })),
+        }),
       };
 
       // Generate thumbnail from playhead position (non-blocking)
@@ -490,6 +526,8 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
           // Restore in/out points
           inPoint: project.timeline.inPoint ?? null,
           outPoint: project.timeline.outPoint ?? null,
+          // Restore project markers
+          markers: project.timeline.markers ?? [],
           isDirty: false, // Fresh load is clean
         });
 
@@ -505,6 +543,7 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
         set({
           tracks: [],
           items: [],
+          markers: [],
           inPoint: null,
           outPoint: null,
           isDirty: false, // New project starts clean
@@ -524,6 +563,7 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
   clearTimeline: () => set({
     tracks: [],
     items: [],
+    markers: [],
     scrollPosition: 0,
     isDirty: false,
   }),
