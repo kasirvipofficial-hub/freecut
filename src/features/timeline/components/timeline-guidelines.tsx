@@ -18,6 +18,8 @@ export interface TimelineGuidelinesProps {
 export function TimelineGuidelines({ activeSnapTarget }: TimelineGuidelinesProps) {
   const { frameToPixels } = useTimelineZoom();
 
+  console.log('[Guidelines] activeSnapTarget:', activeSnapTarget);
+
   // Only show when there's an active snap target
   if (!activeSnapTarget) {
     return null;
@@ -35,12 +37,15 @@ export function TimelineGuidelines({ activeSnapTarget }: TimelineGuidelinesProps
   const left = frameToPixels(activeSnapTarget.frame);
 
   return (
-    <div className="absolute inset-0 pointer-events-none z-10">
+    <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 10000 }}>
       <div
-        className={`absolute top-0 bottom-0 w-px transition-opacity ${
-          isPlayhead ? 'bg-primary opacity-90' : 'bg-green-500 opacity-60'
-        }`}
-        style={{ left: `${left}px` }}
+        className="absolute top-0 bottom-0 w-0.5"
+        style={{
+          left: `${left}px`,
+          backgroundColor: isPlayhead ? '#22c55e' : '#22c55e', // Green for both - visible against playhead
+          opacity: 0.9,
+          boxShadow: '0 0 4px rgba(34, 197, 94, 0.8)',
+        }}
       />
     </div>
   );

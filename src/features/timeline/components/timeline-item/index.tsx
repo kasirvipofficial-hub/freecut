@@ -51,10 +51,10 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
   const { isDragging, dragOffset, handleDragStart } = useTimelineDrag(item, timelineDuration, trackLocked);
 
   // Trim functionality - disabled if track is locked
-  const { isTrimming, trimHandle, trimDelta, handleTrimStart } = useTimelineTrim(item, trackLocked);
+  const { isTrimming, trimHandle, trimDelta, handleTrimStart } = useTimelineTrim(item, timelineDuration, trackLocked);
 
   // Rate stretch functionality - disabled if track is locked
-  const { isStretching, stretchHandle, handleStretchStart, getVisualFeedback } = useRateStretch(item, trackLocked);
+  const { isStretching, stretchHandle, handleStretchStart, getVisualFeedback } = useRateStretch(item, timelineDuration, trackLocked);
 
   // Granular selector: only re-render when THIS item's drag participation changes
   const isPartOfMultiDrag = useSelectionStore(

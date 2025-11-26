@@ -35,7 +35,11 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
   isDirty: false,
 
   // Actions
-  setTracks: (tracks) => set({ tracks, isDirty: true }),
+  // Always keep tracks sorted by order property - single source of truth
+  setTracks: (tracks) => set({
+    tracks: [...tracks].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+    isDirty: true,
+  }),
   addItem: (item) => set((state) => ({ items: [...state.items, item as any], isDirty: true })),
   updateItem: (id, updates) => set((state) => ({
     items: state.items.map((i) => (i.id === id ? { ...i, ...updates } : i)),

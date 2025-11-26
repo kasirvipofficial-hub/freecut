@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { TimelineItem } from '@/types/timeline';
-import type { DragState, UseTimelineDragReturn } from '../types/drag';
+import type { DragState, UseTimelineDragReturn, SnapTarget } from '../types/drag';
 import { useTimelineStore } from '../stores/timeline-store';
 import { useSelectionStore } from '@/features/editor/stores/selection-store';
 import { useTimelineZoom } from './use-timeline-zoom';
@@ -52,10 +52,11 @@ export function useTimelineDrag(
   // Get zoom utilities
   const { pixelsToFrame } = useTimelineZoom();
 
-  // Phase 2 features
-  const { calculateSnap } = useSnapCalculator(
+  // Snap calculator - only use magnetic snap targets (item edges), not grid lines
+  // Always pass item.id to exclude self from snap targets
+  const { magneticSnapTargets, snapThresholdFrames, snapEnabled } = useSnapCalculator(
     timelineDuration,
-    isDragging ? item.id : null
+    item.id
   );
 
   // Get all items for collision detection
@@ -69,6 +70,13 @@ export function useTimelineDrag(
   const itemsRef = useRef(items);
   const allItemsRef = useRef(allItems);
   const selectedItemIdsRef = useRef(selectedItemIds);
+  // Update refs synchronously (not in useEffect) so they're always current
+  const magneticSnapTargetsRef = useRef(magneticSnapTargets);
+  magneticSnapTargetsRef.current = magneticSnapTargets;
+  const snapThresholdFramesRef = useRef(snapThresholdFrames);
+  snapThresholdFramesRef.current = snapThresholdFrames;
+  const snapEnabledRef = useRef(snapEnabled);
+  snapEnabledRef.current = snapEnabled;
 
   // Update refs when dependencies change
   useEffect(() => {
@@ -108,6 +116,57 @@ export function useTimelineDrag(
     const newTrackIndex = Math.max(0, Math.min(tracks.length - 1, startTrackIndex + trackOffset));
 
     return tracks[newTrackIndex]?.id || startTrackId;
+  }, []);
+
+  /**
+   * Calculate magnetic snap for item position (start and end edges)
+   * Only snaps to other item edges, not grid lines
+   */
+  const calculateMagneticSnap = useCallback((
+    targetStartFrame: number,
+    itemDurationInFrames: number
+  ): { snappedFrame: number; snapTarget: SnapTarget | null } => {
+    const targets = magneticSnapTargetsRef.current;
+    const threshold = snapThresholdFramesRef.current;
+    const enabled = snapEnabledRef.current;
+
+    if (!enabled || targets.length === 0) {
+      return { snappedFrame: targetStartFrame, snapTarget: null };
+    }
+
+    const targetEndFrame = targetStartFrame + itemDurationInFrames;
+
+    // Find nearest snap for start position
+    let nearestStartTarget: SnapTarget | null = null;
+    let startDistance = threshold;
+    for (const target of targets) {
+      const distance = Math.abs(targetStartFrame - target.frame);
+      if (distance < startDistance) {
+        nearestStartTarget = target;
+        startDistance = distance;
+      }
+    }
+
+    // Find nearest snap for end position
+    let nearestEndTarget: SnapTarget | null = null;
+    let endDistance = threshold;
+    for (const target of targets) {
+      const distance = Math.abs(targetEndFrame - target.frame);
+      if (distance < endDistance) {
+        nearestEndTarget = target;
+        endDistance = distance;
+      }
+    }
+
+    // Use the closer snap
+    if (startDistance < endDistance && nearestStartTarget) {
+      return { snappedFrame: nearestStartTarget.frame, snapTarget: nearestStartTarget };
+    } else if (nearestEndTarget) {
+      // Snap end, adjust start position
+      return { snappedFrame: nearestEndTarget.frame - itemDurationInFrames, snapTarget: nearestEndTarget };
+    }
+
+    return { snappedFrame: targetStartFrame, snapTarget: null };
   }, []);
 
   /**
@@ -242,7 +301,7 @@ export function useTimelineDrag(
       const draggedItem = itemsRef.current.find((i) => i.id === dragStateRef.current?.itemId);
       const itemDuration = draggedItem?.durationInFrames || 0;
 
-      const snapResult = calculateSnap(proposedFrame, itemDuration);
+      const snapResult = calculateMagneticSnap(proposedFrame, itemDuration);
 
       // Only update store when snap target actually changes to reduce re-renders
       const prevSnap = prevSnapTargetRef.current;
@@ -305,7 +364,7 @@ export function useTimelineDrag(
 
             // Apply snapping (only to anchor item, others follow)
             if (draggedItem.id === item.id) {
-              const snapResult = calculateSnap(newFrom, sourceItem.durationInFrames);
+              const snapResult = calculateMagneticSnap(newFrom, sourceItem.durationInFrames);
               newFrom = snapResult.snappedFrame;
             }
 
@@ -365,7 +424,7 @@ export function useTimelineDrag(
           let proposedFrame = Math.max(0, dragState.startFrame + deltaFrames);
 
           // Apply snapping
-          const snapResult = calculateSnap(proposedFrame, item.durationInFrames);
+          const snapResult = calculateMagneticSnap(proposedFrame, item.durationInFrames);
           proposedFrame = snapResult.snappedFrame;
 
           // Find nearest available space (snaps forward if collision)
@@ -408,7 +467,7 @@ export function useTimelineDrag(
         window.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [isDragging, item.id, getTrackIdFromMouseY, calculateSnap]);
+  }, [isDragging, item.id, getTrackIdFromMouseY, calculateMagneticSnap]);
 
   return {
     isDragging,

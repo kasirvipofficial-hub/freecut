@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import type { SnapTarget } from '../types/drag';
 import { useTimelineStore } from '../stores/timeline-store';
 import { useZoomStore } from '../stores/zoom-store';
+import { usePlaybackStore } from '@/features/preview/stores/playback-store';
 import { useTimelineZoom } from './use-timeline-zoom';
 import {
   generateGridSnapPoints,
@@ -27,6 +28,7 @@ export function useSnapCalculator(
   const fps = useTimelineStore((s) => s.fps);
   const snapEnabled = useTimelineStore((s) => s.snapEnabled);
   const zoomLevel = useZoomStore((s) => s.level);
+  const currentFrame = usePlaybackStore((s) => s.currentFrame);
   const { pixelsPerSecond } = useTimelineZoom();
 
   /**
@@ -73,8 +75,14 @@ export function useSnapCalculator(
         });
       });
 
+    // 3. Playhead snap point
+    targets.push({
+      frame: currentFrame,
+      type: 'playhead',
+    });
+
     return targets;
-  }, [items, draggingItemId, timelineDuration, fps, zoomLevel]);
+  }, [items, draggingItemId, timelineDuration, fps, zoomLevel, currentFrame]);
 
   /**
    * Calculate snap for a given position
@@ -147,11 +155,11 @@ export function useSnapCalculator(
   };
 
   /**
-   * Get magnetic snap targets only (for visual guidelines)
+   * Get magnetic snap targets only (item edges + playhead, for visual guidelines)
    */
   const magneticSnapTargets = useMemo(() => {
     return snapTargets.filter(
-      (t) => t.type === 'item-start' || t.type === 'item-end'
+      (t) => t.type === 'item-start' || t.type === 'item-end' || t.type === 'playhead'
     );
   }, [snapTargets]);
 
