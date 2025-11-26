@@ -14,6 +14,8 @@ export const HOTKEYS = {
   NEXT_FRAME_ALT: 'l',
   GO_TO_START: 'home',
   GO_TO_END: 'end',
+  NEXT_EDGE: 'down',
+  PREVIOUS_EDGE: 'up',
 
   // Timeline editing
   SPLIT_ITEM: 'c',
@@ -73,6 +75,8 @@ export const HOTKEY_DESCRIPTIONS: Record<HotkeyKey, string> = {
   NEXT_FRAME_ALT: 'Next frame (alternative)',
   GO_TO_START: 'Go to start',
   GO_TO_END: 'Go to end',
+  NEXT_EDGE: 'Next clip edge',
+  PREVIOUS_EDGE: 'Previous clip edge',
 
   // Timeline editing
   SPLIT_ITEM: 'Split item at playhead',

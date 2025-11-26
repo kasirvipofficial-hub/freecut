@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { usePlaybackStore } from '@/features/preview/stores/playback-store';
 import { useTimelineStore } from '../stores/timeline-store';
@@ -40,6 +41,17 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
   const setActiveTool = useSelectionStore((s) => s.setActiveTool);
   const removeItems = useTimelineStore((s) => s.removeItems);
   const toggleSnap = useTimelineStore((s) => s.toggleSnap);
+  const items = useTimelineStore((s) => s.items);
+
+  // Calculate all unique clip edges (start and end frames) sorted ascending
+  const clipEdges = useMemo(() => {
+    const edges = new Set<number>();
+    for (const item of items) {
+      edges.add(item.from);
+      edges.add(item.from + item.durationInFrames);
+    }
+    return Array.from(edges).sort((a, b) => a - b);
+  }, [items]);
 
   // Playback: Space - Play/Pause (global shortcut)
   useHotkeys(
@@ -130,6 +142,43 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
     },
     HOTKEY_OPTIONS,
     [setCurrentFrame]
+  );
+
+  // Navigation: Down - Jump to next clip edge
+  useHotkeys(
+    HOTKEYS.NEXT_EDGE,
+    (event) => {
+      event.preventDefault();
+      // Find the next edge after current frame
+      const nextEdge = clipEdges.find((edge) => edge > currentFrame);
+      if (nextEdge !== undefined) {
+        setCurrentFrame(nextEdge);
+      }
+    },
+    HOTKEY_OPTIONS,
+    [setCurrentFrame, currentFrame, clipEdges]
+  );
+
+  // Navigation: Up - Jump to previous clip edge
+  useHotkeys(
+    HOTKEYS.PREVIOUS_EDGE,
+    (event) => {
+      event.preventDefault();
+      // Find the previous edge before current frame
+      // Iterate backwards through sorted edges
+      let previousEdge: number | undefined;
+      for (let i = clipEdges.length - 1; i >= 0; i--) {
+        if (clipEdges[i] < currentFrame) {
+          previousEdge = clipEdges[i];
+          break;
+        }
+      }
+      if (previousEdge !== undefined) {
+        setCurrentFrame(previousEdge);
+      }
+    },
+    HOTKEY_OPTIONS,
+    [setCurrentFrame, currentFrame, clipEdges]
   );
 
   // Editing: Delete - Delete selected items
