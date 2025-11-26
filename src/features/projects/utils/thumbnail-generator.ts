@@ -398,7 +398,9 @@ export async function generatePlayheadThumbnail(
       const frameInClip = currentFrame - item.from;
       // Account for trim/offset (sourceStart defaults to 0)
       const sourceStart = item.sourceStart ?? 0;
-      const frameInSource = sourceStart + frameInClip;
+      // Account for playback speed - a sped up clip consumes more source frames per timeline frame
+      const speed = item.speed ?? 1;
+      const frameInSource = sourceStart + frameInClip * speed;
       // Convert to seconds
       const timeInSeconds = frameInSource / fps;
 
