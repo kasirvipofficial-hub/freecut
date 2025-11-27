@@ -4,6 +4,7 @@ import { usePlaybackStore } from '@/features/preview/stores/playback-store';
 import { useTimelineStore } from '../stores/timeline-store';
 import { useSelectionStore } from '@/features/editor/stores/selection-store';
 import { HOTKEYS, HOTKEY_OPTIONS } from '@/config/hotkeys';
+import { canJoinMultipleItems } from '@/utils/clip-utils';
 
 export interface TimelineShortcutCallbacks {
   onPlay?: () => void;
@@ -40,6 +41,7 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
   const activeTool = useSelectionStore((s) => s.activeTool);
   const setActiveTool = useSelectionStore((s) => s.setActiveTool);
   const removeItems = useTimelineStore((s) => s.removeItems);
+  const joinItems = useTimelineStore((s) => s.joinItems);
   const toggleSnap = useTimelineStore((s) => s.toggleSnap);
   const items = useTimelineStore((s) => s.items);
   const markers = useTimelineStore((s) => s.markers);
@@ -94,31 +96,9 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
     [setCurrentFrame, currentFrame]
   );
 
-  // Navigation: J - Previous frame (alternative)
-  useHotkeys(
-    HOTKEYS.PREVIOUS_FRAME_ALT,
-    (event) => {
-      event.preventDefault();
-      setCurrentFrame(Math.max(0, currentFrame - 1));
-    },
-    HOTKEY_OPTIONS,
-    [setCurrentFrame, currentFrame]
-  );
-
   // Navigation: Arrow Right - Next frame
   useHotkeys(
     HOTKEYS.NEXT_FRAME,
-    (event) => {
-      event.preventDefault();
-      setCurrentFrame(currentFrame + 1);
-    },
-    HOTKEY_OPTIONS,
-    [setCurrentFrame, currentFrame]
-  );
-
-  // Navigation: L - Next frame (alternative)
-  useHotkeys(
-    HOTKEYS.NEXT_FRAME_ALT,
     (event) => {
       event.preventDefault();
       setCurrentFrame(currentFrame + 1);
@@ -217,6 +197,30 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
     },
     HOTKEY_OPTIONS,
     [selectedItemIds, removeItems, callbacks]
+  );
+
+  // Editing: J - Join selected clips (if they form a contiguous joinable chain)
+  useHotkeys(
+    HOTKEYS.JOIN_ITEMS,
+    (event) => {
+      // Need at least 2 items selected
+      if (selectedItemIds.length < 2) return;
+
+      // Get selected items
+      const selectedItems = selectedItemIds
+        .map((id) => items.find((i) => i.id === id))
+        .filter((item): item is NonNullable<typeof item> => item !== undefined);
+
+      if (selectedItems.length < 2) return;
+
+      // Check if all selected items can be joined
+      if (canJoinMultipleItems(selectedItems)) {
+        event.preventDefault();
+        joinItems(selectedItemIds);
+      }
+    },
+    HOTKEY_OPTIONS,
+    [selectedItemIds, items, joinItems]
   );
 
   // Selection: Escape - Deselect all items

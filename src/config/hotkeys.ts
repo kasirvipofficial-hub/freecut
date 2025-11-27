@@ -9,9 +9,7 @@ export const HOTKEYS = {
   // Playback controls
   PLAY_PAUSE: 'space',
   PREVIOUS_FRAME: 'left',
-  PREVIOUS_FRAME_ALT: 'j',
   NEXT_FRAME: 'right',
-  NEXT_FRAME_ALT: 'l',
   GO_TO_START: 'home',
   GO_TO_END: 'end',
   NEXT_EDGE: 'down',
@@ -19,12 +17,13 @@ export const HOTKEYS = {
 
   // Timeline editing
   SPLIT_ITEM: 'c',
+  JOIN_ITEMS: 'j',
   DELETE_SELECTED: 'delete',
   DELETE_SELECTED_ALT: 'backspace',
 
   // History
   UNDO: 'mod+z',
-  REDO: 'mod+shift+z',
+  REDO: 'mod+y',
 
   // Zoom
   ZOOM_IN: 'mod+equals',
@@ -75,9 +74,7 @@ export const HOTKEY_DESCRIPTIONS: Record<HotkeyKey, string> = {
   // Playback
   PLAY_PAUSE: 'Play/Pause',
   PREVIOUS_FRAME: 'Previous frame',
-  PREVIOUS_FRAME_ALT: 'Previous frame (alternative)',
   NEXT_FRAME: 'Next frame',
-  NEXT_FRAME_ALT: 'Next frame (alternative)',
   GO_TO_START: 'Go to start',
   GO_TO_END: 'Go to end',
   NEXT_EDGE: 'Next clip edge',
@@ -85,6 +82,7 @@ export const HOTKEY_DESCRIPTIONS: Record<HotkeyKey, string> = {
 
   // Timeline editing
   SPLIT_ITEM: 'Split item at playhead',
+  JOIN_ITEMS: 'Join selected clips',
   DELETE_SELECTED: 'Delete selected items',
   DELETE_SELECTED_ALT: 'Delete selected items (alternative)',
 

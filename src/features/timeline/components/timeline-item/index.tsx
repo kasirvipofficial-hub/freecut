@@ -7,6 +7,15 @@ import { useTimelineDrag, dragOffsetRef } from '../../hooks/use-timeline-drag';
 import { useTimelineTrim } from '../../hooks/use-timeline-trim';
 import { useRateStretch } from '../../hooks/use-rate-stretch';
 import { DRAG_OPACITY } from '../../constants';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import { canJoinItems, canJoinMultipleItems } from '@/utils/clip-utils';
 
 // Width in pixels for edge hover detection (trim/rate-stretch handles)
 const EDGE_HOVER_ZONE = 8;
@@ -41,6 +50,9 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
   const selectItems = useSelectionStore((s) => s.selectItems);
   const activeTool = useSelectionStore((s) => s.activeTool);
   const splitItem = useTimelineStore((s) => s.splitItem);
+  const joinItems = useTimelineStore((s) => s.joinItems);
+  const removeItems = useTimelineStore((s) => s.removeItems);
+  const items = useTimelineStore((s) => s.items);
 
   const isSelected = selectedItemIds.includes(item.id);
 
@@ -316,8 +328,91 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
     ? 'cursor-grabbing'
     : 'cursor-grab';
 
+  // Check if join is available when multiple items are selected
+  const canJoinSelected = useMemo(() => {
+    if (selectedItemIds.length < 2) return false;
+    const selectedItems = selectedItemIds
+      .map((id) => items.find((i) => i.id === id))
+      .filter((i): i is NonNullable<typeof i> => i !== undefined);
+    return canJoinMultipleItems(selectedItems);
+  }, [selectedItemIds, items]);
+
+  // Check if this clip has a joinable neighbor on the left (this clip is the "right" one)
+  const hasJoinableLeft = useMemo(() => {
+    const leftNeighbor = items.find(
+      (other) =>
+        other.id !== item.id &&
+        other.trackId === item.trackId &&
+        other.from + other.durationInFrames === item.from
+    );
+    if (!leftNeighbor) return false;
+    return canJoinItems(leftNeighbor, item);
+  }, [items, item]);
+
+  // Check if this clip has a joinable neighbor on the right (this clip is the "left" one)
+  const hasJoinableRight = useMemo(() => {
+    const rightNeighbor = items.find(
+      (other) =>
+        other.id !== item.id &&
+        other.trackId === item.trackId &&
+        other.from === item.from + item.durationInFrames
+    );
+    if (!rightNeighbor) return false;
+    return canJoinItems(item, rightNeighbor);
+  }, [items, item]);
+
+  // For context menu: can join if this clip has any joinable neighbor
+  const canJoinFromContextMenu = hasJoinableLeft || hasJoinableRight;
+
+  // Handle join action for multiple selected clips
+  const handleJoinSelected = useCallback(() => {
+    if (selectedItemIds.length >= 2) {
+      const selectedItems = selectedItemIds
+        .map((id) => items.find((i) => i.id === id))
+        .filter((i): i is NonNullable<typeof i> => i !== undefined);
+      if (canJoinMultipleItems(selectedItems)) {
+        joinItems(selectedItemIds);
+      }
+    }
+  }, [selectedItemIds, items, joinItems]);
+
+  // Handle join with left neighbor
+  const handleJoinLeft = useCallback(() => {
+    const leftNeighbor = items.find(
+      (other) =>
+        other.id !== item.id &&
+        other.trackId === item.trackId &&
+        other.from + other.durationInFrames === item.from
+    );
+    if (leftNeighbor) {
+      joinItems([leftNeighbor.id, item.id]);
+    }
+  }, [items, joinItems, item]);
+
+  // Handle join with right neighbor
+  const handleJoinRight = useCallback(() => {
+    const rightNeighbor = items.find(
+      (other) =>
+        other.id !== item.id &&
+        other.trackId === item.trackId &&
+        other.from === item.from + item.durationInFrames
+    );
+    if (rightNeighbor) {
+      joinItems([item.id, rightNeighbor.id]);
+    }
+  }, [items, joinItems, item]);
+
+  // Handle delete action
+  const handleDelete = useCallback(() => {
+    if (selectedItemIds.length > 0) {
+      removeItems(selectedItemIds);
+    }
+  }, [selectedItemIds, removeItems]);
+
   return (
     <>
+    <ContextMenu>
+      <ContextMenuTrigger asChild disabled={trackLocked}>
     <div
       ref={transformRef}
       data-item-id={item.id}
@@ -410,7 +505,53 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
         </>
       )}
 
+      {/* Join indicator - glowing edge when clip can be joined with neighbor */}
+      {/* Hidden when hovering edge (to not interfere with trim/stretch handles) */}
+      {hasJoinableLeft && !trackLocked && hoveredEdge !== 'start' && !isTrimming && !isStretching && (
+        <div
+          className="absolute left-0 top-0 bottom-0 w-px bg-green-400 shadow-[0_0_6px_1px_rgba(74,222,128,0.7)] pointer-events-none"
+          title="Can join with previous clip (J)"
+        />
+      )}
+      {hasJoinableRight && !trackLocked && hoveredEdge !== 'end' && !isTrimming && !isStretching && (
+        <div
+          className="absolute right-0 top-0 bottom-0 w-px bg-green-400 shadow-[0_0_6px_1px_rgba(74,222,128,0.7)] pointer-events-none"
+          title="Can join with next clip (J)"
+        />
+      )}
+
     </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        {/* Show "Join Selected" when multiple clips are selected and joinable */}
+        {canJoinSelected && (
+          <ContextMenuItem onClick={handleJoinSelected}>
+            Join Selected
+            <ContextMenuShortcut>J</ContextMenuShortcut>
+          </ContextMenuItem>
+        )}
+        {/* Show directional join options for single clip with joinable neighbors */}
+        {!canJoinSelected && hasJoinableLeft && (
+          <ContextMenuItem onClick={handleJoinLeft}>
+            Join with Previous
+          </ContextMenuItem>
+        )}
+        {!canJoinSelected && hasJoinableRight && (
+          <ContextMenuItem onClick={handleJoinRight}>
+            Join with Next
+          </ContextMenuItem>
+        )}
+        {(canJoinSelected || canJoinFromContextMenu) && <ContextMenuSeparator />}
+        <ContextMenuItem
+          onClick={handleDelete}
+          disabled={selectedItemIds.length === 0}
+          className="text-destructive focus:text-destructive"
+        >
+          Delete
+          <ContextMenuShortcut>Del</ContextMenuShortcut>
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
 
       {/* Alt-drag ghost for anchor item: rendered outside clipped container */}
       {isAltDrag && isDragging && (

@@ -219,6 +219,62 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
     isDirty: true,
   })),
 
+  // Join multiple adjacent items that were previously split (inverse of splitItem)
+  // Items must form a contiguous chain with same originId, mediaId, track, speed, and source continuity
+  joinItems: (itemIds) => set((state) => {
+    if (itemIds.length < 2) return state;
+
+    // Get all items and sort by position
+    const itemsToJoin = itemIds
+      .map((id) => state.items.find((i) => i.id === id))
+      .filter((item): item is NonNullable<typeof item> => item !== undefined)
+      .sort((a, b) => a.from - b.from);
+
+    if (itemsToJoin.length < 2) return state;
+
+    // Validate all items can be joined (check each adjacent pair)
+    for (let i = 0; i < itemsToJoin.length - 1; i++) {
+      const left = itemsToJoin[i]!;
+      const right = itemsToJoin[i + 1]!;
+
+      // Must share same origin (from a split operation)
+      if (left.originId !== right.originId) return state;
+      // Must be on same track
+      if (left.trackId !== right.trackId) return state;
+      // Must be from same source media
+      if (left.mediaId !== right.mediaId) return state;
+      // Must be adjacent (left ends where right begins)
+      if (left.from + left.durationInFrames !== right.from) return state;
+      // Must have same speed
+      if ((left.speed || 1) !== (right.speed || 1)) return state;
+
+      // Verify source continuity (no trim gap between clips)
+      const leftSourceEnd = left.sourceEnd ?? ((left.sourceStart ?? 0) + left.durationInFrames * (left.speed || 1));
+      const rightSourceStart = right.sourceStart ?? 0;
+      if (Math.abs(leftSourceEnd - rightSourceStart) > 0.5) return state;
+    }
+
+    // All validations passed - create merged item from first and last
+    const firstItem = itemsToJoin[0]!;
+    const lastItem = itemsToJoin[itemsToJoin.length - 1]!
+    const totalDuration = itemsToJoin.reduce((sum, item) => sum + item.durationInFrames, 0);
+
+    const mergedItem: typeof firstItem = {
+      ...firstItem,
+      durationInFrames: totalDuration,
+      sourceEnd: lastItem.sourceEnd,
+      trimEnd: lastItem.trimEnd,
+    };
+
+    const idsToRemove = new Set(itemIds);
+    return {
+      items: state.items
+        .filter((i) => !idsToRemove.has(i.id))
+        .concat([mergedItem]),
+      isDirty: true,
+    };
+  }),
+
   // Split item at the specified frame
   splitItem: (id, splitFrame) => set((state) => {
     const item = state.items.find((i) => i.id === id);
