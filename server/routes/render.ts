@@ -190,9 +190,21 @@ router.post('/media/upload', (req, res, next) => {
 /**
  * GET /api/media/:jobId/:mediaId
  * Serve uploaded media file for rendering
+ * Supports URLs with or without extension:
+ *   - /api/media/{jobId}/{mediaId}.mp3 (preferred - Remotion can detect format)
+ *   - /api/media/{jobId}/{mediaId} (fallback - looks up extension from disk)
  */
 router.get('/media/:jobId/:mediaId', async (req: Request, res: Response) => {
-  const { jobId, mediaId } = req.params;
+  const { jobId } = req.params;
+  let { mediaId } = req.params;
+
+  // Check if mediaId includes an extension (e.g., "abc123.mp3")
+  const dotIndex = mediaId.lastIndexOf('.');
+  let providedExt = '';
+  if (dotIndex > 0) {
+    providedExt = mediaId.substring(dotIndex);
+    mediaId = mediaId.substring(0, dotIndex);
+  }
 
   try {
     // List files in job directory to find the right file
@@ -206,7 +218,7 @@ router.get('/media/:jobId/:mediaId', async (req: Request, res: Response) => {
       });
     }
 
-    // Get full path
+    // Get extension from the actual file
     const ext = mediaFile.substring(mediaId.length);
     const filePath = mediaService.getMediaPath(jobId, mediaId, ext);
 

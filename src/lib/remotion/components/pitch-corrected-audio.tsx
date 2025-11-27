@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { useCurrentFrame, useVideoConfig, Internals, getRemotionEnvironment } from 'remotion';
-import { Audio } from '@remotion/media';
+import { useCurrentFrame, useVideoConfig, Internals, getRemotionEnvironment, Audio } from 'remotion';
 
 interface PitchCorrectedAudioProps {
   src: string;
@@ -11,10 +10,15 @@ interface PitchCorrectedAudioProps {
 }
 
 /**
- * Audio component with pitch correction for rate-stretched playback.
+ * Audio component with pitch-preserved playback for rate-stretched audio.
  *
  * During preview: Uses HTML5 audio element with preservesPitch (native browser feature)
- * During render: Uses @remotion/media Audio with toneFrequency for FFmpeg pitch correction
+ * During render: Uses Remotion's Audio component with playbackRate (uses FFmpeg atempo filter
+ *                which preserves pitch automatically)
+ *
+ * Note: We use Audio from 'remotion' directly instead of '@remotion/media' Audio because:
+ * - @remotion/media Audio shows "Unknown container format" warnings for MP3 files
+ * - The standard Audio component works reliably with all formats
  */
 export const PitchCorrectedAudio: React.FC<PitchCorrectedAudioProps> = ({
   src,
@@ -31,16 +35,16 @@ export const PitchCorrectedAudio: React.FC<PitchCorrectedAudioProps> = ({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastSyncTimeRef = useRef<number>(0);
 
-  // During rendering, use the standard Audio component with toneFrequency
+  // During rendering, use Remotion's Audio component
+  // Remotion's playbackRate uses FFmpeg's atempo filter which already preserves pitch
+  // So we don't need to apply toneFrequency for pitch correction
   if (environment.isRendering) {
-    const toneFrequency = Math.min(2, Math.max(0.01, 1 / playbackRate));
     return (
       <Audio
         src={src}
         volume={muted ? 0 : volume}
         playbackRate={playbackRate}
         trimBefore={trimBefore > 0 ? trimBefore : undefined}
-        toneFrequency={toneFrequency}
       />
     );
   }

@@ -1,5 +1,5 @@
 import { bundle } from '@remotion/bundler';
-import { renderMedia, selectComposition } from '@remotion/renderer';
+import { renderMedia, selectComposition, makeCancelSignal } from '@remotion/renderer';
 import { Server as SocketServer } from 'socket.io';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -16,7 +16,7 @@ const OUTPUT_DIR = path.join(__dirname, '..', 'temp', 'output');
 export class RenderService {
   private io: SocketServer | null = null;
   private bundleLocation: string | null = null;
-  private activeRenders: Map<string, AbortController> = new Map();
+  private activeRenders: Map<string, () => void> = new Map(); // Stores cancel functions from makeCancelSignal
 
   /**
    * Set Socket.IO instance for emitting progress
@@ -61,9 +61,9 @@ export class RenderService {
 
     console.log(`[RenderService] Starting render for job ${jobId}`);
 
-    // Create abort controller for cancellation
-    const abortController = new AbortController();
-    this.activeRenders.set(jobId, abortController);
+    // Create cancel signal using Remotion's makeCancelSignal
+    const { cancelSignal, cancel } = makeCancelSignal();
+    this.activeRenders.set(jobId, cancel);
 
     try {
       // Update job status
@@ -73,15 +73,30 @@ export class RenderService {
       // Ensure bundle is ready
       const bundleLocation = await this.bundleProject();
 
+      // Get all uploaded media files to find extensions
+      const uploadedFiles = await mediaService.listMediaFiles(jobId);
+      const mediaExtensions = new Map<string, string>();
+      for (const file of uploadedFiles) {
+        // Files are stored as {mediaId}{extension}, e.g., "abc123.mp3"
+        const dotIndex = file.lastIndexOf('.');
+        if (dotIndex > 0) {
+          const mediaId = file.substring(0, dotIndex);
+          const ext = file.substring(dotIndex);
+          mediaExtensions.set(mediaId, ext);
+        }
+      }
+
       // Resolve media paths - replace blob URLs with HTTP URLs served by our server
+      // Include file extension in URL so Remotion can detect the container format
       const tracksWithResolvedMedia = composition.tracks.map(track => ({
         ...track,
         items: track.items.map(item => {
           if (item.mediaId && (item.type === 'video' || item.type === 'audio' || item.type === 'image')) {
+            const ext = mediaExtensions.get(item.mediaId) || '';
             // Use HTTP URL to access uploaded media via our server
             return {
               ...item,
-              src: `http://localhost:3001/api/media/${jobId}/${item.mediaId}`,
+              src: `http://localhost:3001/api/media/${jobId}/${item.mediaId}${ext}`,
             };
           }
           return item;
@@ -152,7 +167,7 @@ export class RenderService {
             console.log(`[RenderService] Job ${jobId}: ${renderedFrames}/${compositionData.durationInFrames} frames (${progress}%)`);
           }
         },
-        cancelSignal: () => abortController.signal.aborted,
+        cancelSignal,
       };
 
       // Add ProRes profile if using ProRes codec
@@ -171,8 +186,10 @@ export class RenderService {
       // Clean up media files after successful render
       await mediaService.cleanupJob(jobId);
     } catch (error: any) {
-      // Check if cancelled
-      if (error.name === 'AbortError' || abortController.signal.aborted) {
+      // Check if cancelled - Remotion throws "Render cancelled" error
+      const isCancelled = error?.message?.includes('Render cancelled') ||
+                          error?.message?.includes('cancelled');
+      if (isCancelled) {
         jobManager.cancelJob(jobId);
         this.emitProgress(jobId, { progress: 0, status: 'cancelled' });
         console.log(`[RenderService] Job ${jobId} was cancelled`);
@@ -194,9 +211,9 @@ export class RenderService {
    * Cancel an active render
    */
   cancelRender(jobId: string): boolean {
-    const abortController = this.activeRenders.get(jobId);
-    if (abortController) {
-      abortController.abort();
+    const cancelFn = this.activeRenders.get(jobId);
+    if (cancelFn) {
+      cancelFn();
       console.log(`[RenderService] Cancelling job ${jobId}`);
       return true;
     }
