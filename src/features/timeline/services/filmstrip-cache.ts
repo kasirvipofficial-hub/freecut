@@ -8,7 +8,12 @@
  * - Rendering matches frames to display slots by timestamp
  */
 
-import { deleteFilmstripsByMediaId } from '@/lib/storage/indexeddb';
+import {
+  deleteFilmstripsByMediaId,
+  getFilmstripByMediaId,
+  saveFilmstrip,
+} from '@/lib/storage/indexeddb';
+import type { FilmstripData } from '@/types/storage';
 
 // Dynamically import mediabunny (heavy library)
 const mediabunnyModule = () => import('mediabunny');
@@ -30,6 +35,7 @@ const FRAMES_PER_BATCH = 10;
 
 export interface CachedFilmstrip {
   frames: ImageBitmap[];
+  blobs: Blob[]; // Keep blobs for IndexedDB persistence
   timestamps: number[];
   width: number;
   height: number;
@@ -196,6 +202,7 @@ class FilmstripCacheService {
 
       // Sample frames at regular intervals from actual video frames
       const imageBitmaps: ImageBitmap[] = [];
+      const blobs: Blob[] = [];
       const timestamps: number[] = [];
       let sizeBytes = 0;
       let lastUpdateCount = 0;
@@ -234,6 +241,7 @@ class FilmstripCacheService {
             // Create ImageBitmap for display
             const bitmap = await createImageBitmap(blob);
             imageBitmaps.push(bitmap);
+            blobs.push(blob); // Keep for IndexedDB persistence
             timestamps.push(frameTime);
             sizeBytes += blob.size;
             framesSampled++;
@@ -251,6 +259,7 @@ class FilmstripCacheService {
 
               const intermediate: CachedFilmstrip = {
                 frames: [...imageBitmaps],
+                blobs: [...blobs],
                 timestamps: [...timestamps],
                 width: THUMBNAIL_WIDTH,
                 height: THUMBNAIL_HEIGHT,
@@ -278,6 +287,7 @@ class FilmstripCacheService {
 
       const cached: CachedFilmstrip = {
         frames: imageBitmaps,
+        blobs,
         timestamps,
         width: THUMBNAIL_WIDTH,
         height: THUMBNAIL_HEIGHT,
@@ -290,6 +300,23 @@ class FilmstripCacheService {
       this.addToMemoryCache(mediaId, cached);
       this.notifyUpdate(mediaId, cached);
 
+      // Persist to IndexedDB for reload persistence
+      try {
+        const filmstripData: FilmstripData = {
+          id: `${mediaId}:high`,
+          mediaId,
+          density: 'high',
+          frames: blobs,
+          timestamps,
+          width: THUMBNAIL_WIDTH,
+          height: THUMBNAIL_HEIGHT,
+          createdAt: Date.now(),
+        };
+        await saveFilmstrip(filmstripData);
+      } catch (err) {
+        console.warn('Failed to persist filmstrip to IndexedDB:', err);
+      }
+
       onProgress?.(100);
 
       return cached;
@@ -297,6 +324,44 @@ class FilmstripCacheService {
       // Clean up mediabunny input
       input?.dispose();
       this.activeExtractions.delete(mediaId);
+    }
+  }
+
+  /**
+   * Load filmstrip from IndexedDB and convert blobs to ImageBitmaps
+   */
+  private async loadFromIndexedDB(mediaId: string): Promise<CachedFilmstrip | null> {
+    try {
+      const stored = await getFilmstripByMediaId(mediaId);
+      if (!stored || !stored.frames || stored.frames.length === 0) {
+        return null;
+      }
+
+      // Convert blobs to ImageBitmaps
+      const imageBitmaps: ImageBitmap[] = [];
+      let sizeBytes = 0;
+
+      for (const blob of stored.frames) {
+        const bitmap = await createImageBitmap(blob);
+        imageBitmaps.push(bitmap);
+        sizeBytes += blob.size;
+      }
+
+      const cached: CachedFilmstrip = {
+        frames: imageBitmaps,
+        blobs: stored.frames,
+        timestamps: stored.timestamps,
+        width: stored.width,
+        height: stored.height,
+        sizeBytes,
+        lastAccessed: Date.now(),
+        isComplete: true,
+      };
+
+      return cached;
+    } catch (err) {
+      console.warn('Failed to load filmstrip from IndexedDB:', err);
+      return null;
     }
   }
 
@@ -320,6 +385,14 @@ class FilmstripCacheService {
     const pending = this.pendingRequests.get(mediaId);
     if (pending) {
       return pending.promise;
+    }
+
+    // Check IndexedDB for persisted filmstrip
+    const stored = await this.loadFromIndexedDB(mediaId);
+    if (stored) {
+      this.addToMemoryCache(mediaId, stored);
+      this.notifyUpdate(mediaId, stored);
+      return stored;
     }
 
     // Generate new filmstrip

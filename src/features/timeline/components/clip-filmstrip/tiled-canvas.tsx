@@ -36,17 +36,11 @@ export const TiledCanvas = memo(function TiledCanvas({
 }: TiledCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasPoolRef = useRef<Map<number, HTMLCanvasElement>>(new Map());
-  const renderTileRef = useRef(renderTile);
-
-  // Keep renderTile ref updated
-  useEffect(() => {
-    renderTileRef.current = renderTile;
-  }, [renderTile]);
 
   // Calculate number of tiles needed
   const tileCount = Math.ceil(width / TILE_WIDTH);
 
-  // Render tiles effect - now also depends on version for progressive updates
+  // Render tiles effect - depends on version which includes zoom level
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -85,8 +79,8 @@ export const TiledCanvas = memo(function TiledCanvas({
         ctx.scale(dpr, dpr);
         ctx.clearRect(0, 0, actualTileWidth, height);
 
-        // Call render function
-        renderTileRef.current(ctx, tileIndex, tileOffset, actualTileWidth);
+        // Call render function directly (no ref indirection)
+        renderTile(ctx, tileIndex, tileOffset, actualTileWidth);
       }
     }
 
@@ -97,7 +91,7 @@ export const TiledCanvas = memo(function TiledCanvas({
         canvasPool.delete(index);
       }
     }
-  }, [width, height, tileCount, version]);
+  }, [width, height, tileCount, version, renderTile]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -126,6 +120,10 @@ export const TiledCanvas = memo(function TiledCanvas({
 /**
  * Hook to create a stable render function for tiled canvas
  * that updates when dependencies change without causing re-renders
+ *
+ * NOTE: This has a race condition with rapid updates. For zoom-sensitive
+ * rendering, pass renderTile directly to TiledCanvas and include it in
+ * the version prop calculation instead.
  */
 export function useTiledCanvasRenderer(
   render: (

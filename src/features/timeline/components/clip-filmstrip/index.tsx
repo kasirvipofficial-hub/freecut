@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useState } from 'react';
-import { TiledCanvas, useTiledCanvasRenderer } from './tiled-canvas';
+import { TiledCanvas } from './tiled-canvas';
 import { FilmstripSkeleton } from './filmstrip-skeleton';
 import { useFilmstrip } from '../../hooks/use-filmstrip';
 import { useZoomStore } from '../../stores/zoom-store';
@@ -159,16 +159,6 @@ export const ClipFilmstrip = memo(function ClipFilmstrip({
     [frames, timestamps, pixelsPerSecond, sourceStart, trimStart, speed]
   );
 
-  // Create stable renderer
-  const stableRenderer = useTiledCanvasRenderer(renderTile, [
-    frames,
-    timestamps,
-    pixelsPerSecond,
-    sourceStart,
-    trimStart,
-    speed,
-  ]);
-
   // Show skeleton only if no frames yet
   if (!frames || frames.length === 0) {
     return <FilmstripSkeleton clipWidth={clipWidth} height={THUMBNAIL_HEIGHT} />;
@@ -178,12 +168,16 @@ export const ClipFilmstrip = memo(function ClipFilmstrip({
     return null;
   }
 
+  // Include pixelsPerSecond in version to force re-render on zoom changes
+  // Using Math.round to avoid floating point noise triggering unnecessary re-renders
+  const renderVersion = frames.length * 10000 + Math.round(pixelsPerSecond * 100);
+
   return (
     <TiledCanvas
       width={clipWidth}
       height={THUMBNAIL_HEIGHT}
-      renderTile={stableRenderer}
-      version={frames.length}
+      renderTile={renderTile}
+      version={renderVersion}
       className="top-1"
     />
   );
