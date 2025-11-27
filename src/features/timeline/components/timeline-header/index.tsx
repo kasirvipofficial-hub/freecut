@@ -1,3 +1,4 @@
+import { useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -25,6 +26,12 @@ import { useTimelineZoom } from '../../hooks/use-timeline-zoom';
 import { useTimelineStore } from '../../stores/timeline-store';
 import { usePlaybackStore } from '@/features/preview/stores/playback-store';
 import { useSelectionStore } from '@/features/editor/stores/selection-store';
+import {
+  ZOOM_FRICTION,
+  ZOOM_MIN_VELOCITY,
+  ZOOM_MIN,
+  ZOOM_MAX,
+} from '../../constants/momentum';
 
 export interface TimelineHeaderProps {
   onZoomChange?: (newZoom: number) => void;
@@ -55,6 +62,93 @@ export function TimelineHeader({ onZoomChange, onZoomIn, onZoomOut }: TimelineHe
   // Read from store directly when needed to avoid re-renders every frame
   const activeTool = useSelectionStore((s) => s.activeTool);
   const setActiveTool = useSelectionStore((s) => s.setActiveTool);
+
+
+  // Momentum state for zoom slider
+  const zoomVelocityRef = useRef(0);
+  const lastZoomValueRef = useRef(zoomLevel);
+  const lastZoomTimeRef = useRef(0);
+  const momentumIdRef = useRef<number | null>(null);
+  const isDraggingRef = useRef(false);
+  const zoomLevelRef = useRef(zoomLevel);
+  zoomLevelRef.current = zoomLevel;
+
+  // Apply zoom with bounds checking
+  const applyZoom = useCallback((newZoom: number) => {
+    const clampedZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
+    if (onZoomChange) {
+      onZoomChange(clampedZoom);
+    } else {
+      setZoom(clampedZoom);
+    }
+    return clampedZoom;
+  }, [onZoomChange, setZoom]);
+
+  // Momentum loop for zoom slider
+  const startZoomMomentum = useCallback(() => {
+    if (momentumIdRef.current !== null) {
+      cancelAnimationFrame(momentumIdRef.current);
+    }
+
+    const momentumLoop = () => {
+      if (Math.abs(zoomVelocityRef.current) > ZOOM_MIN_VELOCITY) {
+        const newZoom = zoomLevelRef.current + zoomVelocityRef.current;
+        const clampedZoom = applyZoom(newZoom);
+
+        // Stop momentum if we hit bounds
+        if (clampedZoom <= ZOOM_MIN || clampedZoom >= ZOOM_MAX) {
+          zoomVelocityRef.current = 0;
+          momentumIdRef.current = null;
+          return;
+        }
+
+        zoomVelocityRef.current *= ZOOM_FRICTION;
+        momentumIdRef.current = requestAnimationFrame(momentumLoop);
+      } else {
+        zoomVelocityRef.current = 0;
+        momentumIdRef.current = null;
+      }
+    };
+
+    momentumIdRef.current = requestAnimationFrame(momentumLoop);
+  }, [applyZoom]);
+
+  // Handle slider value change (while dragging)
+  const handleSliderChange = useCallback((values: number[]) => {
+    const newZoom = values[0] ?? 1;
+    const now = performance.now();
+    const timeDelta = now - lastZoomTimeRef.current;
+
+    // Calculate velocity based on change over time
+    if (timeDelta > 0 && timeDelta < 100) {
+      const valueDelta = newZoom - lastZoomValueRef.current;
+      zoomVelocityRef.current = valueDelta / timeDelta * 16; // Normalize to ~60fps
+    }
+
+    lastZoomValueRef.current = newZoom;
+    lastZoomTimeRef.current = now;
+    isDraggingRef.current = true;
+
+    applyZoom(newZoom);
+  }, [applyZoom]);
+
+  // Handle slider release - start momentum
+  const handleSliderCommit = useCallback(() => {
+    isDraggingRef.current = false;
+    // Only start momentum if there's meaningful velocity
+    if (Math.abs(zoomVelocityRef.current) > ZOOM_MIN_VELOCITY) {
+      startZoomMomentum();
+    }
+  }, [startZoomMomentum]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (momentumIdRef.current !== null) {
+        cancelAnimationFrame(momentumIdRef.current);
+      }
+    };
+  }, []);
 
   const handleUndo = () => {
     useTimelineStore.temporal.getState().undo();
@@ -265,14 +359,8 @@ export function TimelineHeader({ onZoomChange, onZoomIn, onZoomOut }: TimelineHe
 
         <Slider
           value={[zoomLevel]}
-          onValueChange={(values) => {
-            const newZoom = values[0] ?? 1;
-            if (onZoomChange) {
-              onZoomChange(newZoom);
-            } else {
-              setZoom(newZoom);
-            }
-          }}
+          onValueChange={handleSliderChange}
+          onValueCommit={handleSliderCommit}
           min={0.01}
           max={2}
           step={0.01}

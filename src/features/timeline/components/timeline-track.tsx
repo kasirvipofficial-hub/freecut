@@ -7,6 +7,7 @@ import { useMediaLibraryStore } from '@/features/media-library/stores/media-libr
 import { mediaLibraryService } from '@/features/media-library/services/media-library-service';
 import { findNearestAvailableSpace } from '../utils/collision-utils';
 import { getMediaDragData } from '@/features/media-library/utils/drag-data-cache';
+import { CLIP_HEIGHT } from '@/constants/timeline';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -462,9 +463,7 @@ export const TimelineTrack = memo(function TimelineTrack({ track, items }: Timel
         <div
           ref={trackRef}
           data-track-id={track.id}
-          className={`border-b border-border relative transition-colors ${
-            isDragOver ? 'bg-primary/5 border-primary' : ''
-          }`}
+          className="border-b border-border relative"
           style={{
             height: `${track.height}px`,
             // CSS containment tells browser this element's layout is independent
@@ -477,31 +476,26 @@ export const TimelineTrack = memo(function TimelineTrack({ track, items }: Timel
           onMouseDown={handleMouseDown}
           onContextMenu={handleContextMenu}
         >
-          {/* Drop indicator */}
-          {isDragOver && !track.locked && (
-            <>
-              <div className="absolute inset-0 border-2 border-dashed border-primary pointer-events-none rounded" />
-              {/* Ghost preview clips */}
-              {ghostPreviews.map((ghost, index) => (
-                <div
-                  key={index}
-                  className={`absolute top-2 h-12 rounded border-2 border-dashed pointer-events-none z-20 flex items-center px-2 ${
-                    ghost.type === 'video'
-                      ? 'border-timeline-video bg-timeline-video/20'
-                      : ghost.type === 'audio'
-                      ? 'border-timeline-audio bg-timeline-audio/20'
-                      : 'border-timeline-image bg-timeline-image/20'
-                  }`}
-                  style={{
-                    left: `${ghost.left}px`,
-                    width: `${ghost.width}px`,
-                  }}
-                >
-                  <span className="text-xs text-foreground/70 truncate">{ghost.label}</span>
-                </div>
-              ))}
-            </>
-          )}
+          {/* Ghost preview clips during drag */}
+          {isDragOver && !track.locked && ghostPreviews.map((ghost, index) => (
+            <div
+              key={index}
+              className={`absolute inset-y-0 rounded border-2 border-dashed pointer-events-none z-20 flex items-center px-2 ${
+                ghost.type === 'video'
+                  ? 'border-timeline-video bg-timeline-video/20'
+                  : ghost.type === 'audio'
+                  ? 'border-timeline-audio bg-timeline-audio/20'
+                  : 'border-timeline-image bg-timeline-image/20'
+              }`}
+              style={{
+                left: `${ghost.left}px`,
+                width: `${ghost.width}px`,
+                height: CLIP_HEIGHT,
+              }}
+            >
+              <span className="text-xs text-foreground/70 truncate">{ghost.label}</span>
+            </div>
+          ))}
 
           {/* Render all items for this track - always visible in timeline UI */}
           {trackItems.map((item) => (

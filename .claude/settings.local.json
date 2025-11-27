@@ -28,7 +28,8 @@
       "Bash(E:)",
       "Bash(find:*)",
       "WebFetch(domain:mediabunny.dev)",
-      "Bash(node -e:*)"
+      "Bash(node -e:*)",
+      "WebFetch(domain:stackoverflow.com)"
     ],
     "deny": [],
     "ask": []

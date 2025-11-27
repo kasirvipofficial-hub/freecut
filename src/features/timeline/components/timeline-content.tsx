@@ -9,6 +9,19 @@ import { useSelectionStore } from '@/features/editor/stores/selection-store';
 // Hooks
 import { useMarqueeSelection } from '@/hooks/use-marquee-selection';
 
+// Constants
+import {
+  SCROLL_SENSITIVITY,
+  SCROLL_FRICTION,
+  SCROLL_MIN_VELOCITY,
+  SCROLL_SMOOTHING,
+  SCROLL_GESTURE_TIMEOUT,
+  ZOOM_SENSITIVITY,
+  ZOOM_FRICTION,
+  ZOOM_MIN_VELOCITY,
+  ZOOM_SMOOTHING,
+} from '../constants/momentum';
+
 // Components
 import { TimelineMarkers } from './timeline-markers';
 import { TimelinePlayhead } from './timeline-playhead';
@@ -88,6 +101,14 @@ export function TimelineContent({ duration, scrollRef, onZoomHandlersReady }: Ti
 
   const zoomLevelRef = useRef(zoomLevel);
   zoomLevelRef.current = zoomLevel;
+
+
+  // Momentum scrolling state
+  const velocityXRef = useRef(0);
+  const velocityYRef = useRef(0);
+  const velocityZoomRef = useRef(0);
+  const momentumIdRef = useRef<number | null>(null);
+  const lastWheelTimeRef = useRef(0);
 
   // Merge external scrollRef with internal containerRef
   const mergedRef = useCallback((node: HTMLDivElement | null) => {
@@ -370,24 +391,124 @@ export function TimelineContent({ duration, scrollRef, onZoomHandlersReady }: Ti
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps - only call once on mount
 
-  // Handle Ctrl+Scroll zoom with playhead anchoring
-  const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-    // Only handle zoom when Ctrl (Windows/Linux) or Cmd (Mac) is pressed
-    if (!event.ctrlKey && !event.metaKey) {
-      return; // Allow normal scrolling
+  // Momentum scroll/zoom loop using requestAnimationFrame
+  const startMomentumScroll = useCallback(() => {
+    if (momentumIdRef.current !== null) {
+      cancelAnimationFrame(momentumIdRef.current);
     }
 
-    // Note: preventDefault is handled globally in App.tsx
-    if (!containerRef.current) return;
+    const momentumLoop = () => {
+      if (!containerRef.current) return;
 
-    // Calculate zoom delta with medium sensitivity
-    // Negative deltaY = scroll up = zoom in, Positive deltaY = scroll down = zoom out
-    const zoomFactor = 1 - event.deltaY * 0.001;
-    const newZoomLevel = zoomLevelRef.current * zoomFactor;
+      let hasScrollMomentum = false;
+      let hasZoomMomentum = false;
 
-    // Apply zoom immediately
-    applyZoomWithPlayheadCentering(newZoomLevel);
-  };
+      // Apply velocity to scroll position
+      if (Math.abs(velocityXRef.current) > SCROLL_MIN_VELOCITY) {
+        containerRef.current.scrollLeft += velocityXRef.current;
+        velocityXRef.current *= SCROLL_FRICTION;
+        hasScrollMomentum = true;
+      } else {
+        velocityXRef.current = 0;
+      }
+
+      if (Math.abs(velocityYRef.current) > SCROLL_MIN_VELOCITY) {
+        containerRef.current.scrollTop += velocityYRef.current;
+        velocityYRef.current *= SCROLL_FRICTION;
+        hasScrollMomentum = true;
+      } else {
+        velocityYRef.current = 0;
+      }
+
+      // Apply velocity to zoom
+      if (Math.abs(velocityZoomRef.current) > ZOOM_MIN_VELOCITY) {
+        const zoomFactor = 1 - velocityZoomRef.current;
+        const newZoomLevel = zoomLevelRef.current * zoomFactor;
+        applyZoomWithPlayheadCentering(newZoomLevel);
+        velocityZoomRef.current *= ZOOM_FRICTION;
+        hasZoomMomentum = true;
+      } else {
+        velocityZoomRef.current = 0;
+      }
+
+      // Continue loop if still moving
+      if (hasScrollMomentum || hasZoomMomentum) {
+        momentumIdRef.current = requestAnimationFrame(momentumLoop);
+      } else {
+        momentumIdRef.current = null;
+      }
+    };
+
+    momentumIdRef.current = requestAnimationFrame(momentumLoop);
+  }, [applyZoomWithPlayheadCentering]);
+
+  // Cleanup momentum on unmount
+  useEffect(() => {
+    return () => {
+      if (momentumIdRef.current !== null) {
+        cancelAnimationFrame(momentumIdRef.current);
+      }
+    };
+  }, []);
+
+  // Attach non-passive wheel event listener to allow preventDefault
+  // React's onWheel is passive by default in modern browsers
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const wheelHandler = (event: WheelEvent) => {
+      // Prevent native scroll/zoom behavior for all cases we handle
+      event.preventDefault();
+
+      const now = performance.now();
+      const timeDelta = now - lastWheelTimeRef.current;
+      lastWheelTimeRef.current = now;
+
+      // If a new gesture starts (after pause), reset all velocities
+      if (timeDelta > SCROLL_GESTURE_TIMEOUT) {
+        velocityXRef.current = 0;
+        velocityYRef.current = 0;
+        velocityZoomRef.current = 0;
+      }
+
+      // Ctrl/Cmd + scroll = zoom with momentum
+      if (event.ctrlKey || event.metaKey) {
+        velocityXRef.current = 0;
+        velocityYRef.current = 0;
+        const zoomSmoothingFactor = 1 - ZOOM_SMOOTHING;
+        const delta = event.deltaY * ZOOM_SENSITIVITY;
+        velocityZoomRef.current = velocityZoomRef.current * zoomSmoothingFactor + delta * ZOOM_SMOOTHING;
+        startMomentumScroll();
+        return;
+      }
+
+      // Reset zoom velocity for scroll operations
+      velocityZoomRef.current = 0;
+      const smoothingFactor = 1 - SCROLL_SMOOTHING;
+
+      // Shift + scroll = vertical scroll ONLY
+      if (event.shiftKey) {
+        velocityXRef.current = 0;
+        const delta = (event.deltaX || event.deltaY) * SCROLL_SENSITIVITY;
+        velocityYRef.current = velocityYRef.current * smoothingFactor + delta * SCROLL_SMOOTHING;
+      } else {
+        // Default scroll = horizontal scroll ONLY
+        velocityYRef.current = 0;
+        const delta = (event.deltaY || event.deltaX) * SCROLL_SENSITIVITY;
+        velocityXRef.current = velocityXRef.current * smoothingFactor + delta * SCROLL_SMOOTHING;
+      }
+
+      startMomentumScroll();
+    };
+
+    // Add with { passive: false } to allow preventDefault
+    container.addEventListener('wheel', wheelHandler, { passive: false });
+
+    return () => {
+      container.removeEventListener('wheel', wheelHandler);
+    };
+  }, [applyZoomWithPlayheadCentering, startMomentumScroll]);
 
   return (
     <div
@@ -397,7 +518,6 @@ export function TimelineContent({ duration, scrollRef, onZoomHandlersReady }: Ti
         scrollBehavior: 'auto', // Disable smooth scrolling for instant zoom response
         willChange: 'scroll-position', // Hint to browser for optimization
       }}
-      onWheel={handleWheel}
       onClick={handleContainerClick}
     >
       {/* Marquee selection overlay */}

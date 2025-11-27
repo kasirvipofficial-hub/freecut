@@ -564,7 +564,7 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
       {/* Speed badge - show when speed is not 1x */}
       {currentSpeed !== 1 && !isStretching && (
         <div className="absolute top-1 right-1 px-1 py-0.5 text-[10px] font-bold bg-black/60 text-white rounded font-mono">
-          {currentSpeed >= 1 ? `${currentSpeed.toFixed(1)}x` : `${currentSpeed.toFixed(2)}x`}
+          {currentSpeed.toFixed(2)}x
         </div>
       )}
 
