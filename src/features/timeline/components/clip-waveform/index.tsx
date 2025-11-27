@@ -1,5 +1,5 @@
-import { memo, useCallback, useEffect, useState } from 'react';
-import { TiledCanvas, useTiledCanvasRenderer } from '../clip-filmstrip/tiled-canvas';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { TiledCanvas } from '../clip-filmstrip/tiled-canvas';
 import { WaveformSkeleton } from './waveform-skeleton';
 import { useWaveform } from '../../hooks/use-waveform';
 import { useZoomStore } from '../../stores/zoom-store';
@@ -50,16 +50,27 @@ export const ClipWaveform = memo(function ClipWaveform({
   isVisible,
 }: ClipWaveformProps) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const hasStartedLoadingRef = useRef(false);
   const pixelsPerSecond = useZoomStore((s) => s.pixelsPerSecond);
 
-  // Load blob URL for the media
+  // Load blob URL for the media - only once when first visible
   useEffect(() => {
+    // Skip if already started loading (prevents re-triggering on visibility changes)
+    if (hasStartedLoadingRef.current) {
+      return;
+    }
+
+    // Only start loading when visible
+    if (!isVisible || !mediaId) {
+      return;
+    }
+
+    hasStartedLoadingRef.current = true;
     let mounted = true;
-    let url: string | null = null;
 
     const loadBlobUrl = async () => {
       try {
-        url = await mediaLibraryService.getMediaBlobUrl(mediaId);
+        const url = await mediaLibraryService.getMediaBlobUrl(mediaId);
         if (mounted && url) {
           setBlobUrl(url);
         }
@@ -68,21 +79,19 @@ export const ClipWaveform = memo(function ClipWaveform({
       }
     };
 
-    if (isVisible && mediaId) {
-      loadBlobUrl();
-    }
+    loadBlobUrl();
 
     return () => {
       mounted = false;
     };
   }, [mediaId, isVisible]);
 
-  // Use waveform hook
+  // Use waveform hook - enabled once we have blobUrl (independent of visibility after that)
   const { peaks, duration, sampleRate, isLoading, error } = useWaveform({
     mediaId,
     blobUrl,
-    isVisible,
-    enabled: isVisible && !!blobUrl,
+    isVisible: true, // Always consider visible once we start - prevents re-triggers
+    enabled: !!blobUrl,
   });
 
   // Render function for tiled canvas
@@ -150,18 +159,6 @@ export const ClipWaveform = memo(function ClipWaveform({
     [peaks, duration, sampleRate, pixelsPerSecond, sourceStart, trimStart, speed, sourceDuration]
   );
 
-  // Create stable renderer that updates with dependencies
-  const stableRenderer = useTiledCanvasRenderer(renderTile, [
-    peaks,
-    duration,
-    sampleRate,
-    pixelsPerSecond,
-    sourceStart,
-    trimStart,
-    speed,
-    sourceDuration,
-  ]);
-
   // Show skeleton while loading or if no peaks yet
   if (isLoading || !peaks || peaks.length === 0) {
     return <WaveformSkeleton clipWidth={clipWidth} height={WAVEFORM_HEIGHT} />;
@@ -172,11 +169,16 @@ export const ClipWaveform = memo(function ClipWaveform({
     return null;
   }
 
+  // Include pixelsPerSecond in version to force re-render on zoom changes
+  // Using Math.round to avoid floating point noise triggering unnecessary re-renders
+  const renderVersion = peaks.length * 10000 + Math.round(pixelsPerSecond * 100);
+
   return (
     <TiledCanvas
       width={clipWidth}
       height={WAVEFORM_HEIGHT}
-      renderTile={stableRenderer}
+      renderTile={renderTile}
+      version={renderVersion}
       className="top-2" // Offset from clip top to leave room for label
     />
   );

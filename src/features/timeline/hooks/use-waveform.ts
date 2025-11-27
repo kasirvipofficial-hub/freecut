@@ -97,10 +97,8 @@ export function useWaveform({
         isGeneratingRef.current = false;
       });
 
-    return () => {
-      // Abort pending generation on cleanup
-      waveformCache.abort(mediaId);
-    };
+    // Don't abort on effect re-runs - let generation continue in background
+    // The cache will hold the result for when we need it
   }, [mediaId, blobUrl, isVisible, enabled, waveform, handleProgress]);
 
   // Cleanup on unmount

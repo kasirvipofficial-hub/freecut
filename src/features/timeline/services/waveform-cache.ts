@@ -4,15 +4,14 @@
  * Manages waveform data caching with:
  * - In-memory LRU cache for fast access
  * - IndexedDB persistence across sessions
- * - Worker-based waveform generation
+ * - Mediabunny-based waveform generation (hardware-accelerated)
  */
 
 import type { WaveformData } from '@/types/storage';
 import { getWaveform, saveWaveform, deleteWaveform, reconnectDB } from '@/lib/storage/indexeddb';
-import type {
-  WaveformWorkerRequest,
-  WaveformWorkerResponse,
-} from '../workers/waveform-worker';
+
+// Lazy load mediabunny to avoid blocking initial render
+const mediabunnyModule = () => import('mediabunny');
 
 // Memory cache configuration
 const MAX_CACHE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
@@ -34,11 +33,15 @@ interface PendingRequest {
   abortController: AbortController;
 }
 
+interface ExtractionState {
+  aborted: boolean;
+}
+
 class WaveformCacheService {
   private memoryCache = new Map<string, CachedWaveform>();
   private currentCacheSize = 0;
   private pendingRequests = new Map<string, PendingRequest>();
-  private worker: Worker | null = null;
+  private activeExtractions = new Map<string, ExtractionState>();
 
   /**
    * Get waveform from memory cache
@@ -151,103 +154,170 @@ class WaveformCacheService {
   }
 
   /**
-   * Get or create the worker
-   */
-  private getWorker(): Worker {
-    if (!this.worker) {
-      this.worker = new Worker(
-        new URL('../workers/waveform-worker.ts', import.meta.url),
-        { type: 'module' }
-      );
-    }
-    return this.worker;
-  }
-
-  /**
-   * Generate waveform using worker
+   * Generate waveform using mediabunny (hardware-accelerated WebCodecs)
    */
   private async generateWaveform(
     mediaId: string,
     blobUrl: string,
     onProgress?: (progress: number) => void
   ): Promise<CachedWaveform> {
-    const worker = this.getWorker();
-    const requestId = `${mediaId}:${Date.now()}`;
+    const extractionState: ExtractionState = { aborted: false };
+    this.activeExtractions.set(mediaId, extractionState);
 
-    return new Promise((resolve, reject) => {
-      const channel = new MessageChannel();
+    // Load mediabunny
+    const mediabunny = await mediabunnyModule();
+    const { Input, UrlSource, AudioSampleSink, MP4, WEBM, MATROSKA, MP3, WAVE, FLAC, OGG } = mediabunny;
 
-      channel.port1.onmessage = async (event: MessageEvent<WaveformWorkerResponse>) => {
-        const { type, payload } = event.data;
+    try {
+      onProgress?.(5);
 
-        switch (type) {
-          case 'progress':
-            onProgress?.(payload.progress || 0);
-            break;
+      // Create input from blob URL with common audio/video formats
+      const input = new Input({
+        source: new UrlSource(blobUrl),
+        formats: [MP4, WEBM, MATROSKA, MP3, WAVE, FLAC, OGG],
+      });
 
-          case 'waveform-ready':
-            try {
-              const peaks = payload.peaks!;
-              const duration = payload.duration!;
-              const sampleRate = payload.sampleRate!;
-              const channels = payload.channels!;
+      // Get primary audio track
+      const audioTrack = await input.getPrimaryAudioTrack();
+      if (!audioTrack) {
+        throw new Error('No audio track found');
+      }
 
-              // Save to IndexedDB
-              const waveformData: WaveformData = {
-                id: mediaId,
-                mediaId,
-                peaks: peaks.buffer as ArrayBuffer,
-                duration,
-                sampleRate,
-                channels,
-                createdAt: Date.now(),
-              };
-              await saveWaveform(waveformData);
+      onProgress?.(10);
 
-              const cached: CachedWaveform = {
-                peaks,
-                duration,
-                sampleRate,
-                channels,
-                sizeBytes: peaks.buffer.byteLength,
-                lastAccessed: Date.now(),
-              };
+      // Get audio metadata
+      const sampleRate = audioTrack.sampleRate;
+      const channels = audioTrack.numberOfChannels;
+      const duration = await audioTrack.computeDuration();
 
-              // Add to memory cache
-              this.addToMemoryCache(mediaId, cached);
+      // Create audio sample sink for sample extraction
+      const sink = new AudioSampleSink(audioTrack);
 
-              channel.port1.close();
-              resolve(cached);
-            } catch (error) {
-              channel.port1.close();
-              reject(error);
+      // Collect all audio samples
+      const allSamples: Float32Array[] = [];
+      let totalSamples = 0;
+
+      onProgress?.(20);
+
+      try {
+        for await (const sample of sink.samples()) {
+          if (extractionState.aborted) {
+            sample.close();
+            throw new Error('Aborted');
+          }
+
+          // Convert to AudioBuffer
+          const buffer = sample.toAudioBuffer();
+          sample.close(); // Release sample resources
+
+          // Get samples from all channels and mix to mono
+          const channelData: Float32Array[] = [];
+          for (let c = 0; c < buffer.numberOfChannels; c++) {
+            channelData.push(buffer.getChannelData(c));
+          }
+
+          // Mix to mono by averaging channels
+          const monoSamples = new Float32Array(buffer.length);
+          for (let i = 0; i < buffer.length; i++) {
+            let sum = 0;
+            for (let c = 0; c < channelData.length; c++) {
+              sum += channelData[c]![i] ?? 0;
             }
-            break;
+            monoSamples[i] = sum / channelData.length;
+          }
 
-          case 'error':
-            channel.port1.close();
-            reject(new Error(payload.error || 'Unknown error'));
-            break;
+          allSamples.push(monoSamples);
+          totalSamples += buffer.length;
 
-          case 'aborted':
-            channel.port1.close();
-            reject(new Error('Aborted'));
-            break;
+          // Update progress
+          const progress = 20 + Math.min(60, Math.round((totalSamples / (sampleRate * duration)) * 60));
+          onProgress?.(progress);
         }
+      } catch (loopError) {
+        if (extractionState.aborted) {
+          throw new Error('Aborted');
+        }
+        throw loopError;
+      }
+
+      onProgress?.(80);
+
+      // Combine all samples into one array
+      const combinedSamples = new Float32Array(totalSamples);
+      let offset = 0;
+      for (const samples of allSamples) {
+        combinedSamples.set(samples, offset);
+        offset += samples.length;
+      }
+
+      // Downsample to target samples per second
+      const numOutputSamples = Math.ceil(duration * SAMPLES_PER_SECOND);
+      const samplesPerOutput = Math.floor(totalSamples / numOutputSamples);
+      const peaks = new Float32Array(numOutputSamples);
+
+      // Extract peak values
+      for (let i = 0; i < numOutputSamples; i++) {
+        const startIdx = i * samplesPerOutput;
+        const endIdx = Math.min(startIdx + samplesPerOutput, totalSamples);
+
+        let maxVal = 0;
+        for (let j = startIdx; j < endIdx; j++) {
+          const val = Math.abs(combinedSamples[j] ?? 0);
+          if (val > maxVal) {
+            maxVal = val;
+          }
+        }
+        peaks[i] = maxVal;
+      }
+
+      // Normalize to 0-1 range
+      let maxPeak = 0;
+      for (let i = 0; i < peaks.length; i++) {
+        if (peaks[i]! > maxPeak) {
+          maxPeak = peaks[i]!;
+        }
+      }
+      if (maxPeak > 0) {
+        for (let i = 0; i < peaks.length; i++) {
+          peaks[i] = peaks[i]! / maxPeak;
+        }
+      }
+
+      onProgress?.(90);
+
+      const cached: CachedWaveform = {
+        peaks,
+        duration,
+        sampleRate: SAMPLES_PER_SECOND,
+        channels,
+        sizeBytes: peaks.buffer.byteLength,
+        lastAccessed: Date.now(),
       };
 
-      const message: WaveformWorkerRequest = {
-        type: 'generate-waveform',
-        payload: {
-          requestId,
+      // Add to memory cache
+      this.addToMemoryCache(mediaId, cached);
+
+      // Persist to IndexedDB
+      try {
+        const waveformData: WaveformData = {
+          id: mediaId,
           mediaId,
-          blobUrl,
-          samplesPerSecond: SAMPLES_PER_SECOND,
-        },
-      };
+          peaks: peaks.buffer as ArrayBuffer,
+          duration,
+          sampleRate: SAMPLES_PER_SECOND,
+          channels,
+          createdAt: Date.now(),
+        };
+        await saveWaveform(waveformData);
+      } catch (saveError) {
+        console.warn('Failed to persist waveform to IndexedDB:', saveError);
+      }
 
-      worker.postMessage(message, [channel.port2]);
-    });
+      onProgress?.(100);
+      return cached;
+    } finally {
+      this.activeExtractions.delete(mediaId);
+    }
   }
 
   /**
@@ -315,9 +385,9 @@ class WaveformCacheService {
    * Abort pending generation for a media item
    */
   abort(mediaId: string): void {
-    const pending = this.pendingRequests.get(mediaId);
-    if (pending) {
-      pending.abortController.abort();
+    const extraction = this.activeExtractions.get(mediaId);
+    if (extraction) {
+      extraction.aborted = true;
     }
   }
 
@@ -345,12 +415,15 @@ class WaveformCacheService {
   }
 
   /**
-   * Terminate worker
+   * Cleanup
    */
   dispose(): void {
     this.clearAll();
-    this.worker?.terminate();
-    this.worker = null;
+    // Abort all active extractions
+    for (const extraction of this.activeExtractions.values()) {
+      extraction.aborted = true;
+    }
+    this.activeExtractions.clear();
   }
 }
 

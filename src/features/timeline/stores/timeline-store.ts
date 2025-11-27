@@ -376,21 +376,24 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
       trimEnd: currentTrimEnd + rightSourceFrames,
     };
 
-    // Right item: new from, new duration, adjusted trim properties
+    // Right item: new from, new duration, adjusted source start
+    // NOTE: Only update sourceStart, NOT trimStart - they're added in visualization
+    // trimStart represents user trimming, sourceStart represents where in source we begin
     const rightItem: typeof item = {
       ...item,
       id: crypto.randomUUID(),
       from: splitFrame,
       durationInFrames: rightDuration,
-      // Adjust trim/source properties to account for split (in source frames)
-      trimStart: currentTrimStart + leftSourceFrames,
+      // Move source start forward by left clip's source frames
       sourceStart: currentSourceStart + leftSourceFrames,
+      // trimStart stays the same - we're not "trimming", we're moving the source window
     };
 
     // Update offset for video/audio items (Remotion compatibility)
+    // Offset should be the effective start in source: sourceStart + trimStart
     if (item.type === 'video' || item.type === 'audio') {
-      (leftItem as any).offset = leftItem.trimStart || 0;
-      (rightItem as any).offset = rightItem.trimStart || 0;
+      (leftItem as any).offset = (leftItem.sourceStart || 0) + (leftItem.trimStart || 0);
+      (rightItem as any).offset = (rightItem.sourceStart || 0) + (rightItem.trimStart || 0);
     }
 
     // Replace original item with the two new items
