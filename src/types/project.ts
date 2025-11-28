@@ -44,6 +44,27 @@ export interface ProjectTimeline {
     shapeType?: 'rectangle' | 'circle' | 'triangle' | 'solid';
     fillColor?: string;
     speed?: number; // Playback speed multiplier (default 1.0)
+    // Source dimensions (for video/image items)
+    sourceWidth?: number;
+    sourceHeight?: number;
+    // Transform properties
+    transform?: {
+      x?: number;
+      y?: number;
+      width?: number;
+      height?: number;
+      rotation?: number;
+      opacity?: number;
+      cornerRadius?: number;
+      aspectRatioLocked?: boolean;
+    };
+    // Audio properties
+    volume?: number;
+    audioFadeIn?: number;
+    audioFadeOut?: number;
+    // Video properties
+    fadeIn?: number;
+    fadeOut?: number;
   }>;
   // Playback and view state
   currentFrame?: number;

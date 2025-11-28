@@ -5,17 +5,23 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import {
-  ChevronLeft,
-  ChevronRight,
-  Settings2,
-} from 'lucide-react';
-import { useEditorStore } from '../stores/editor-store';
+import { ChevronLeft, ChevronRight, Settings2 } from 'lucide-react';
+import { useEditorStore } from '../../stores/editor-store';
+import { useSelectionStore } from '../../stores/selection-store';
+import { CanvasPanel } from './canvas-panel';
+import { ClipPanel } from './clip-panel';
 
+/**
+ * Properties sidebar - right panel for editing properties.
+ * Shows ClipPanel when clips are selected, CanvasPanel otherwise.
+ */
 export function PropertiesSidebar() {
   // Use granular selectors - Zustand v5 best practice
   const rightSidebarOpen = useEditorStore((s) => s.rightSidebarOpen);
   const toggleRightSidebar = useEditorStore((s) => s.toggleRightSidebar);
+  const selectedItemIds = useSelectionStore((s) => s.selectedItemIds);
+
+  const hasSelection = selectedItemIds.length > 0;
 
   return (
     <>
@@ -45,23 +51,8 @@ export function PropertiesSidebar() {
             </div>
 
             {/* Properties Panel */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* Empty state */}
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="w-16 h-16 rounded-xl bg-secondary border border-border flex items-center justify-center mb-4">
-                  <Settings2 className="w-8 h-8 text-muted-foreground" />
-                </div>
-                <h3 className="text-sm font-medium text-foreground mb-1">
-                  No Selection
-                </h3>
-                <p className="text-xs text-muted-foreground max-w-[200px]">
-                  Select an item on the timeline to edit its properties
-                </p>
-              </div>
-
-              {/* TODO: Add property controls when an item is selected
-                  Example: Transform, Effects, Opacity, Blend Mode, etc.
-              */}
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-4">
+              {hasSelection ? <ClipPanel /> : <CanvasPanel />}
             </div>
           </div>
         </Activity>

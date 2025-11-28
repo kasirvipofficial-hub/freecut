@@ -545,6 +545,47 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
     isDirty: true,
   })),
 
+  // Transform actions
+  updateItemTransform: (id, transformUpdates) => set((state) => ({
+    items: state.items.map((item) => {
+      if (item.id !== id) return item;
+      // Merge transform updates (preserving other transform properties)
+      const existingTransform = item.transform || {};
+      return {
+        ...item,
+        transform: {
+          ...existingTransform,
+          ...transformUpdates,
+        },
+      };
+    }),
+    isDirty: true,
+  })),
+
+  // Reset transform to defaults (remove explicit values)
+  resetItemTransform: (id) => set((state) => ({
+    items: state.items.map((item) =>
+      item.id === id ? { ...item, transform: undefined } : item
+    ),
+    isDirty: true,
+  })),
+
+  // Batch update for multi-select (apply same transform updates to all)
+  updateItemsTransform: (ids, transformUpdates) => set((state) => ({
+    items: state.items.map((item) => {
+      if (!ids.includes(item.id)) return item;
+      const existingTransform = item.transform || {};
+      return {
+        ...item,
+        transform: {
+          ...existingTransform,
+          ...transformUpdates,
+        },
+      };
+    }),
+    isDirty: true,
+  })),
+
   // Save timeline to project in IndexedDB
   saveTimeline: async (projectId) => {
     const state = useTimelineStore.getState();
@@ -588,17 +629,40 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
             ...(item.sourceStart !== undefined && { sourceStart: item.sourceStart }),
             ...(item.sourceEnd !== undefined && { sourceEnd: item.sourceEnd }),
             ...(item.sourceDuration !== undefined && { sourceDuration: item.sourceDuration }),
+            // Save transform if present
+            ...(item.transform && { transform: item.transform }),
+            // Save audio properties for all items (video/audio may have these)
+            ...(item.volume !== undefined && { volume: item.volume }),
+            ...(item.audioFadeIn !== undefined && { audioFadeIn: item.audioFadeIn }),
+            ...(item.audioFadeOut !== undefined && { audioFadeOut: item.audioFadeOut }),
+            // Save video fade properties
+            ...(item.fadeIn !== undefined && { fadeIn: item.fadeIn }),
+            ...(item.fadeOut !== undefined && { fadeOut: item.fadeOut }),
           };
 
           // Add type-specific properties
           if (item.type === 'video') {
-            return { ...baseItem, src: item.src, thumbnailUrl: item.thumbnailUrl, offset: item.offset, ...(item.speed !== undefined && item.speed !== 1 && { speed: item.speed }) };
+            return {
+              ...baseItem,
+              src: item.src,
+              thumbnailUrl: item.thumbnailUrl,
+              offset: item.offset,
+              ...(item.speed !== undefined && item.speed !== 1 && { speed: item.speed }),
+              ...(item.sourceWidth !== undefined && { sourceWidth: item.sourceWidth }),
+              ...(item.sourceHeight !== undefined && { sourceHeight: item.sourceHeight }),
+            };
           } else if (item.type === 'audio') {
             return { ...baseItem, src: item.src, waveformData: item.waveformData, offset: item.offset, ...(item.speed !== undefined && item.speed !== 1 && { speed: item.speed }) };
           } else if (item.type === 'text') {
             return { ...baseItem, text: item.text, fontSize: item.fontSize, fontFamily: item.fontFamily, color: item.color };
           } else if (item.type === 'image') {
-            return { ...baseItem, src: item.src, thumbnailUrl: item.thumbnailUrl };
+            return {
+              ...baseItem,
+              src: item.src,
+              thumbnailUrl: item.thumbnailUrl,
+              ...(item.sourceWidth !== undefined && { sourceWidth: item.sourceWidth }),
+              ...(item.sourceHeight !== undefined && { sourceHeight: item.sourceHeight }),
+            };
           } else if (item.type === 'shape') {
             return { ...baseItem, shapeType: item.shapeType, fillColor: item.fillColor };
           }

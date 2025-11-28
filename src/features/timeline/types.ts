@@ -1,4 +1,5 @@
 import type { TimelineTrack, TimelineItem, ProjectMarker } from '@/types/timeline';
+import type { TransformProperties } from '@/types/transform';
 
 export interface TimelineState {
   tracks: TimelineTrack[];
@@ -35,6 +36,10 @@ export interface TimelineActions {
   addMarker: (frame: number, color?: string, label?: string) => void;
   updateMarker: (id: string, updates: Partial<Omit<ProjectMarker, 'id'>>) => void;
   removeMarker: (id: string) => void;
+  // Transform actions
+  updateItemTransform: (id: string, transform: Partial<TransformProperties>) => void;
+  resetItemTransform: (id: string) => void;
+  updateItemsTransform: (ids: string[], transform: Partial<TransformProperties>) => void;
   saveTimeline: (projectId: string) => Promise<void>;
   loadTimeline: (projectId: string) => Promise<void>;
   clearTimeline: () => void;

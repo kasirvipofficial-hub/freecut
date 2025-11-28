@@ -1,0 +1,103 @@
+import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
+  AlignLeft,
+  AlignCenterHorizontal,
+  AlignRight,
+  AlignStartVertical,
+  AlignCenterVertical,
+  AlignEndVertical,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+export type AlignmentType =
+  | 'left'
+  | 'center-h'
+  | 'right'
+  | 'top'
+  | 'center-v'
+  | 'bottom';
+
+interface AlignmentButtonsProps {
+  onAlign: (alignment: AlignmentType) => void;
+  disabled?: boolean;
+  className?: string;
+}
+
+const horizontalAlignments: Array<{
+  type: AlignmentType;
+  icon: typeof AlignLeft;
+  label: string;
+}> = [
+  { type: 'left', icon: AlignLeft, label: 'Align Left' },
+  { type: 'center-h', icon: AlignCenterHorizontal, label: 'Center Horizontally' },
+  { type: 'right', icon: AlignRight, label: 'Align Right' },
+];
+
+const verticalAlignments: Array<{
+  type: AlignmentType;
+  icon: typeof AlignStartVertical;
+  label: string;
+}> = [
+  { type: 'top', icon: AlignStartVertical, label: 'Align Top' },
+  { type: 'center-v', icon: AlignCenterVertical, label: 'Center Vertically' },
+  { type: 'bottom', icon: AlignEndVertical, label: 'Align Bottom' },
+];
+
+/**
+ * Horizontal and vertical alignment button groups.
+ * Used to align selected clips to canvas edges or center.
+ */
+export function AlignmentButtons({
+  onAlign,
+  disabled = false,
+  className,
+}: AlignmentButtonsProps) {
+  return (
+    <div className={cn('flex items-center gap-3', className)}>
+      {/* Horizontal alignment */}
+      <div className="flex items-center gap-0.5 p-0.5 bg-secondary rounded-md">
+        {horizontalAlignments.map(({ type, icon: Icon, label }) => (
+          <Tooltip key={type}>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => onAlign(type)}
+                disabled={disabled}
+              >
+                <Icon className="w-3.5 h-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{label}</TooltipContent>
+          </Tooltip>
+        ))}
+      </div>
+
+      {/* Vertical alignment */}
+      <div className="flex items-center gap-0.5 p-0.5 bg-secondary rounded-md">
+        {verticalAlignments.map(({ type, icon: Icon, label }) => (
+          <Tooltip key={type}>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => onAlign(type)}
+                disabled={disabled}
+              >
+                <Icon className="w-3.5 h-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{label}</TooltipContent>
+          </Tooltip>
+        ))}
+      </div>
+    </div>
+  );
+}

@@ -5,6 +5,7 @@ import { useTimelineStore } from '@/features/timeline/stores/timeline-store';
 import { MainComposition } from '@/lib/remotion/compositions/main-composition';
 import { useRemotionPlayer } from '../hooks/use-remotion-player';
 import { resolveMediaUrls, cleanupBlobUrls } from '../utils/media-resolver';
+import { GizmoOverlay } from './gizmo-overlay';
 import type { TimelineTrack } from '@/types/timeline';
 
 interface VideoPreviewProps {
@@ -32,6 +33,10 @@ interface VideoPreviewProps {
 export function VideoPreview({ project, containerSize }: VideoPreviewProps) {
   const playerRef = useRef<PlayerRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const playerContainerRef = useRef<HTMLDivElement>(null);
+
+  // State for gizmo overlay positioning
+  const [playerContainerRect, setPlayerContainerRect] = useState<DOMRect | null>(null);
 
   // Granular selectors - avoid subscribing to currentFrame here to prevent re-renders
   const fps = useTimelineStore((s) => s.fps);
@@ -180,6 +185,31 @@ export function VideoPreview({ project, containerSize }: VideoPreviewProps) {
     return playerSize.width > containerSize.width || playerSize.height > containerSize.height;
   }, [zoom, playerSize, containerSize]);
 
+  // Track player container rect for gizmo positioning
+  useEffect(() => {
+    const container = playerContainerRef.current;
+    if (!container) return;
+
+    const updateRect = () => {
+      setPlayerContainerRect(container.getBoundingClientRect());
+    };
+
+    // Initial measurement
+    updateRect();
+
+    // Update on resize
+    const resizeObserver = new ResizeObserver(updateRect);
+    resizeObserver.observe(container);
+
+    // Update on scroll (container rect changes position)
+    window.addEventListener('scroll', updateRect, true);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('scroll', updateRect, true);
+    };
+  }, [playerSize]); // Re-run when player size changes
+
   return (
     <div
       className="w-full h-full bg-gradient-to-br from-background to-secondary/20 relative"
@@ -187,7 +217,11 @@ export function VideoPreview({ project, containerSize }: VideoPreviewProps) {
     >
       <div className="min-w-full min-h-full grid place-items-center p-6">
         <div
-          ref={containerRef}
+          ref={(el) => {
+            // Assign both refs
+            (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+            (playerContainerRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+          }}
           className="relative overflow-hidden border-2 border-border shadow-2xl"
           style={{
             width: `${playerSize.width}px`,
@@ -232,6 +266,14 @@ export function VideoPreview({ project, containerSize }: VideoPreviewProps) {
               <p className="text-red-500">Player Error: {error.message}</p>
             </div>
           )}
+        />
+
+        {/* Transform gizmo overlay for selected items */}
+        <GizmoOverlay
+          containerRect={playerContainerRect}
+          playerSize={playerSize}
+          projectSize={{ width: project.width, height: project.height }}
+          zoom={zoom}
         />
 
       </div>

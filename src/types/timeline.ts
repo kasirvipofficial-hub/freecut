@@ -1,3 +1,5 @@
+import type { TransformProperties } from './transform';
+
 // Base type for all timeline items (following Remotion pattern)
 type BaseTimelineItem = {
   id: string;
@@ -14,6 +16,15 @@ type BaseTimelineItem = {
   sourceEnd?: number; // Original end frame in source media (default sourceDuration)
   sourceDuration?: number; // Total duration of source media in frames (for boundary checks)
   speed?: number; // Playback speed multiplier (default 1.0, range 0.1-10.0)
+  // Transform properties (optional - defaults computed at render time)
+  transform?: TransformProperties;
+  // Audio properties (for video/audio items)
+  volume?: number; // Volume in dB, -60 to +12 (default: 0)
+  audioFadeIn?: number; // Audio fade in duration in seconds (default: 0)
+  audioFadeOut?: number; // Audio fade out duration in seconds (default: 0)
+  // Video properties (for video items)
+  fadeIn?: number; // Video fade in duration in seconds (default: 0)
+  fadeOut?: number; // Video fade out duration in seconds (default: 0)
 };
 
 // Discriminated union types for different item types
@@ -22,6 +33,9 @@ export type VideoItem = BaseTimelineItem & {
   src: string;
   thumbnailUrl?: string;
   offset?: number; // Trim offset in source video
+  // Source dimensions (intrinsic size from media metadata)
+  sourceWidth?: number;
+  sourceHeight?: number;
 };
 
 export type AudioItem = BaseTimelineItem & {
@@ -43,6 +57,9 @@ export type ImageItem = BaseTimelineItem & {
   type: 'image';
   src: string;
   thumbnailUrl?: string;
+  // Source dimensions (intrinsic size from media metadata)
+  sourceWidth?: number;
+  sourceHeight?: number;
 };
 
 export type ShapeItem = BaseTimelineItem & {

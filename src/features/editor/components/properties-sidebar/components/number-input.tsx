@@ -1,0 +1,170 @@
+import { useCallback, useRef, useState, useEffect } from 'react';
+import { cn } from '@/lib/utils';
+
+type MixedValue = number | 'mixed';
+
+interface NumberInputProps {
+  value: MixedValue;
+  onChange: (value: number) => void;
+  label?: string;
+  unit?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  disabled?: boolean;
+  scrubEnabled?: boolean;
+  placeholder?: string;
+  className?: string;
+}
+
+/**
+ * Compact number input with optional label prefix and unit suffix.
+ * Supports:
+ * - Click-drag (scrub) to adjust value
+ * - Arrow keys for increment/decrement
+ * - Shift+Arrow for 10x step
+ * - 'Mixed' state for multi-selection with different values
+ */
+export function NumberInput({
+  value,
+  onChange,
+  label,
+  unit,
+  min,
+  max,
+  step = 1,
+  disabled = false,
+  scrubEnabled = true,
+  placeholder,
+  className,
+}: NumberInputProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [localValue, setLocalValue] = useState(
+    value === 'mixed' ? '' : String(value)
+  );
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const scrubStartRef = useRef<{ x: number; startValue: number } | null>(null);
+
+  // Sync local value with prop value
+  useEffect(() => {
+    if (!inputRef.current || document.activeElement !== inputRef.current) {
+      setLocalValue(value === 'mixed' ? '' : String(value));
+    }
+  }, [value]);
+
+  const clamp = useCallback(
+    (v: number) => {
+      let result = v;
+      if (min !== undefined) result = Math.max(min, result);
+      if (max !== undefined) result = Math.min(max, result);
+      return result;
+    },
+    [min, max]
+  );
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setLocalValue(e.target.value);
+  };
+
+  const handleInputBlur = () => {
+    const parsed = parseFloat(localValue);
+    if (!isNaN(parsed)) {
+      onChange(clamp(parsed));
+    } else {
+      // Revert to original value
+      setLocalValue(value === 'mixed' ? '' : String(value));
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.currentTarget.blur();
+    } else if (e.key === 'Escape') {
+      setLocalValue(value === 'mixed' ? '' : String(value));
+      e.currentTarget.blur();
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const currentValue = value === 'mixed' ? 0 : value;
+      const multiplier = e.shiftKey ? 10 : 1;
+      const delta = e.key === 'ArrowUp' ? step * multiplier : -step * multiplier;
+      onChange(clamp(currentValue + delta));
+    }
+  };
+
+  // Scrub handling
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!scrubEnabled || disabled) return;
+    if (e.target === inputRef.current) return; // Don't scrub when clicking input
+
+    const startValue = value === 'mixed' ? 0 : value;
+    scrubStartRef.current = { x: e.clientX, startValue };
+    setIsScrubbing(true);
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!scrubStartRef.current) return;
+      const dx = moveEvent.clientX - scrubStartRef.current.x;
+      const sensitivity = moveEvent.shiftKey ? 0.1 : 1;
+      const delta = Math.round(dx * sensitivity * step);
+      const newValue = clamp(scrubStartRef.current.startValue + delta);
+      onChange(newValue);
+    };
+
+    const handleMouseUp = () => {
+      setIsScrubbing(false);
+      scrubStartRef.current = null;
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const isMixed = value === 'mixed';
+
+  return (
+    <div
+      className={cn(
+        'relative flex items-center h-7 bg-secondary border border-input rounded-md overflow-hidden transition-colors',
+        'focus-within:ring-1 focus-within:ring-ring focus-within:border-ring',
+        isScrubbing && 'ring-1 ring-ring border-ring',
+        disabled && 'opacity-50 cursor-not-allowed',
+        !disabled && scrubEnabled && 'cursor-ew-resize',
+        className
+      )}
+      onMouseDown={handleMouseDown}
+    >
+      {/* Label prefix */}
+      {label && (
+        <span className="pl-2 pr-1 text-[10px] text-muted-foreground select-none pointer-events-none">
+          {label}
+        </span>
+      )}
+
+      {/* Input */}
+      <input
+        ref={inputRef}
+        type="text"
+        inputMode="numeric"
+        value={localValue}
+        onChange={handleInputChange}
+        onBlur={handleInputBlur}
+        onKeyDown={handleKeyDown}
+        disabled={disabled}
+        placeholder={isMixed ? 'Mixed' : placeholder}
+        className={cn(
+          'flex-1 h-full bg-transparent text-xs font-mono text-foreground outline-none',
+          'px-1 min-w-0 cursor-text',
+          isMixed && 'italic text-muted-foreground'
+        )}
+      />
+
+      {/* Unit suffix */}
+      {unit && (
+        <span className="pr-2 text-[10px] text-muted-foreground select-none pointer-events-none">
+          {unit}
+        </span>
+      )}
+    </div>
+  );
+}
