@@ -1,8 +1,18 @@
 import React from 'react';
 import { AbsoluteFill, OffthreadVideo } from 'remotion';
+import { Gif } from '@remotion/gif';
 import type { TimelineItem } from '@/types/timeline';
 import { DebugOverlay } from './debug-overlay';
 import { PitchCorrectedAudio } from './pitch-corrected-audio';
+
+/**
+ * Check if a URL points to a GIF file
+ */
+function isGifUrl(url: string): boolean {
+  if (!url) return false;
+  const lowerUrl = url.toLowerCase();
+  return lowerUrl.endsWith('.gif') || lowerUrl.includes('.gif');
+}
 
 // Set to true to show debug overlay on video items during rendering
 const DEBUG_VIDEO_OVERLAY = false;
@@ -54,6 +64,28 @@ export const Item: React.FC<ItemProps> = ({ item, muted = false }) => {
     const isInvalidSeek = sourceDuration > 0 && trimBefore >= sourceDuration;
     const exceedsSource = sourceDuration > 0 && sourceEndPosition > sourceDuration + tolerance;
 
+    // Safety check: if sourceStart is unreasonably high (>1 hour) and no sourceDuration is set,
+    // this indicates corrupted metadata from split/trim operations
+    // Show error state instead of crashing Remotion
+    const MAX_REASONABLE_FRAMES = 30 * 60 * 60; // 1 hour at 30fps
+    const hasCorruptedMetadata = sourceDuration === 0 && trimBefore > MAX_REASONABLE_FRAMES;
+
+    if (hasCorruptedMetadata || isInvalidSeek) {
+      console.error('[Remotion Item] Invalid source position detected:', {
+        itemId: item.id,
+        sourceStart: item.sourceStart,
+        trimBefore,
+        sourceDuration,
+        hasCorruptedMetadata,
+        isInvalidSeek,
+      });
+      return (
+        <AbsoluteFill style={{ backgroundColor: '#2a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <p style={{ color: '#ff6b6b', fontSize: 14 }}>Invalid source position</p>
+        </AbsoluteFill>
+      );
+    }
+
     // Clamp trimBefore to valid range if source duration is known
     let safeTrimBefore = trimBefore;
     if (sourceDuration > 0) {
@@ -68,6 +100,23 @@ export const Item: React.FC<ItemProps> = ({ item, muted = false }) => {
         });
         safeTrimBefore = maxTrimBefore;
       }
+    }
+
+    // If clip would exceed source even after clamping, show error
+    // This happens when durationInFrames * playbackRate > sourceDuration
+    if (exceedsSource && safeTrimBefore === 0 && sourceFramesNeeded > sourceDuration) {
+      console.error('[Remotion Item] Clip duration exceeds source duration:', {
+        itemId: item.id,
+        sourceFramesNeeded,
+        sourceDuration,
+        durationInFrames: item.durationInFrames,
+        playbackRate,
+      });
+      return (
+        <AbsoluteFill style={{ backgroundColor: '#2a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <p style={{ color: '#ff6b6b', fontSize: 14 }}>Clip exceeds source duration</p>
+        </AbsoluteFill>
+      );
     }
 
     return (
@@ -131,6 +180,33 @@ export const Item: React.FC<ItemProps> = ({ item, muted = false }) => {
         </AbsoluteFill>
       );
     }
+
+    // Use Remotion's Gif component for animated GIFs
+    // This ensures proper frame-by-frame rendering during export
+    // Check both src URL and item label (original filename) for .gif extension
+    const isAnimatedGif = isGifUrl(item.src) || (item.label && item.label.toLowerCase().endsWith('.gif'));
+
+    if (isAnimatedGif) {
+      // Get playback rate from speed property (default 1x)
+      const gifPlaybackRate = item.speed ?? 1;
+
+      return (
+        <AbsoluteFill>
+          <Gif
+            src={item.src}
+            fit="cover"
+            style={{
+              width: '100%',
+              height: '100%',
+            }}
+            loopBehavior="loop"
+            playbackRate={gifPlaybackRate}
+          />
+        </AbsoluteFill>
+      );
+    }
+
+    // Regular static images
     return (
       <AbsoluteFill>
         <img

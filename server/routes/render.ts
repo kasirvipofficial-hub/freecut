@@ -300,9 +300,20 @@ router.get('/render/:jobId/download', async (req: Request, res: Response) => {
     });
   }
 
+  // Determine content type and filename based on extension
+  const outputPath = job.outputPath;
+  const ext = outputPath.substring(outputPath.lastIndexOf('.')).toLowerCase();
+  const contentTypes: Record<string, string> = {
+    '.mp4': 'video/mp4',
+    '.webm': 'video/webm',
+    '.mov': 'video/quicktime',
+    '.gif': 'image/gif',
+  };
+  const contentType = contentTypes[ext] || 'application/octet-stream';
+
   // Stream the file
-  res.setHeader('Content-Type', 'video/mp4');
-  res.setHeader('Content-Disposition', `attachment; filename="${jobId}.mp4"`);
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Content-Disposition', `attachment; filename="${jobId}${ext}"`);
 
   const fileStream = fs.createReadStream(job.outputPath);
   fileStream.pipe(res);

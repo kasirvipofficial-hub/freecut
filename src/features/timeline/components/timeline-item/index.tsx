@@ -191,8 +191,10 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
   // Get visual feedback for rate stretch
   const stretchFeedback = isStretching ? getVisualFeedback() : null;
 
-  // Check if this is a media item (video/audio) that supports rate stretch
-  const isMediaItem = item.type === 'video' || item.type === 'audio';
+  // Check if this is a media item (video/audio/gif) that supports rate stretch
+  // GIFs are animated images that can have their playback speed adjusted
+  const isGifImage = item.type === 'image' && item.label?.toLowerCase().endsWith('.gif');
+  const isMediaItem = item.type === 'video' || item.type === 'audio' || isGifImage;
 
   // Current speed for badge display
   const currentSpeed = item.speed || 1;

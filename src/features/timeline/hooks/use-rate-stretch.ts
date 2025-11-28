@@ -252,8 +252,9 @@ export function useRateStretch(item: TimelineItem, timelineDuration: number, tra
     (e: React.MouseEvent, handle: StretchHandle) => {
       if (trackLocked) return;
 
-      // Only works on video/audio items
-      if (item.type !== 'video' && item.type !== 'audio') return;
+      // Only works on video/audio/gif items
+      const isGifImage = item.type === 'image' && item.label?.toLowerCase().endsWith('.gif');
+      if (item.type !== 'video' && item.type !== 'audio' && !isGifImage) return;
 
       e.stopPropagation();
       e.preventDefault();

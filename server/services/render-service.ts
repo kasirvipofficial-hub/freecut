@@ -123,9 +123,26 @@ export class RenderService {
       // Update total frames from composition
       jobManager.updateJob(jobId, { totalFrames: compositionData.durationInFrames });
 
-      // Prepare output path
+      // Get the canonical codec first, then derive extension from it
+      // This ensures codec and extension are always consistent
+      const codec = this.getCodec(settings.codec);
+
+      // Inline extension lookup to avoid any caching issues
+      const extMap: Record<string, string> = {
+        h264: '.mp4',
+        h265: '.mp4',
+        vp8: '.webm',
+        vp9: '.webm',
+        prores: '.mov',
+        gif: '.gif',
+      };
+      const fileExtension = extMap[codec] || '.mp4';
+
+      console.log(`[RenderService] Codec: ${settings.codec} -> ${codec}, Extension: ${fileExtension}, extMap[codec]: ${extMap[codec]}`);
+
+      // Prepare output path with correct extension for codec
       await fs.mkdir(OUTPUT_DIR, { recursive: true });
-      const outputFileName = `${jobId}.mp4`;
+      const outputFileName = `${jobId}${fileExtension}`;
       const outputPath = path.join(OUTPUT_DIR, outputFileName);
 
       // Start rendering
@@ -135,7 +152,7 @@ export class RenderService {
       const renderOptions: any = {
         composition: compositionData,
         serveUrl: bundleLocation,
-        codec: this.getCodec(settings.codec),
+        codec: codec,
         outputLocation: outputPath,
         videoBitrate: this.getVideoBitrate(settings, composition.width, composition.height),
         audioBitrate: settings.audioBitrate || '192k',
@@ -173,6 +190,16 @@ export class RenderService {
       // Add ProRes profile if using ProRes codec
       if (settings.codec === 'prores' && settings.proResProfile) {
         renderOptions.proresProfile = settings.proResProfile;
+      }
+
+      // Add GIF-specific options
+      if (codec === 'gif') {
+        // everyNthFrame: 1 = every frame (smooth but large), 2 = every other frame, etc.
+        // Default to 1 for smooth playback matching preview
+        renderOptions.everyNthFrame = settings.gifEveryNthFrame || 1;
+        // Remove video bitrate for GIF (not applicable)
+        delete renderOptions.videoBitrate;
+        delete renderOptions.audioBitrate;
       }
 
       await renderMedia(renderOptions);
@@ -235,16 +262,35 @@ export class RenderService {
   /**
    * Map export codec to Remotion codec
    */
-  private getCodec(codec: string): 'h264' | 'h265' | 'vp8' | 'vp9' | 'prores' {
-    const codecMap: Record<string, 'h264' | 'h265' | 'vp8' | 'vp9' | 'prores'> = {
+  private getCodec(codec: string): 'h264' | 'h265' | 'vp8' | 'vp9' | 'prores' | 'gif' {
+    const codecMap: Record<string, 'h264' | 'h265' | 'vp8' | 'vp9' | 'prores' | 'gif'> = {
       h264: 'h264',
       h265: 'h265',
       vp8: 'vp8',
       vp9: 'vp9',
       prores: 'prores',
+      gif: 'gif',
     };
 
     return codecMap[codec] || 'h264';
+  }
+
+  /**
+   * Get file extension for codec
+   */
+  private getFileExtension(codec: string): string {
+    const extensionMap: Record<string, string> = {
+      h264: '.mp4',
+      h265: '.mp4',
+      vp8: '.webm',
+      vp9: '.webm',
+      prores: '.mov',
+      gif: '.gif',
+    };
+
+    const ext = extensionMap[codec];
+    console.log(`[getFileExtension] codec="${codec}", extensionMap[codec]="${ext}", fallback=".mp4"`);
+    return ext || '.mp4';
   }
 
   /**
@@ -290,17 +336,35 @@ export class RenderService {
   }
 
   /**
-   * Get output file path for a job
+   * Get output file path for a job (checks for any extension)
+   */
+  async findOutputPath(jobId: string): Promise<string | null> {
+    const extensions = ['.mp4', '.gif', '.webm', '.mov'];
+    for (const ext of extensions) {
+      const filePath = path.join(OUTPUT_DIR, `${jobId}${ext}`);
+      try {
+        await fs.access(filePath);
+        return filePath;
+      } catch {
+        // File doesn't exist with this extension, try next
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Get output file path for a job (legacy - use findOutputPath instead)
    */
   getOutputPath(jobId: string): string {
     return path.join(OUTPUT_DIR, `${jobId}.mp4`);
   }
 
   /**
-   * Check if output file exists
+   * Check if output file exists (checks for any extension)
    */
   async outputExists(jobId: string): Promise<boolean> {
-    const outputPath = this.getOutputPath(jobId);
+    const outputPath = await this.findOutputPath(jobId);
+    if (!outputPath) return false;
     try {
       await fs.access(outputPath);
       return true;

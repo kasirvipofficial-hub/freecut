@@ -31,13 +31,19 @@ export function splitItem(item: TimelineItem, splitFrame: number): [TimelineItem
   const currentTrimStart = item.trimStart || 0;
   const currentTrimEnd = item.trimEnd || 0;
 
+  // Account for playback speed when calculating source positions
+  // Timeline frames * speed = source frames consumed
+  const speed = item.speed || 1;
+  const firstPartSourceFrames = Math.round(firstPartDuration * speed);
+  const secondPartSourceFrames = Math.round(secondPartDuration * speed);
+
   const firstPart: TimelineItem = {
     ...item,
     id: `${item.id}-1`,
     durationInFrames: firstPartDuration,
-    // Update sourceEnd and trimEnd for left item
-    sourceEnd: currentSourceStart + firstPartDuration,
-    trimEnd: currentTrimEnd + secondPartDuration,
+    // Update sourceEnd and trimEnd for left item (in source frames)
+    sourceEnd: currentSourceStart + firstPartSourceFrames,
+    trimEnd: currentTrimEnd + secondPartSourceFrames,
   };
 
   const secondPart: TimelineItem = {
@@ -45,9 +51,9 @@ export function splitItem(item: TimelineItem, splitFrame: number): [TimelineItem
     id: `${item.id}-2`,
     from: splitFrame,
     durationInFrames: secondPartDuration,
-    // Update trimStart and sourceStart for right item
-    trimStart: currentTrimStart + firstPartDuration,
-    sourceStart: currentSourceStart + firstPartDuration,
+    // Update trimStart and sourceStart for right item (in source frames)
+    trimStart: currentTrimStart + firstPartSourceFrames,
+    sourceStart: currentSourceStart + firstPartSourceFrames,
   };
 
   return [firstPart, secondPart];
