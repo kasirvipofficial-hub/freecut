@@ -350,9 +350,21 @@ export function TimelineContent({ duration, scrollRef, onZoomHandlersReady }: Ti
     return { actualDuration: contentDuration, timelineWidth: width };
   }, [items, fps, timeToPixels, containerWidth]);
 
-  // Render all items - browser handles visibility via CSS content-visibility: auto
-  // This prevents flickering during zoom (items stay in DOM, browser skips off-screen rendering)
-  const visibleItems = items;
+  // Pre-filter items by track to avoid passing all items to all tracks
+  // This prevents cascade re-renders when only one track's items change
+  const itemsByTrack = useMemo(() => {
+    const map = new Map<string, typeof items>();
+    for (const track of tracks) {
+      map.set(track.id, []);
+    }
+    for (const item of items) {
+      const trackItems = map.get(item.trackId);
+      if (trackItems) {
+        trackItems.push(item);
+      }
+    }
+    return map;
+  }, [items, tracks]);
 
   /**
    * Adjusts scroll position to center the playhead when zoom changes
@@ -589,7 +601,7 @@ export function TimelineContent({ duration, scrollRef, onZoomHandlersReady }: Ti
         onMouseLeave={handleMouseLeaveForRazor}
       >
         {tracks.map((track) => (
-          <TimelineTrack key={track.id} track={track} items={visibleItems} timelineWidth={timelineWidth} />
+          <TimelineTrack key={track.id} track={track} items={itemsByTrack.get(track.id) ?? []} timelineWidth={timelineWidth} />
         ))}
 
         {/* Snap guidelines (shown during drag) */}

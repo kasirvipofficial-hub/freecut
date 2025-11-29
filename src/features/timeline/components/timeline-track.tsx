@@ -56,6 +56,39 @@ interface GhostPreviewItem {
 }
 
 /**
+ * Custom equality for TimelineTrack memo - prevents re-renders when items haven't changed
+ * Compares items by ID and key properties instead of reference equality
+ */
+function areTrackPropsEqual(
+  prev: TimelineTrackProps,
+  next: TimelineTrackProps
+): boolean {
+  // Track reference changed
+  if (prev.track !== next.track) return false;
+  if (prev.timelineWidth !== next.timelineWidth) return false;
+
+  // Items array length changed
+  if (prev.items.length !== next.items.length) return false;
+
+  // Compare items by ID and key render-affecting properties
+  for (let i = 0; i < prev.items.length; i++) {
+    const prevItem = prev.items[i];
+    const nextItem = next.items[i];
+    if (!prevItem || !nextItem) return false;
+    if (
+      prevItem.id !== nextItem.id ||
+      prevItem.from !== nextItem.from ||
+      prevItem.durationInFrames !== nextItem.durationInFrames ||
+      prevItem.label !== nextItem.label
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
  * Timeline Track Component
  *
  * Renders a single timeline track with:
@@ -85,8 +118,8 @@ export const TimelineTrack = memo(function TimelineTrack({ track, items }: Timel
   // Zoom utilities for position calculation
   const { pixelsToFrame, frameToPixels } = useTimelineZoom();
 
-  // Filter items for this track
-  const trackItems = items.filter((item) => item.trackId === track.id);
+  // Items are pre-filtered by TimelineContent - use directly
+  const trackItems = items;
 
   // Check if a frame position is inside a real gap (between clips, not after the last clip)
   const isFrameInGap = useCallback((frame: number) => {
@@ -575,4 +608,4 @@ export const TimelineTrack = memo(function TimelineTrack({ track, items }: Timel
       )}
     </ContextMenu>
   );
-});
+}, areTrackPropsEqual);
