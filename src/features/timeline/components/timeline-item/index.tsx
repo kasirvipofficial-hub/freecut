@@ -218,8 +218,10 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
   const sourceDuration = item.sourceDuration || (item.durationInFrames * currentSpeed);
   const currentSourceEnd = item.sourceEnd || sourceDuration;
 
-  // Images/GIFs can loop infinitely, so don't clamp their extension
-  const canLoopInfinitely = item.type === 'image';
+  // Items that can extend infinitely (no source duration limit)
+  // - Images/GIFs: can loop
+  // - Text/Shapes: no source media, just duration
+  const canExtendInfinitely = item.type === 'image' || item.type === 'text' || item.type === 'shape';
 
   // Clamp visual feedback to prevent showing invalid states
   let trimVisualLeft = left;
@@ -228,9 +230,9 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
   if (isTrimming) {
     if (trimHandle === 'start') {
       // Start handle: adjust both position and width
-      // For looping media (images/GIFs), allow infinite extension (but not past frame 0)
-      // For non-looping media, clamp to source start
-      const maxExtendBySource = canLoopInfinitely ? Infinity : (currentSourceStart / currentSpeed);
+      // For infinitely extensible items, only limit by timeline frame 0
+      // For media items, also clamp to source start
+      const maxExtendBySource = canExtendInfinitely ? Infinity : (currentSourceStart / currentSpeed);
       const maxExtendByTimeline = item.from; // Can't go before frame 0
       const maxExtendTimelineFrames = Math.min(maxExtendBySource, maxExtendByTimeline);
       const maxExtendPixels = timeToPixels(maxExtendTimelineFrames / fps);
@@ -248,18 +250,18 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
       trimVisualWidth = Math.round(width - clampedDelta);
     } else {
       // End handle: adjust width only
-      // For looping media (images/GIFs), allow infinite extension
-      // For non-looping media, clamp to source duration
-      const maxExtendSourceFrames = canLoopInfinitely ? Infinity : (sourceDuration - currentSourceEnd);
+      // For infinitely extensible items, allow unlimited extension
+      // For media items, clamp to source duration
+      const maxExtendSourceFrames = canExtendInfinitely ? Infinity : (sourceDuration - currentSourceEnd);
       const maxExtendTimelineFrames = maxExtendSourceFrames / currentSpeed;
-      const maxExtendPixels = canLoopInfinitely ? Infinity : timeToPixels(maxExtendTimelineFrames / fps);
+      const maxExtendPixels = canExtendInfinitely ? Infinity : timeToPixels(maxExtendTimelineFrames / fps);
 
       // Prevent trimming more than available (keep at least 1 timeline frame)
       const maxTrimPixels = width - minWidthPixels;
 
       // Clamp delta considering both constraints
       const clampedDelta = Math.max(
-        -maxExtendPixels, // Don't extend past source end (or infinite for images/GIFs)
+        -maxExtendPixels, // Don't extend past source end (or infinite for extensible items)
         Math.min(maxTrimPixels, -trimDeltaPixels) // Don't trim too much (note: trimDelta is negative for extending)
       );
 
@@ -563,8 +565,18 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
         </div>
       )}
 
-      {/* Item label - only for non-media items (video/audio have labels in flex layout) */}
-      {item.type !== 'video' && item.type !== 'audio' && (
+      {/* Text item - show text content preview */}
+      {item.type === 'text' && (
+        <div className="absolute inset-0 flex flex-col px-2 py-1 overflow-hidden">
+          <div className="text-[10px] text-muted-foreground truncate">Text</div>
+          <div className="text-xs font-medium truncate flex-1">
+            {item.text || 'Empty text'}
+          </div>
+        </div>
+      )}
+
+      {/* Item label - for image and shape items */}
+      {item.type !== 'video' && item.type !== 'audio' && item.type !== 'text' && (
         <div className="px-2 py-1 text-xs font-medium truncate">
           {item.label}
         </div>

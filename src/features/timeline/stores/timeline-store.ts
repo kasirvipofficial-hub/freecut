@@ -174,6 +174,29 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
     items: state.items.map((item) => {
       if (item.id !== id) return item;
 
+      // Non-media items (text, shape) use simple trimming - just adjust position and duration
+      const isNonMediaItem = item.type === 'text' || item.type === 'shape';
+      if (isNonMediaItem) {
+        let actualTrimAmount = trimAmount;
+
+        // Prevent extending before timeline frame 0
+        if (trimAmount < 0 && item.from + trimAmount < 0) {
+          actualTrimAmount = -item.from;
+        }
+
+        // Prevent trimming more than available duration (keep at least 1 frame)
+        if (trimAmount > 0 && item.durationInFrames - trimAmount < 1) {
+          actualTrimAmount = item.durationInFrames - 1;
+        }
+
+        return {
+          ...item,
+          from: Math.round(item.from + actualTrimAmount),
+          durationInFrames: Math.max(1, Math.round(item.durationInFrames - actualTrimAmount)),
+        };
+      }
+
+      // Media items use source-based trimming
       const currentTrimStart = item.trimStart || 0;
       const currentSourceStart = item.sourceStart || 0;
 
@@ -243,6 +266,24 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
     items: state.items.map((item) => {
       if (item.id !== id) return item;
 
+      // Non-media items (text, shape) use simple trimming - just adjust duration
+      const isNonMediaItem = item.type === 'text' || item.type === 'shape';
+      if (isNonMediaItem) {
+        let actualTrimAmount = trimAmount;
+
+        // Prevent trimming more than available duration (keep at least 1 frame)
+        if (trimAmount > 0 && item.durationInFrames - trimAmount < 1) {
+          actualTrimAmount = item.durationInFrames - 1;
+        }
+
+        // No limit on extending for non-media items (they can be any duration)
+        return {
+          ...item,
+          durationInFrames: Math.max(1, Math.round(item.durationInFrames - actualTrimAmount)),
+        };
+      }
+
+      // Media items use source-based trimming
       const currentTrimEnd = item.trimEnd || 0;
       // Account for speed: timeline frames * speed = source frames
       const speed = item.speed || 1;

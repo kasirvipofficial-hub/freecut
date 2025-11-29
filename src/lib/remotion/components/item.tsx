@@ -10,6 +10,7 @@ import {
   getSourceDimensions,
   toTransformStyle,
 } from '../utils/transform-resolver';
+import { loadFont, FONT_WEIGHT_MAP } from '../utils/fonts';
 
 /**
  * Hook to calculate video audio volume with fades and preview support.
@@ -444,6 +445,41 @@ export const Item: React.FC<ItemProps> = ({ item, muted = false }) => {
   }
 
   if (item.type === 'text') {
+    // Load the Google Font and get the CSS fontFamily value
+    // loadFont() blocks rendering until the font is ready (works for both preview and server render)
+    const fontName = item.fontFamily ?? 'Inter';
+    const fontFamily = loadFont(fontName);
+
+    // Get font weight from shared map
+    const fontWeight = FONT_WEIGHT_MAP[item.fontWeight ?? 'normal'] ?? 400;
+
+    // Map text align to flexbox justify-content
+    const textAlignMap: Record<string, string> = {
+      left: 'flex-start',
+      center: 'center',
+      right: 'flex-end',
+    };
+    const justifyContent = textAlignMap[item.textAlign ?? 'center'] ?? 'center';
+
+    // Build text shadow CSS if present
+    const textShadow = item.textShadow
+      ? `${item.textShadow.offsetX}px ${item.textShadow.offsetY}px ${item.textShadow.blur}px ${item.textShadow.color}`
+      : undefined;
+
+    // Build stroke/outline effect using text-stroke or text shadow workaround
+    // Note: -webkit-text-stroke is not well supported in Remotion rendering
+    // Using multiple text shadows as a fallback for stroke effect
+    const strokeShadows = item.stroke
+      ? [
+          `${item.stroke.width}px 0 ${item.stroke.color}`,
+          `-${item.stroke.width}px 0 ${item.stroke.color}`,
+          `0 ${item.stroke.width}px ${item.stroke.color}`,
+          `0 -${item.stroke.width}px ${item.stroke.color}`,
+        ].join(', ')
+      : undefined;
+
+    const finalTextShadow = [textShadow, strokeShadows].filter(Boolean).join(', ') || undefined;
+
     const textContent = (
       <div
         style={{
@@ -451,19 +487,33 @@ export const Item: React.FC<ItemProps> = ({ item, muted = false }) => {
           height: '100%',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
+          justifyContent,
+          padding: '16px',
+          backgroundColor: item.backgroundColor,
+          boxSizing: 'border-box',
         }}
       >
-        <h1
+        <div
           style={{
-            fontSize: item.fontSize || 60,
-            fontFamily: item.fontFamily || 'Arial, sans-serif',
+            fontSize: item.fontSize ?? 60,
+            // Use the fontFamily returned by loadFont (includes proper CSS value)
+            fontFamily: fontFamily,
+            fontWeight,
+            fontStyle: item.fontStyle ?? 'normal',
             color: item.color,
-            textAlign: 'center',
+            textAlign: item.textAlign ?? 'center',
+            lineHeight: item.lineHeight ?? 1.2,
+            letterSpacing: item.letterSpacing ?? 0,
+            textShadow: finalTextShadow,
+            // Best practice: use inline-block and pre-wrap to match measureText behavior
+            display: 'inline-block',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            width: '100%',
           }}
         >
           {item.text}
-        </h1>
+        </div>
       </div>
     );
 

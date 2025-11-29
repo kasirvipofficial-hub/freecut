@@ -10,6 +10,7 @@ import { LayoutSection } from './layout-section';
 import { FillSection } from './fill-section';
 import { VideoSection } from './video-section';
 import { AudioSection } from './audio-section';
+import { TextSection } from './text-section';
 
 /**
  * Clip properties panel - shown when one or more clips are selected.
@@ -63,6 +64,12 @@ export function ClipPanel() {
     [selectedItems]
   );
 
+  // Check if selection includes text items
+  const hasTextItems = useMemo(
+    () => selectedItems.some((item) => item.type === 'text'),
+    [selectedItems]
+  );
+
   // Handle transform changes
   const handleTransformChange = useCallback(
     (ids: string[], updates: Partial<TransformProperties>) => {
@@ -104,6 +111,14 @@ export function ClipPanel() {
             canvas={canvas}
             onTransformChange={handleTransformChange}
           />
+          <Separator />
+        </>
+      )}
+
+      {/* Text - only for text items */}
+      {hasTextItems && (
+        <>
+          <TextSection items={selectedItems} />
           <Separator />
         </>
       )}

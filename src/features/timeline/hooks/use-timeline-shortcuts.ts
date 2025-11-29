@@ -65,6 +65,7 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
   }, [items, markers]);
 
   // Playback: Space - Play/Pause (global shortcut)
+  // Uses default HOTKEY_OPTIONS which disables in form tags (inputs/textareas)
   useHotkeys(
     HOTKEYS.PLAY_PAUSE,
     (event) => {
@@ -76,15 +77,7 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
         callbacks.onPlay();
       }
     },
-    {
-      ...HOTKEY_OPTIONS,
-      enableOnFormTags: true, // Enable on all elements, including focused timeline items
-      enabled: (keyboardEvent) => {
-        const target = keyboardEvent.target as HTMLElement;
-        // Only disable on actual text input fields, allow on buttons/divs
-        return target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA';
-      },
-    },
+    HOTKEY_OPTIONS,
     [togglePlayPause, isPlaying, callbacks]
   );
 

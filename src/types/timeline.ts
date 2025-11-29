@@ -48,9 +48,29 @@ export type AudioItem = BaseTimelineItem & {
 export type TextItem = BaseTimelineItem & {
   type: 'text';
   text: string;
-  fontSize?: number;
-  fontFamily?: string;
-  color: string;
+  // Typography
+  fontSize?: number; // Font size in pixels (default: 60)
+  fontFamily?: string; // Font family name (default: 'Inter')
+  fontWeight?: 'normal' | 'medium' | 'semibold' | 'bold'; // Font weight (default: 'normal')
+  fontStyle?: 'normal' | 'italic'; // Font style (default: 'normal')
+  // Colors
+  color: string; // Text color (hex or oklch)
+  backgroundColor?: string; // Background color behind text (optional)
+  // Text layout
+  textAlign?: 'left' | 'center' | 'right'; // Horizontal alignment (default: 'center')
+  lineHeight?: number; // Line height multiplier (default: 1.2)
+  letterSpacing?: number; // Letter spacing in pixels (default: 0)
+  // Text effects
+  textShadow?: {
+    offsetX: number;
+    offsetY: number;
+    blur: number;
+    color: string;
+  };
+  stroke?: {
+    width: number;
+    color: string;
+  };
 };
 
 export type ImageItem = BaseTimelineItem & {

@@ -28,6 +28,8 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@remotion/gif": "^4.0.375",
+    "@remotion/google-fonts": "^4.0.375",
+    "@remotion/layout-utils": "^4.0.375",
     "@remotion/media": "^4.0.375",
     "@remotion/player": "^4.0.375",
     "@remotion/renderer": "^4.0.375",

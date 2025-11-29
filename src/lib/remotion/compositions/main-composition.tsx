@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { AbsoluteFill, Sequence, useVideoConfig, useCurrentFrame } from 'remotion';
 import type { RemotionInputProps } from '@/types/export';
+import type { TextItem } from '@/types/timeline';
 import { Item } from '../components/item';
 import { generateStableKey } from '../utils/generate-stable-key';
+import { loadFonts } from '../utils/fonts';
 
 /**
  * Main Remotion Composition
@@ -48,6 +50,22 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, backgrou
       (item) => item.type !== 'video' && item.type !== 'audio'
     ),
   }));
+
+  // Load fonts for all text items
+  // This ensures Google Fonts are loaded before rendering
+  useMemo(() => {
+    const textItems = visibleTracks
+      .flatMap((track) => track.items)
+      .filter((item): item is TextItem => item.type === 'text');
+
+    const fontFamilies = textItems
+      .map((item) => item.fontFamily ?? 'Inter')
+      .filter((font, index, arr) => arr.indexOf(font) === index); // unique
+
+    if (fontFamilies.length > 0) {
+      loadFonts(fontFamilies);
+    }
+  }, [visibleTracks]);
 
   // Check if any VIDEO items (not audio) are active at current frame
   // Used to render a clearing layer when no videos are visible
