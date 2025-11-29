@@ -1,7 +1,7 @@
 import { useMemo, useCallback, useState, useRef, useEffect, memo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeftRight, RotateCcw, LayoutDashboard, Clock, Palette } from 'lucide-react';
+import { ArrowLeftRight, RotateCcw, LayoutDashboard, Clock } from 'lucide-react';
 import { useProjectStore } from '@/features/projects/stores/project-store';
 import { useTimelineStore } from '@/features/timeline/stores/timeline-store';
 import { useGizmoStore } from '@/features/preview/stores/gizmo-store';
@@ -30,6 +30,11 @@ const ColorPicker = memo(function ColorPicker({
   const containerRef = useRef<HTMLDivElement>(null);
   const setCanvasBackgroundPreview = useGizmoStore((s) => s.setCanvasBackgroundPreview);
   const clearCanvasBackgroundPreview = useGizmoStore((s) => s.clearCanvasBackgroundPreview);
+
+  // Sync local state when initialColor changes from outside (e.g., reset button)
+  useEffect(() => {
+    setColor(initialColor);
+  }, [initialColor]);
 
   const handleColorChange = useCallback((newColor: string) => {
     setColor(newColor);
@@ -63,7 +68,7 @@ const ColorPicker = memo(function ColorPicker({
   }, [isOpen, handleClose]);
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative flex-1">
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
@@ -97,6 +102,7 @@ export function CanvasPanel() {
   const updateProject = useProjectStore((s) => s.updateProject);
   const items = useTimelineStore((s) => s.items);
   const fps = useTimelineStore((s) => s.fps);
+  const markDirty = useTimelineStore((s) => s.markDirty);
 
   // Calculate timeline duration from rightmost item
   const timelineDuration = useMemo(() => {
@@ -114,33 +120,57 @@ export function CanvasPanel() {
 
   const handleWidthChange = useCallback(
     (newWidth: number) => {
-      if (projectId) updateProject(projectId, { width: newWidth });
+      if (projectId) {
+        updateProject(projectId, { width: newWidth });
+        markDirty();
+      }
     },
-    [projectId, updateProject]
+    [projectId, updateProject, markDirty]
   );
 
   const handleHeightChange = useCallback(
     (newHeight: number) => {
-      if (projectId) updateProject(projectId, { height: newHeight });
+      if (projectId) {
+        updateProject(projectId, { height: newHeight });
+        markDirty();
+      }
     },
-    [projectId, updateProject]
+    [projectId, updateProject, markDirty]
   );
 
   const handleSwapDimensions = useCallback(() => {
-    if (projectId) updateProject(projectId, { width: height, height: width });
-  }, [projectId, width, height, updateProject]);
+    if (projectId) {
+      updateProject(projectId, { width: height, height: width });
+      markDirty();
+    }
+  }, [projectId, width, height, updateProject, markDirty]);
 
   const handleResetDimensions = useCallback(() => {
-    if (projectId) updateProject(projectId, { width: 1920, height: 1080 });
-  }, [projectId, updateProject]);
+    if (projectId) {
+      updateProject(projectId, { width: 1920, height: 1080 });
+      markDirty();
+    }
+  }, [projectId, updateProject, markDirty]);
 
   // Commit background color to store on release
   const handleBackgroundColorChange = useCallback(
     (color: string) => {
-      if (projectId) updateProject(projectId, { backgroundColor: color });
+      if (projectId) {
+        updateProject(projectId, { backgroundColor: color });
+        markDirty();
+      }
     },
-    [projectId, updateProject]
+    [projectId, updateProject, markDirty]
   );
+
+  // Reset background color to black
+  const handleResetBackgroundColor = useCallback(() => {
+    if (storedBackgroundColor === '#000000') return; // Already default
+    if (projectId) {
+      updateProject(projectId, { backgroundColor: '#000000' });
+      markDirty();
+    }
+  }, [projectId, storedBackgroundColor, updateProject, markDirty]);
 
   // Format duration as MM:SS.FF
   const formatDuration = (frames: number): string => {
@@ -196,17 +226,24 @@ export function CanvasPanel() {
             Reset
           </Button>
         </div>
-      </PropertySection>
 
-      <Separator />
-
-      {/* Background Section */}
-      <PropertySection title="Background" icon={Palette} defaultOpen={true}>
-        <PropertyRow label="Color">
-          <ColorPicker
-            initialColor={storedBackgroundColor}
-            onColorChange={handleBackgroundColorChange}
-          />
+        {/* Background Color */}
+        <PropertyRow label="Background">
+          <div className="flex items-center gap-1 flex-1">
+            <ColorPicker
+              initialColor={storedBackgroundColor}
+              onColorChange={handleBackgroundColorChange}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 flex-shrink-0"
+              onClick={handleResetBackgroundColor}
+              title="Reset to black"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </Button>
+          </div>
         </PropertyRow>
       </PropertySection>
 

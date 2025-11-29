@@ -70,7 +70,7 @@ export function SliderInput({
   }, [onChange]);
 
   return (
-    <div className={cn('flex items-center gap-2 min-w-0', className)}>
+    <div className={cn('flex items-center gap-1 min-w-0 flex-1', className)}>
       <Slider
         value={[displayNumericValue]}
         onValueChange={handleValueChange}
@@ -83,7 +83,7 @@ export function SliderInput({
       />
       <span
         className={cn(
-          'text-xs font-mono text-muted-foreground w-12 text-right flex-shrink-0',
+          'text-xs font-mono text-muted-foreground min-w-[52px] text-right flex-shrink-0',
           isMixed && localValue === null && 'italic'
         )}
       >

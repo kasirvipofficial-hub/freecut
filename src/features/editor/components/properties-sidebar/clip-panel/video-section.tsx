@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
-import { Video } from 'lucide-react';
+import { Video, RotateCcw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import type { TimelineItem, VideoItem } from '@/types/timeline';
 import { useTimelineStore } from '@/features/timeline/stores/timeline-store';
 import { useGizmoStore } from '@/features/preview/stores/gizmo-store';
@@ -59,12 +60,13 @@ type MixedValue = number | 'mixed';
  */
 function getMixedVideoValue(
   items: TimelineItem[],
-  getter: (item: VideoItem) => number | undefined
+  getter: (item: VideoItem) => number | undefined,
+  defaultValue = 0
 ): MixedValue {
   const videoItems = items.filter((item): item is VideoItem => item.type === 'video');
-  if (videoItems.length === 0) return 1;
+  if (videoItems.length === 0) return defaultValue;
 
-  const values = videoItems.map((item) => getter(item) ?? 1);
+  const values = videoItems.map((item) => getter(item) ?? defaultValue);
   const firstValue = values[0]!; // Safe: videoItems.length > 0 checked above
   return values.every((v) => Math.abs(v - firstValue) < 0.001) ? firstValue : 'mixed';
 }
@@ -90,10 +92,10 @@ export function VideoSection({ items }: VideoSectionProps) {
     [items]
   );
 
-  // Get current values
-  const speed = getMixedVideoValue(videoItems, (item) => item.speed);
-  const fadeIn = getMixedVideoValue(videoItems, (item) => item.fadeIn);
-  const fadeOut = getMixedVideoValue(videoItems, (item) => item.fadeOut);
+  // Get current values (speed defaults to 1, fades default to 0)
+  const speed = getMixedVideoValue(videoItems, (item) => item.speed, 1);
+  const fadeIn = getMixedVideoValue(videoItems, (item) => item.fadeIn, 0);
+  const fadeOut = getMixedVideoValue(videoItems, (item) => item.fadeOut, 0);
 
   // Convert speed to slider value (log scale, 1x at center)
   const sliderValue = speed === 'mixed' ? 'mixed' : speedToSlider(speed);
@@ -173,45 +175,111 @@ export function VideoSection({ items }: VideoSectionProps) {
     [videoItems, updateItem, clearItemPropertiesPreview]
   );
 
+  // Reset speed to 1x
+  const handleResetSpeed = useCallback(() => {
+    const tolerance = 0.01;
+    videoItems.forEach((item) => {
+      const currentSpeed = item.speed || 1;
+      if (Math.abs(currentSpeed - 1) <= tolerance) return;
+
+      const sourceDuration = item.sourceDuration
+        ? Math.round(item.durationInFrames * currentSpeed)
+        : Math.round(item.durationInFrames * currentSpeed);
+      const newDuration = Math.max(1, sourceDuration);
+      rateStretchItem(item.id, item.from, newDuration, 1);
+    });
+  }, [videoItems, rateStretchItem]);
+
+  // Reset fade in to 0
+  const handleResetFadeIn = useCallback(() => {
+    const tolerance = 0.01;
+    const needsUpdate = videoItems.some((item) => (item.fadeIn ?? 0) > tolerance);
+    if (needsUpdate) {
+      videoItems.forEach((item) => updateItem(item.id, { fadeIn: 0 }));
+    }
+  }, [videoItems, updateItem]);
+
+  // Reset fade out to 0
+  const handleResetFadeOut = useCallback(() => {
+    const tolerance = 0.01;
+    const needsUpdate = videoItems.some((item) => (item.fadeOut ?? 0) > tolerance);
+    if (needsUpdate) {
+      videoItems.forEach((item) => updateItem(item.id, { fadeOut: 0 }));
+    }
+  }, [videoItems, updateItem]);
+
   if (videoItems.length === 0) return null;
 
   return (
     <PropertySection title="Video" icon={Video} defaultOpen={true}>
       {/* Playback Rate - affects clip duration (log scale, 1x at center) */}
       <PropertyRow label="Speed">
-        <SliderInput
-          value={sliderValue}
-          onChange={handleSliderChange}
-          min={-1}
-          max={1}
-          step={0.02}
-          formatValue={formatSpeed}
-        />
+        <div className="flex items-center gap-1 flex-1">
+          <SliderInput
+            value={sliderValue}
+            onChange={handleSliderChange}
+            min={-1}
+            max={1}
+            step={0.02}
+            formatValue={formatSpeed}
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 flex-shrink-0"
+            onClick={handleResetSpeed}
+            title="Reset to 1x"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </Button>
+        </div>
       </PropertyRow>
 
       {/* Video Fades */}
       <PropertyRow label="Fade In">
-        <SliderInput
-          value={fadeIn}
-          onChange={handleFadeInChange}
-          onLiveChange={handleFadeInLiveChange}
-          min={0}
-          max={5}
-          step={0.1}
-          unit="s"
-        />
+        <div className="flex items-center gap-1 flex-1">
+          <SliderInput
+            value={fadeIn}
+            onChange={handleFadeInChange}
+            onLiveChange={handleFadeInLiveChange}
+            min={0}
+            max={5}
+            step={0.1}
+            unit="s"
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 flex-shrink-0"
+            onClick={handleResetFadeIn}
+            title="Reset to 0"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </Button>
+        </div>
       </PropertyRow>
 
       <PropertyRow label="Fade Out">
-        <SliderInput
-          value={fadeOut}
-          onChange={handleFadeOutChange}
-          onLiveChange={handleFadeOutLiveChange}
-          min={0}
-          max={5}
-          step={0.1}
-          unit="s"
-        />
+        <div className="flex items-center gap-1 flex-1">
+          <SliderInput
+            value={fadeOut}
+            onChange={handleFadeOutChange}
+            onLiveChange={handleFadeOutLiveChange}
+            min={0}
+            max={5}
+            step={0.1}
+            unit="s"
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 flex-shrink-0"
+            onClick={handleResetFadeOut}
+            title="Reset to 0"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </Button>
+        </div>
       </PropertyRow>
     </PropertySection>
   );

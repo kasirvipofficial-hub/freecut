@@ -274,7 +274,7 @@ export function TransformGizmo({
         className="absolute pointer-events-auto cursor-move"
         style={{
           inset: -2,
-          border: `2px dashed ${isInteracting ? '#2563eb' : '#3b82f6'}`,
+          border: `2px dashed ${isInteracting ? '#ea580c' : '#f97316'}`,
           boxSizing: 'border-box',
         }}
         onMouseDown={handleTranslateStart}
@@ -285,7 +285,7 @@ export function TransformGizmo({
       {SCALE_HANDLES.map((handle) => (
         <div
           key={handle}
-          className="bg-white border border-blue-500 pointer-events-auto"
+          className="bg-white border border-orange-500 pointer-events-auto"
           style={getHandleStyle(handle)}
           onMouseDown={(e) => handleScaleStart(handle, e)}
         />
@@ -293,7 +293,7 @@ export function TransformGizmo({
 
       {/* Rotation handle */}
       <div
-        className="absolute bg-white border border-blue-500 rounded-full pointer-events-auto cursor-crosshair"
+        className="absolute bg-white border border-orange-500 rounded-full pointer-events-auto cursor-crosshair"
         style={{
           width: 10,
           height: 10,
@@ -306,7 +306,7 @@ export function TransformGizmo({
 
       {/* Rotation guide line */}
       <div
-        className="absolute border-l border-dashed border-blue-500 pointer-events-none"
+        className="absolute border-l border-dashed border-orange-500 pointer-events-none"
         style={{
           left: '50%',
           top: -ROTATION_HANDLE_OFFSET + 10,

@@ -331,6 +331,7 @@ export const TimelineMarkers = memo(function TimelineMarkers({ duration, width }
   // Scrubbing handlers
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation(); // Prevent click from bubbling to container and clearing selection
     if (!containerRef.current) return;
 
     const rect = containerRef.current.getBoundingClientRect();

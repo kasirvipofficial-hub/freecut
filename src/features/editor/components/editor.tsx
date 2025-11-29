@@ -28,6 +28,7 @@ export interface EditorProps {
     width: number;
     height: number;
     fps: number;
+    backgroundColor?: string;
     timeline?: ProjectTimeline;
   };
 }
@@ -68,6 +69,7 @@ export function Editor({ projectId, project }: EditorProps) {
         width: project.width,
         height: project.height,
         fps: project.fps,
+        backgroundColor: project.backgroundColor,
       },
       createdAt: Date.now(),
       updatedAt: Date.now(),

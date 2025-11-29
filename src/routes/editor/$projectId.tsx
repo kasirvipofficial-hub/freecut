@@ -19,6 +19,7 @@ export const Route = createFileRoute('/editor/$projectId')({
         width: project.metadata.width,
         height: project.metadata.height,
         fps: project.metadata.fps,
+        backgroundColor: project.metadata.backgroundColor,
         timeline: project.timeline,
       },
     };

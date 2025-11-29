@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
-import { Droplet } from 'lucide-react';
+import { Droplet, RotateCcw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import type { TimelineItem } from '@/types/timeline';
 import type { TransformProperties, CanvasSettings } from '@/types/transform';
 import { useGizmoStore } from '@/features/preview/stores/gizmo-store';
@@ -102,32 +103,80 @@ export function FillSection({
     [itemIds, onTransformChange, clearPropertiesPreview]
   );
 
+  // Reset opacity to 100%
+  const handleResetOpacity = useCallback(() => {
+    const tolerance = 0.01;
+    const needsUpdate = items.some((item) => {
+      const sourceDimensions = getSourceDimensions(item);
+      const resolved = resolveTransform(item, canvas, sourceDimensions);
+      return Math.abs(resolved.opacity - 1) > tolerance;
+    });
+    if (needsUpdate) {
+      onTransformChange(itemIds, { opacity: 1 });
+    }
+  }, [items, itemIds, onTransformChange, canvas]);
+
+  // Reset corner radius to 0
+  const handleResetCornerRadius = useCallback(() => {
+    const tolerance = 0.5;
+    const needsUpdate = items.some((item) => {
+      const sourceDimensions = getSourceDimensions(item);
+      const resolved = resolveTransform(item, canvas, sourceDimensions);
+      return resolved.cornerRadius > tolerance;
+    });
+    if (needsUpdate) {
+      onTransformChange(itemIds, { cornerRadius: 0 });
+    }
+  }, [items, itemIds, onTransformChange, canvas]);
+
   return (
     <PropertySection title="Fill" icon={Droplet} defaultOpen={true}>
       {/* Opacity */}
       <PropertyRow label="Opacity">
-        <SliderInput
-          value={opacity}
-          onChange={handleOpacityChange}
-          onLiveChange={handleOpacityLiveChange}
-          min={0}
-          max={100}
-          step={1}
-          unit="%"
-        />
+        <div className="flex items-center gap-1 flex-1">
+          <SliderInput
+            value={opacity}
+            onChange={handleOpacityChange}
+            onLiveChange={handleOpacityLiveChange}
+            min={0}
+            max={100}
+            step={1}
+            unit="%"
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 flex-shrink-0"
+            onClick={handleResetOpacity}
+            title="Reset to 100%"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </Button>
+        </div>
       </PropertyRow>
 
       {/* Corner Radius */}
       <PropertyRow label="Radius">
-        <SliderInput
-          value={cornerRadius}
-          onChange={handleCornerRadiusChange}
-          onLiveChange={handleCornerRadiusLiveChange}
-          min={0}
-          max={1000}
-          step={1}
-          unit="px"
-        />
+        <div className="flex items-center gap-1 flex-1">
+          <SliderInput
+            value={cornerRadius}
+            onChange={handleCornerRadiusChange}
+            onLiveChange={handleCornerRadiusLiveChange}
+            min={0}
+            max={1000}
+            step={1}
+            unit="px"
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 flex-shrink-0"
+            onClick={handleResetCornerRadius}
+            title="Reset to 0"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </Button>
+        </div>
       </PropertyRow>
     </PropertySection>
   );

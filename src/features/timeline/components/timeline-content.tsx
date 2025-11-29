@@ -82,6 +82,7 @@ export function TimelineContent({ duration, scrollRef, onZoomHandlersReady }: Ti
   const [scrollLeft, setScrollLeft] = useState(0);
   const marqueeWasActiveRef = useRef(false);
   const dragWasActiveRef = useRef(false);
+  const scrubWasActiveRef = useRef(false);
 
   // Use refs to avoid callback recreation on every frame/zoom change
   // Access currentFrame via store subscription (no re-renders) instead of hook
@@ -243,10 +244,38 @@ export function TimelineContent({ duration, scrollRef, onZoomHandlersReady }: Ti
     }
   }, [dragState?.isDragging]);
 
+  // Track playhead/ruler scrubbing to prevent deselection after scrub ends
+  useEffect(() => {
+    const handleScrubStart = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Check if mousedown is on a playhead handle or timeline ruler
+      if (target.closest('[data-playhead-handle]') || target.closest('.timeline-ruler')) {
+        scrubWasActiveRef.current = true;
+      }
+    };
+
+    const handleScrubEnd = () => {
+      if (scrubWasActiveRef.current) {
+        // Reset after a short delay when scrub ends
+        setTimeout(() => {
+          scrubWasActiveRef.current = false;
+        }, 100);
+      }
+    };
+
+    document.addEventListener('mousedown', handleScrubStart, true);
+    document.addEventListener('mouseup', handleScrubEnd);
+
+    return () => {
+      document.removeEventListener('mousedown', handleScrubStart, true);
+      document.removeEventListener('mouseup', handleScrubEnd);
+    };
+  }, []);
+
   // Click empty space to deselect items (but preserve track selection)
   const handleContainerClick = (e: React.MouseEvent) => {
-    // Don't deselect if marquee selection or drag just finished
-    if (marqueeWasActiveRef.current || dragWasActiveRef.current) {
+    // Don't deselect if marquee selection, drag, or scrubbing just finished
+    if (marqueeWasActiveRef.current || dragWasActiveRef.current || scrubWasActiveRef.current) {
       return;
     }
 

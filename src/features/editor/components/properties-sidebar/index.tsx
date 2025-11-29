@@ -28,12 +28,12 @@ export function PropertiesSidebar() {
       {/* Right Sidebar */}
       <div
         className={`panel-bg border-l border-border transition-all duration-200 flex-shrink-0 ${
-          rightSidebarOpen ? 'w-80' : 'w-0'
+          rightSidebarOpen ? 'w-[340px]' : 'w-0'
         }`}
       >
         {/* Use Activity for React 19 performance optimization */}
         <Activity mode={rightSidebarOpen ? 'visible' : 'hidden'}>
-          <div className="h-full flex flex-col w-80">
+          <div className="h-full flex flex-col w-[340px]">
             {/* Sidebar Header */}
             <div className="h-11 flex items-center justify-between px-4 border-b border-border flex-shrink-0">
               <h2 className="text-xs font-semibold tracking-wide uppercase text-muted-foreground flex items-center gap-2">

@@ -1,13 +1,39 @@
 import { useState, useRef, memo, useCallback } from 'react';
 import type { TimelineTrack as TimelineTrackType, TimelineItem as TimelineItemType, VideoItem, AudioItem, ImageItem } from '@/types/timeline';
+import type { TransformProperties } from '@/types/transform';
 import { TimelineItem } from './timeline-item';
 import { useTimelineStore } from '../stores/timeline-store';
 import { useTimelineZoom } from '../hooks/use-timeline-zoom';
 import { useMediaLibraryStore } from '@/features/media-library/stores/media-library-store';
+import { useProjectStore } from '@/features/projects/stores/project-store';
 import { mediaLibraryService } from '@/features/media-library/services/media-library-service';
 import { findNearestAvailableSpace } from '../utils/collision-utils';
 import { getMediaDragData } from '@/features/media-library/utils/drag-data-cache';
 import { CLIP_HEIGHT } from '@/constants/timeline';
+
+/**
+ * Compute initial fit-to-canvas transform for an item.
+ * This locks in the initial size so it doesn't change when canvas changes.
+ */
+function computeInitialTransform(
+  sourceWidth: number,
+  sourceHeight: number,
+  canvasWidth: number,
+  canvasHeight: number
+): TransformProperties {
+  const scaleX = canvasWidth / sourceWidth;
+  const scaleY = canvasHeight / sourceHeight;
+  const fitScale = Math.min(scaleX, scaleY);
+
+  return {
+    x: 0,
+    y: 0,
+    width: Math.round(sourceWidth * fitScale),
+    height: Math.round(sourceHeight * fitScale),
+    rotation: 0,
+    opacity: 1,
+  };
+}
 import {
   ContextMenu,
   ContextMenuContent,
@@ -52,6 +78,9 @@ export const TimelineTrack = memo(function TimelineTrack({ track, items }: Timel
   const allItems = useTimelineStore((s) => s.items);
   const closeGapAtPosition = useTimelineStore((s) => s.closeGapAtPosition);
   const getMedia = useMediaLibraryStore((s) => s.mediaItems);
+  const currentProject = useProjectStore((s) => s.currentProject);
+  const canvasWidth = currentProject?.metadata.width ?? 1920;
+  const canvasHeight = currentProject?.metadata.height ?? 1080;
 
   // Zoom utilities for position calculation
   const { pixelsToFrame, frameToPixels } = useTimelineZoom();
@@ -308,11 +337,16 @@ export const TimelineTrack = memo(function TimelineTrack({ track, items }: Timel
 
           let timelineItem: TimelineItemType;
           if (mediaType === 'video') {
+            const sourceW = media.width || canvasWidth;
+            const sourceH = media.height || canvasHeight;
             timelineItem = {
               ...baseItem,
               type: 'video',
               src: blobUrl,
               thumbnailUrl: thumbnailUrl || undefined,
+              sourceWidth: media.width || undefined,
+              sourceHeight: media.height || undefined,
+              transform: computeInitialTransform(sourceW, sourceH, canvasWidth, canvasHeight),
             } as VideoItem;
           } else if (mediaType === 'audio') {
             timelineItem = {
@@ -321,11 +355,16 @@ export const TimelineTrack = memo(function TimelineTrack({ track, items }: Timel
               src: blobUrl,
             } as AudioItem;
           } else if (mediaType === 'image') {
+            const sourceW = media.width || canvasWidth;
+            const sourceH = media.height || canvasHeight;
             timelineItem = {
               ...baseItem,
               type: 'image',
               src: blobUrl,
               thumbnailUrl: thumbnailUrl || undefined,
+              sourceWidth: media.width || undefined,
+              sourceHeight: media.height || undefined,
+              transform: computeInitialTransform(sourceW, sourceH, canvasWidth, canvasHeight),
             } as ImageItem;
           } else {
             console.warn('Unsupported media type:', mediaType);
@@ -425,11 +464,16 @@ export const TimelineTrack = memo(function TimelineTrack({ track, items }: Timel
       };
 
       if (mediaType === 'video') {
+        const sourceW = media.width || canvasWidth;
+        const sourceH = media.height || canvasHeight;
         timelineItem = {
           ...baseItem,
           type: 'video',
           src: blobUrl,
           thumbnailUrl: thumbnailUrl || undefined,
+          sourceWidth: media.width || undefined,
+          sourceHeight: media.height || undefined,
+          transform: computeInitialTransform(sourceW, sourceH, canvasWidth, canvasHeight),
         } as VideoItem;
       } else if (mediaType === 'audio') {
         timelineItem = {
@@ -438,11 +482,16 @@ export const TimelineTrack = memo(function TimelineTrack({ track, items }: Timel
           src: blobUrl,
         } as AudioItem;
       } else if (mediaType === 'image') {
+        const sourceW = media.width || canvasWidth;
+        const sourceH = media.height || canvasHeight;
         timelineItem = {
           ...baseItem,
           type: 'image',
           src: blobUrl,
           thumbnailUrl: thumbnailUrl || undefined,
+          sourceWidth: media.width || undefined,
+          sourceHeight: media.height || undefined,
+          transform: computeInitialTransform(sourceW, sourceH, canvasWidth, canvasHeight),
         } as ImageItem;
       } else {
         console.warn('Unsupported media type:', mediaType);

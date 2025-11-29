@@ -1,9 +1,11 @@
 import { useCallback, useMemo } from 'react';
-import { Move } from 'lucide-react';
+import { Move, RotateCcw } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/button';
 import type { TimelineItem } from '@/types/timeline';
 import type { TransformProperties, CanvasSettings } from '@/types/transform';
 import { useGizmoStore } from '@/features/preview/stores/gizmo-store';
+import { useMediaLibraryStore } from '@/features/media-library/stores/media-library-store';
 import {
   resolveTransform,
   getSourceDimensions,
@@ -230,6 +232,76 @@ export function LayoutSection({
     [itemIds, onTransformChange, clearPropertiesPreview]
   );
 
+  // Get media items for fallback source dimensions lookup
+  const mediaItems = useMediaLibraryStore((s) => s.mediaItems);
+
+  // Reset scale to source dimensions (1:1 scale)
+  const handleResetScale = useCallback(() => {
+    const tolerance = 0.5;
+
+    // For each item, reset to its source dimensions
+    items.forEach((item) => {
+      // First try to get source dimensions from the item itself
+      let source = getSourceDimensions(item);
+
+      // Fallback: look up dimensions from media library if item has mediaId
+      if (!source && item.mediaId) {
+        const media = mediaItems.find((m) => m.id === item.mediaId);
+        if (media && media.width && media.height) {
+          source = { width: media.width, height: media.height };
+        }
+      }
+
+      if (!source) return;
+
+      // Get current dimensions to check if change is needed
+      const sourceDimensions = getSourceDimensions(item);
+      const resolved = resolveTransform(item, canvas, sourceDimensions);
+
+      // Only update if dimensions actually changed
+      const updates: Partial<TransformProperties> = {};
+      if (Math.abs(resolved.width - source.width) > tolerance) {
+        updates.width = source.width;
+      }
+      if (Math.abs(resolved.height - source.height) > tolerance) {
+        updates.height = source.height;
+      }
+
+      // Skip if no actual changes
+      if (Object.keys(updates).length === 0) return;
+
+      onTransformChange([item.id], updates);
+    });
+  }, [items, onTransformChange, mediaItems, canvas]);
+
+  // Reset position to center (x=0, y=0)
+  const handleResetPosition = useCallback(() => {
+    const tolerance = 0.5;
+    items.forEach((item) => {
+      const sourceDimensions = getSourceDimensions(item);
+      const resolved = resolveTransform(item, canvas, sourceDimensions);
+
+      const updates: Partial<TransformProperties> = {};
+      if (Math.abs(resolved.x) > tolerance) updates.x = 0;
+      if (Math.abs(resolved.y) > tolerance) updates.y = 0;
+
+      if (Object.keys(updates).length === 0) return;
+      onTransformChange([item.id], updates);
+    });
+  }, [items, onTransformChange, canvas]);
+
+  // Reset rotation to 0°
+  const handleResetRotation = useCallback(() => {
+    const tolerance = 0.5;
+    items.forEach((item) => {
+      const sourceDimensions = getSourceDimensions(item);
+      const resolved = resolveTransform(item, canvas, sourceDimensions);
+
+      if (Math.abs(resolved.rotation) <= tolerance) return;
+      onTransformChange([item.id], { rotation: 0 });
+    });
+  }, [items, onTransformChange, canvas]);
+
   const handleAlign = useCallback(
     (alignment: AlignmentType) => {
       // Calculate new position based on alignment
@@ -289,53 +361,86 @@ export function LayoutSection({
 
       {/* Position */}
       <PropertyRow label="Position">
-        <div className="grid grid-cols-2 gap-1">
-          <NumberInput
-            value={x}
-            onChange={handleXChange}
-            onLiveChange={handleXLiveChange}
-            label="X"
-            unit="px"
-            step={1}
-          />
-          <NumberInput
-            value={y}
-            onChange={handleYChange}
-            onLiveChange={handleYLiveChange}
-            label="Y"
-            unit="px"
-            step={1}
-          />
+        <div className="flex items-start gap-1">
+          <div className="grid grid-cols-2 gap-1 flex-1">
+            <NumberInput
+              value={x}
+              onChange={handleXChange}
+              onLiveChange={handleXLiveChange}
+              label="X"
+              unit="px"
+              step={1}
+            />
+            <NumberInput
+              value={y}
+              onChange={handleYChange}
+              onLiveChange={handleYLiveChange}
+              label="Y"
+              unit="px"
+              step={1}
+            />
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 flex-shrink-0"
+            onClick={handleResetPosition}
+            title="Reset to center"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </Button>
         </div>
       </PropertyRow>
 
       {/* Dimensions */}
       <PropertyRow label="Size">
-        <LinkedDimensions
-          width={width}
-          height={height}
-          aspectLocked={aspectLocked}
-          onWidthChange={handleWidthChange}
-          onHeightChange={handleHeightChange}
-          onWidthLiveChange={handleWidthLiveChange}
-          onHeightLiveChange={handleHeightLiveChange}
-          onAspectLockToggle={onAspectLockToggle}
-          minWidth={1}
-          minHeight={1}
-        />
+        <div className="flex items-start gap-1">
+          <LinkedDimensions
+            width={width}
+            height={height}
+            aspectLocked={aspectLocked}
+            onWidthChange={handleWidthChange}
+            onHeightChange={handleHeightChange}
+            onWidthLiveChange={handleWidthLiveChange}
+            onHeightLiveChange={handleHeightLiveChange}
+            onAspectLockToggle={onAspectLockToggle}
+            minWidth={1}
+            minHeight={1}
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 flex-shrink-0"
+            onClick={handleResetScale}
+            title="Reset to original size"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </Button>
+        </div>
       </PropertyRow>
 
       {/* Rotation */}
       <PropertyRow label="Rotation">
-        <SliderInput
-          value={rotation}
-          onChange={handleRotationChange}
-          onLiveChange={handleRotationLiveChange}
-          min={-180}
-          max={180}
-          step={1}
-          unit="°"
-        />
+        <div className="flex items-center gap-1 flex-1">
+          <SliderInput
+            value={rotation}
+            onChange={handleRotationChange}
+            onLiveChange={handleRotationLiveChange}
+            min={-180}
+            max={180}
+            step={1}
+            unit="°"
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 flex-shrink-0"
+            onClick={handleResetRotation}
+            title="Reset rotation"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </Button>
+        </div>
       </PropertyRow>
     </PropertySection>
   );
