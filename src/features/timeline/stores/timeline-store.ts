@@ -548,6 +548,8 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
     isDirty: true,
   })),
 
+  clearAllMarkers: () => set({ markers: [], isDirty: true }),
+
   // Transform actions
   updateItemTransform: (id, transformUpdates) => set((state) => ({
     items: state.items.map((item) => {

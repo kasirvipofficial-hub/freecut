@@ -13,6 +13,7 @@ import type { SelectionState, SelectionActions } from '../types';
 export const useSelectionStore = create<SelectionState & SelectionActions>((set) => ({
   // State
   selectedItemIds: [],
+  selectedMarkerId: null,
   selectedTrackId: null, // Deprecated
   selectedTrackIds: [],
   activeTrackId: null,
@@ -23,14 +24,22 @@ export const useSelectionStore = create<SelectionState & SelectionActions>((set)
   // Actions
   selectItems: (ids) => set((state) => ({
     selectedItemIds: ids,
+    selectedMarkerId: null, // Clear marker selection (mutually exclusive)
     // Preserve track selection when selecting items
     selectionType: ids.length > 0 ? 'item' : (state.selectedTrackIds.length > 0 ? 'track' : null),
   })),
+  selectMarker: (id) => set({
+    selectedMarkerId: id,
+    selectedItemIds: [], // Clear clip selection (mutually exclusive)
+    // Don't clear activeTrackId - it's for track operations, not selection display
+    selectionType: id ? 'marker' : null,
+  }),
   selectTrack: (id) => set({
     selectedTrackId: id,
     activeTrackId: id,
     selectedTrackIds: id ? [id] : [],
     selectedItemIds: [],
+    selectedMarkerId: null, // Clear marker selection
     selectionType: id ? 'track' : null,
   }),
   selectTracks: (ids, append = false) => set((state) => {
@@ -42,6 +51,7 @@ export const useSelectionStore = create<SelectionState & SelectionActions>((set)
       activeTrackId: ids[0] || null, // First selected becomes active
       selectedTrackId: ids[0] || null, // Deprecated
       selectedItemIds: [],
+      selectedMarkerId: null, // Clear marker selection
       selectionType: newSelectedIds.length > 0 ? 'track' : null,
     };
   }),
@@ -50,6 +60,7 @@ export const useSelectionStore = create<SelectionState & SelectionActions>((set)
     selectedTrackId: id, // Deprecated
     selectedTrackIds: id ? [id] : [],
     selectedItemIds: [],
+    selectedMarkerId: null, // Clear marker selection
     selectionType: id ? 'track' : null,
   }),
   toggleTrackSelection: (id) => set((state) => {
@@ -63,11 +74,13 @@ export const useSelectionStore = create<SelectionState & SelectionActions>((set)
       activeTrackId: newSelectedIds[0] || null,
       selectedTrackId: newSelectedIds[0] || null, // Deprecated
       selectedItemIds: [],
+      selectedMarkerId: null, // Clear marker selection
       selectionType: newSelectedIds.length > 0 ? 'track' : null,
     };
   }),
   clearSelection: () => set({
     selectedItemIds: [],
+    selectedMarkerId: null,
     selectedTrackId: null,
     selectedTrackIds: [],
     activeTrackId: null,

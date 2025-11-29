@@ -20,6 +20,7 @@ import {
   Undo2,
   Redo2,
   Flag,
+  FlagOff,
 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { useTimelineZoom } from '../../hooks/use-timeline-zoom';
@@ -58,6 +59,8 @@ export function TimelineHeader({ onZoomChange, onZoomIn, onZoomOut }: TimelineHe
   const setOutPoint = useTimelineStore((s) => s.setOutPoint);
   const clearInOutPoints = useTimelineStore((s) => s.clearInOutPoints);
   const addMarker = useTimelineStore((s) => s.addMarker);
+  const markers = useTimelineStore((s) => s.markers);
+  const clearAllMarkers = useTimelineStore((s) => s.clearAllMarkers);
   // NOTE: Don't subscribe to currentFrame - only needed in click handlers
   // Read from store directly when needed to avoid re-renders every frame
   const activeTool = useSelectionStore((s) => s.activeTool);
@@ -297,7 +300,12 @@ export function TimelineHeader({ onZoomChange, onZoomIn, onZoomOut }: TimelineHe
             </TooltipTrigger>
             <TooltipContent>Clear In/Out Points</TooltipContent>
           </Tooltip>
+        </div>
 
+        <Separator orientation="vertical" className="h-6 mx-2" />
+
+        {/* Markers */}
+        <div className="flex items-center gap-1">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -310,6 +318,21 @@ export function TimelineHeader({ onZoomChange, onZoomIn, onZoomOut }: TimelineHe
               </Button>
             </TooltipTrigger>
             <TooltipContent>Add Marker (M)</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={clearAllMarkers}
+                disabled={markers.length === 0}
+              >
+                <FlagOff className="w-3.5 h-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Clear All Markers</TooltipContent>
           </Tooltip>
         </div>
 

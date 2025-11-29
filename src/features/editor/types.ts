@@ -20,10 +20,11 @@ export interface EditorActions {
 
 export interface SelectionState {
   selectedItemIds: string[];
+  selectedMarkerId: string | null; // Selected marker ID
   selectedTrackId: string | null; // Deprecated: use activeTrackId
   selectedTrackIds: string[]; // Multi-track selection
   activeTrackId: string | null; // Single active track
-  selectionType: 'item' | 'track' | null;
+  selectionType: 'item' | 'track' | 'marker' | null;
   activeTool: 'select' | 'razor' | 'rate-stretch'; // Active timeline tool
   // Drag state for visual feedback
   dragState: {
@@ -38,6 +39,7 @@ export interface SelectionState {
 
 export interface SelectionActions {
   selectItems: (ids: string[]) => void;
+  selectMarker: (id: string | null) => void; // Select a marker
   selectTrack: (id: string | null) => void; // Deprecated: use setActiveTrack
   selectTracks: (ids: string[], append?: boolean) => void;
   setActiveTrack: (id: string | null) => void;

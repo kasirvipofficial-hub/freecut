@@ -4,6 +4,7 @@ import { useCallback, useRef, useState, useEffect, memo } from 'react';
 // Stores and selectors
 import { useTimelineStore } from '../stores/timeline-store';
 import { usePlaybackStore } from '@/features/preview/stores/playback-store';
+import { useSelectionStore } from '@/features/editor/stores/selection-store';
 
 // Components
 import { TimelineInOutMarkers } from './timeline-in-out-markers';
@@ -194,6 +195,7 @@ export const TimelineMarkers = memo(function TimelineMarkers({ duration, width }
   const outPoint = useTimelineStore((s) => s.outPoint);
   const setCurrentFrame = usePlaybackStore((s) => s.setCurrentFrame);
   const pause = usePlaybackStore((s) => s.pause);
+  const selectMarker = useSelectionStore((s) => s.selectMarker);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const tilesContainerRef = useRef<HTMLDivElement>(null);
@@ -334,6 +336,9 @@ export const TimelineMarkers = memo(function TimelineMarkers({ duration, width }
     e.stopPropagation(); // Prevent click from bubbling to container and clearing selection
     if (!containerRef.current) return;
 
+    // Clear marker selection when clicking on ruler
+    selectMarker(null);
+
     const rect = containerRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
 
@@ -341,7 +346,7 @@ export const TimelineMarkers = memo(function TimelineMarkers({ duration, width }
     const frame = Math.max(0, pixelsToFrameRef.current(x));
     setCurrentFrameRef.current(frame);
     setIsDragging(true);
-  }, []);
+  }, [selectMarker]);
 
   useEffect(() => {
     if (!isDragging) return;

@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 
 // Stores and selectors
 import { useTimelineStore } from '../stores/timeline-store';
+import { useSelectionStore } from '@/features/editor/stores/selection-store';
 
 // Utilities and hooks
 import { useTimelineZoom } from '../hooks/use-timeline-zoom';
@@ -22,6 +23,8 @@ import type { ProjectMarker } from '@/types/timeline';
 export function TimelineProjectMarkers() {
   const markers = useTimelineStore((s) => s.markers);
   const updateMarker = useTimelineStore((s) => s.updateMarker);
+  const selectedMarkerId = useSelectionStore((s) => s.selectedMarkerId);
+  const selectMarker = useSelectionStore((s) => s.selectMarker);
   const { frameToPixels, pixelsToFrame } = useTimelineZoom();
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -37,12 +40,14 @@ export function TimelineProjectMarkers() {
     updateMarkerRef.current = updateMarker;
   }, [pixelsToFrame, updateMarker]);
 
-  // Handle drag start
+  // Handle drag start and selection
   const handleMouseDown = useCallback((e: React.MouseEvent, markerId: string) => {
     e.preventDefault();
     e.stopPropagation();
+    // Select the marker (clears any clip selection)
+    selectMarker(markerId);
     setDraggingId(markerId);
-  }, []);
+  }, [selectMarker]);
 
   // Handle dragging
   useEffect(() => {
@@ -86,6 +91,7 @@ export function TimelineProjectMarkers() {
           marker={marker}
           leftPosition={frameToPixels(marker.frame)}
           isDragging={draggingId === marker.id}
+          isSelected={selectedMarkerId === marker.id}
           onMouseDown={(e) => handleMouseDown(e, marker.id)}
         />
       ))}
@@ -97,10 +103,11 @@ interface MarkerIndicatorProps {
   marker: ProjectMarker;
   leftPosition: number;
   isDragging: boolean;
+  isSelected: boolean;
   onMouseDown: (e: React.MouseEvent) => void;
 }
 
-function MarkerIndicator({ marker, leftPosition, isDragging, onMouseDown }: MarkerIndicatorProps) {
+function MarkerIndicator({ marker, leftPosition, isDragging, isSelected, onMouseDown }: MarkerIndicatorProps) {
   return (
     <div
       className="absolute pointer-events-auto"
@@ -109,7 +116,7 @@ function MarkerIndicator({ marker, leftPosition, isDragging, onMouseDown }: Mark
         top: '-2px',
         transform: 'translateX(-50%)',
         cursor: isDragging ? 'grabbing' : 'grab',
-        zIndex: 15,
+        zIndex: isSelected ? 20 : 15,
       }}
       onMouseDown={onMouseDown}
       title={marker.label || `Marker at frame ${marker.frame}`}
@@ -126,6 +133,22 @@ function MarkerIndicator({ marker, leftPosition, isDragging, onMouseDown }: Mark
           backgroundColor: 'transparent',
         }}
       />
+      {/* Selection outline triangle (larger, behind) */}
+      {isSelected && (
+        <div
+          className="absolute"
+          style={{
+            top: '-4px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 0,
+            height: 0,
+            borderLeft: '12px solid transparent',
+            borderRight: '12px solid transparent',
+            borderTop: '18px solid white',
+          }}
+        />
+      )}
       {/* Visible triangle (CSS triangle pointing down) */}
       <div
         style={{

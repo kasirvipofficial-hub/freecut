@@ -63,6 +63,7 @@ export function TimelineContent({ duration, scrollRef, onZoomHandlersReady }: Ti
   // NOTE: Don't subscribe to currentFrame here - it would cause re-renders every frame!
   // Use refs to access it in callbacks instead (see currentFrameRef below)
   const selectItems = useSelectionStore((s) => s.selectItems);
+  const selectMarker = useSelectionStore((s) => s.selectMarker);
   const clearItemSelection = useSelectionStore((s) => s.clearItemSelection);
   const dragState = useSelectionStore((s) => s.dragState);
   const activeTool = useSelectionStore((s) => s.activeTool);
@@ -272,19 +273,20 @@ export function TimelineContent({ duration, scrollRef, onZoomHandlersReady }: Ti
     };
   }, []);
 
-  // Click empty space to deselect items (but preserve track selection)
+  // Click empty space to deselect items and markers (but preserve track selection)
   const handleContainerClick = (e: React.MouseEvent) => {
     // Don't deselect if marquee selection, drag, or scrubbing just finished
     if (marqueeWasActiveRef.current || dragWasActiveRef.current || scrubWasActiveRef.current) {
       return;
     }
 
-    // Deselect items if NOT clicking on a timeline item
+    // Deselect items and markers if NOT clicking on a timeline item
     const target = e.target as HTMLElement;
     const clickedOnItem = target.closest('[data-item-id]');
 
     if (!clickedOnItem) {
       clearItemSelection();
+      selectMarker(null); // Also clear marker selection
     }
   };
 

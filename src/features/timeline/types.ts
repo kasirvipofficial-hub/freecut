@@ -36,6 +36,7 @@ export interface TimelineActions {
   addMarker: (frame: number, color?: string, label?: string) => void;
   updateMarker: (id: string, updates: Partial<Omit<ProjectMarker, 'id'>>) => void;
   removeMarker: (id: string) => void;
+  clearAllMarkers: () => void;
   // Transform actions
   updateItemTransform: (id: string, transform: Partial<TransformProperties>) => void;
   resetItemTransform: (id: string) => void;

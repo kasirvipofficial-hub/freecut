@@ -37,10 +37,12 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
   const isPlaying = usePlaybackStore((s) => s.isPlaying);
 
   const selectedItemIds = useSelectionStore((s) => s.selectedItemIds);
+  const selectedMarkerId = useSelectionStore((s) => s.selectedMarkerId);
   const clearSelection = useSelectionStore((s) => s.clearSelection);
   const activeTool = useSelectionStore((s) => s.activeTool);
   const setActiveTool = useSelectionStore((s) => s.setActiveTool);
   const removeItems = useTimelineStore((s) => s.removeItems);
+  const removeMarker = useTimelineStore((s) => s.removeMarker);
   const rippleDeleteItems = useTimelineStore((s) => s.rippleDeleteItems);
   const joinItems = useTimelineStore((s) => s.joinItems);
   const toggleSnap = useTimelineStore((s) => s.toggleSnap);
@@ -172,10 +174,18 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
     [setCurrentFrame, clipEdges]
   );
 
-  // Editing: Delete - Delete selected items
+  // Editing: Delete - Delete selected items or marker
   useHotkeys(
     HOTKEYS.DELETE_SELECTED,
     (event) => {
+      // Delete selected marker
+      if (selectedMarkerId) {
+        event.preventDefault();
+        removeMarker(selectedMarkerId);
+        clearSelection();
+        return;
+      }
+      // Delete selected items
       if (selectedItemIds.length > 0) {
         event.preventDefault();
         removeItems(selectedItemIds);
@@ -185,13 +195,21 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
       }
     },
     HOTKEY_OPTIONS,
-    [selectedItemIds, removeItems, callbacks]
+    [selectedItemIds, selectedMarkerId, removeItems, removeMarker, clearSelection, callbacks]
   );
 
-  // Editing: Backspace - Delete selected items (alternative)
+  // Editing: Backspace - Delete selected items or marker (alternative)
   useHotkeys(
     HOTKEYS.DELETE_SELECTED_ALT,
     (event) => {
+      // Delete selected marker
+      if (selectedMarkerId) {
+        event.preventDefault();
+        removeMarker(selectedMarkerId);
+        clearSelection();
+        return;
+      }
+      // Delete selected items
       if (selectedItemIds.length > 0) {
         event.preventDefault();
         removeItems(selectedItemIds);
@@ -201,7 +219,7 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
       }
     },
     HOTKEY_OPTIONS,
-    [selectedItemIds, removeItems, callbacks]
+    [selectedItemIds, selectedMarkerId, removeItems, removeMarker, clearSelection, callbacks]
   );
 
   // Editing: Ctrl+Delete - Ripple delete selected items (delete + close gap)
