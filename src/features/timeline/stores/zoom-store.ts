@@ -20,11 +20,40 @@ export interface ZoomActions {
 // ❌ WRONG: Don't destructure the entire store
 // const { level, zoomIn } = useZoomStore();
 
+// Throttle zoom updates to reduce re-render frequency during rapid zoom
+const ZOOM_THROTTLE_MS = 32; // ~30fps max for zoom updates
+let lastZoomUpdate = 0;
+let pendingZoomLevel: number | null = null;
+let zoomThrottleTimeout: ReturnType<typeof setTimeout> | null = null;
+
 export const useZoomStore = create<ZoomState & ZoomActions>((set) => ({
   level: 1,
   pixelsPerSecond: 100,
 
-  setZoomLevel: (level) => set({ level, pixelsPerSecond: level * 100 }),
+  setZoomLevel: (level) => {
+    const now = performance.now();
+    pendingZoomLevel = level;
+
+    // If enough time has passed, update immediately
+    if (now - lastZoomUpdate >= ZOOM_THROTTLE_MS) {
+      lastZoomUpdate = now;
+      set({ level, pixelsPerSecond: level * 100 });
+      pendingZoomLevel = null;
+      return;
+    }
+
+    // Otherwise, schedule update for next throttle window
+    if (!zoomThrottleTimeout) {
+      zoomThrottleTimeout = setTimeout(() => {
+        zoomThrottleTimeout = null;
+        if (pendingZoomLevel !== null) {
+          lastZoomUpdate = performance.now();
+          set({ level: pendingZoomLevel, pixelsPerSecond: pendingZoomLevel * 100 });
+          pendingZoomLevel = null;
+        }
+      }, ZOOM_THROTTLE_MS - (now - lastZoomUpdate));
+    }
+  },
   zoomIn: () =>
     set((state) => {
       const newLevel = Math.min(state.level * 1.2, 50); // Increased from 10 to 50 for finer detail
