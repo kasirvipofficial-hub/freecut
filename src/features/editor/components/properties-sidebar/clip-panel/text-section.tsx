@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, useRef, useEffect, memo } from 'react';
-import { Type, RotateCcw } from 'lucide-react';
+import { Type, RotateCcw, AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -12,6 +12,7 @@ import {
 import { HexColorPicker } from 'react-colorful';
 import type { TextItem, TimelineItem } from '@/types/timeline';
 import { useTimelineStore } from '@/features/timeline/stores/timeline-store';
+import { useGizmoStore } from '@/features/preview/stores/gizmo-store';
 import {
   PropertySection,
   PropertyRow,
@@ -39,11 +40,6 @@ const FONT_WEIGHT_OPTIONS = [
   { value: 'bold', label: 'Bold' },
 ] as const;
 
-const TEXT_ALIGN_OPTIONS = [
-  { value: 'left', label: 'Left' },
-  { value: 'center', label: 'Center' },
-  { value: 'right', label: 'Right' },
-] as const;
 
 interface TextSectionProps {
   items: TimelineItem[];
@@ -51,17 +47,20 @@ interface TextSectionProps {
 
 /**
  * Color picker component for text properties.
+ * Supports live preview during picker drag via onLiveChange.
  */
 const TextColorPicker = memo(function TextColorPicker({
   label,
   color,
   onChange,
+  onLiveChange,
   onReset,
   defaultColor,
 }: {
   label: string;
   color: string;
   onChange: (color: string) => void;
+  onLiveChange?: (color: string) => void;
   onReset?: () => void;
   defaultColor?: string;
 }) {
@@ -75,7 +74,9 @@ const TextColorPicker = memo(function TextColorPicker({
 
   const handleColorChange = useCallback((newColor: string) => {
     setLocalColor(newColor);
-  }, []);
+    // Call live preview during drag
+    onLiveChange?.(newColor);
+  }, [onLiveChange]);
 
   const handleCommit = useCallback(() => {
     onChange(localColor);
@@ -144,11 +145,18 @@ const TextColorPicker = memo(function TextColorPicker({
 export function TextSection({ items }: TextSectionProps) {
   const updateItem = useTimelineStore((s) => s.updateItem);
 
+  // Gizmo store for live fontSize preview
+  const setItemPropertiesPreview = useGizmoStore((s) => s.setItemPropertiesPreview);
+  const clearItemPropertiesPreview = useGizmoStore((s) => s.clearItemPropertiesPreview);
+
   // Filter to only text items
   const textItems = useMemo(
     () => items.filter((item): item is TextItem => item.type === 'text'),
     [items]
   );
+
+  // Memoize item IDs for stable callback dependencies
+  const itemIds = useMemo(() => textItems.map((item) => item.id), [textItems]);
 
   // Get shared values across selected text items
   const sharedValues = useMemo(() => {
@@ -162,6 +170,7 @@ export function TextSection({ items }: TextSectionProps) {
       fontWeight: textItems.every(i => (i.fontWeight ?? 'normal') === (first.fontWeight ?? 'normal')) ? (first.fontWeight ?? 'normal') : undefined,
       color: textItems.every(i => i.color === first.color) ? first.color : undefined,
       textAlign: textItems.every(i => (i.textAlign ?? 'center') === (first.textAlign ?? 'center')) ? (first.textAlign ?? 'center') : undefined,
+      verticalAlign: textItems.every(i => (i.verticalAlign ?? 'middle') === (first.verticalAlign ?? 'middle')) ? (first.verticalAlign ?? 'middle') : undefined,
       letterSpacing: textItems.every(i => (i.letterSpacing ?? 0) === (first.letterSpacing ?? 0)) ? (first.letterSpacing ?? 0) : 'mixed' as const,
       lineHeight: textItems.every(i => (i.lineHeight ?? 1.2) === (first.lineHeight ?? 1.2)) ? (first.lineHeight ?? 1.2) : 'mixed' as const,
     };
@@ -179,20 +188,34 @@ export function TextSection({ items }: TextSectionProps) {
 
   // Handlers
   const handleTextChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const newText = e.target.value;
       textItems.forEach((item) => {
-        updateItem(item.id, { text: newText, label: newText || 'Text' });
+        updateItem(item.id, { text: newText, label: newText.split('\n')[0] || 'Text' });
       });
     },
     [textItems, updateItem]
   );
 
+  // Live preview for fontSize (during drag)
+  const handleFontSizeLiveChange = useCallback(
+    (value: number) => {
+      const previews: Record<string, { fontSize: number }> = {};
+      itemIds.forEach((id) => {
+        previews[id] = { fontSize: value };
+      });
+      setItemPropertiesPreview(previews);
+    },
+    [itemIds, setItemPropertiesPreview]
+  );
+
+  // Commit fontSize (on mouse up)
   const handleFontSizeChange = useCallback(
     (value: number) => {
       updateTextItems({ fontSize: value });
+      queueMicrotask(() => clearItemPropertiesPreview());
     },
-    [updateTextItems]
+    [updateTextItems, clearItemPropertiesPreview]
   );
 
   const handleFontFamilyChange = useCallback(
@@ -209,11 +232,25 @@ export function TextSection({ items }: TextSectionProps) {
     [updateTextItems]
   );
 
+  // Live preview for color (during picker drag)
+  const handleColorLiveChange = useCallback(
+    (value: string) => {
+      const previews: Record<string, { color: string }> = {};
+      itemIds.forEach((id) => {
+        previews[id] = { color: value };
+      });
+      setItemPropertiesPreview(previews);
+    },
+    [itemIds, setItemPropertiesPreview]
+  );
+
+  // Commit color (on picker close)
   const handleColorChange = useCallback(
     (value: string) => {
       updateTextItems({ color: value });
+      queueMicrotask(() => clearItemPropertiesPreview());
     },
-    [updateTextItems]
+    [updateTextItems, clearItemPropertiesPreview]
   );
 
   const handleTextAlignChange = useCallback(
@@ -223,18 +260,53 @@ export function TextSection({ items }: TextSectionProps) {
     [updateTextItems]
   );
 
-  const handleLetterSpacingChange = useCallback(
-    (value: number) => {
-      updateTextItems({ letterSpacing: value });
+  const handleVerticalAlignChange = useCallback(
+    (value: string) => {
+      updateTextItems({ verticalAlign: value as TextItem['verticalAlign'] });
     },
     [updateTextItems]
   );
 
+  // Live preview for letterSpacing (during drag)
+  const handleLetterSpacingLiveChange = useCallback(
+    (value: number) => {
+      const previews: Record<string, { letterSpacing: number }> = {};
+      itemIds.forEach((id) => {
+        previews[id] = { letterSpacing: value };
+      });
+      setItemPropertiesPreview(previews);
+    },
+    [itemIds, setItemPropertiesPreview]
+  );
+
+  // Commit letterSpacing (on mouse up)
+  const handleLetterSpacingChange = useCallback(
+    (value: number) => {
+      updateTextItems({ letterSpacing: value });
+      queueMicrotask(() => clearItemPropertiesPreview());
+    },
+    [updateTextItems, clearItemPropertiesPreview]
+  );
+
+  // Live preview for lineHeight (during drag)
+  const handleLineHeightLiveChange = useCallback(
+    (value: number) => {
+      const previews: Record<string, { lineHeight: number }> = {};
+      itemIds.forEach((id) => {
+        previews[id] = { lineHeight: value };
+      });
+      setItemPropertiesPreview(previews);
+    },
+    [itemIds, setItemPropertiesPreview]
+  );
+
+  // Commit lineHeight (on mouse up)
   const handleLineHeightChange = useCallback(
     (value: number) => {
       updateTextItems({ lineHeight: value });
+      queueMicrotask(() => clearItemPropertiesPreview());
     },
-    [updateTextItems]
+    [updateTextItems, clearItemPropertiesPreview]
   );
 
   if (textItems.length === 0 || !sharedValues) {
@@ -245,11 +317,12 @@ export function TextSection({ items }: TextSectionProps) {
     <PropertySection title="Text" icon={Type} defaultOpen={true}>
       {/* Text Content */}
       <PropertyRow label="Content">
-        <Input
+        <Textarea
           value={sharedValues.text ?? ''}
           onChange={handleTextChange}
           placeholder={sharedValues.text === undefined ? 'Mixed' : 'Enter text...'}
-          className="h-7 text-xs"
+          className="min-h-[60px] text-xs"
+          rows={3}
         />
       </PropertyRow>
 
@@ -277,6 +350,7 @@ export function TextSection({ items }: TextSectionProps) {
         <NumberInput
           value={sharedValues.fontSize}
           onChange={handleFontSizeChange}
+          onLiveChange={handleFontSizeLiveChange}
           min={8}
           max={500}
           step={1}
@@ -305,21 +379,63 @@ export function TextSection({ items }: TextSectionProps) {
 
       {/* Text Align */}
       <PropertyRow label="Align">
-        <Select
-          value={sharedValues.textAlign}
-          onValueChange={handleTextAlignChange}
-        >
-          <SelectTrigger className="h-7 text-xs">
-            <SelectValue placeholder={sharedValues.textAlign === undefined ? 'Mixed' : 'Select alignment'} />
-          </SelectTrigger>
-          <SelectContent>
-            {TEXT_ALIGN_OPTIONS.map((align) => (
-              <SelectItem key={align.value} value={align.value} className="text-xs">
-                {align.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex gap-1">
+          <Button
+            variant={sharedValues.textAlign === 'left' ? 'secondary' : 'ghost'}
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => handleTextAlignChange('left')}
+            title="Align Left"
+          >
+            <AlignLeft className="w-3.5 h-3.5" />
+          </Button>
+          <Button
+            variant={sharedValues.textAlign === 'center' ? 'secondary' : 'ghost'}
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => handleTextAlignChange('center')}
+            title="Align Center"
+          >
+            <AlignCenter className="w-3.5 h-3.5" />
+          </Button>
+          <Button
+            variant={sharedValues.textAlign === 'right' ? 'secondary' : 'ghost'}
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => handleTextAlignChange('right')}
+            title="Align Right"
+          >
+            <AlignRight className="w-3.5 h-3.5" />
+          </Button>
+          <div className="w-px h-5 bg-border mx-1" />
+          <Button
+            variant={sharedValues.verticalAlign === 'top' ? 'secondary' : 'ghost'}
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => handleVerticalAlignChange('top')}
+            title="Align Top"
+          >
+            <AlignVerticalJustifyStart className="w-3.5 h-3.5" />
+          </Button>
+          <Button
+            variant={sharedValues.verticalAlign === 'middle' ? 'secondary' : 'ghost'}
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => handleVerticalAlignChange('middle')}
+            title="Align Middle"
+          >
+            <AlignVerticalJustifyCenter className="w-3.5 h-3.5" />
+          </Button>
+          <Button
+            variant={sharedValues.verticalAlign === 'bottom' ? 'secondary' : 'ghost'}
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => handleVerticalAlignChange('bottom')}
+            title="Align Bottom"
+          >
+            <AlignVerticalJustifyEnd className="w-3.5 h-3.5" />
+          </Button>
+        </div>
       </PropertyRow>
 
       {/* Text Color */}
@@ -327,6 +443,7 @@ export function TextSection({ items }: TextSectionProps) {
         label="Color"
         color={sharedValues.color ?? '#ffffff'}
         onChange={handleColorChange}
+        onLiveChange={handleColorLiveChange}
         onReset={() => handleColorChange('#ffffff')}
         defaultColor="#ffffff"
       />
@@ -336,6 +453,7 @@ export function TextSection({ items }: TextSectionProps) {
         <NumberInput
           value={sharedValues.letterSpacing}
           onChange={handleLetterSpacingChange}
+          onLiveChange={handleLetterSpacingLiveChange}
           min={-20}
           max={100}
           step={1}
@@ -348,6 +466,7 @@ export function TextSection({ items }: TextSectionProps) {
         <NumberInput
           value={sharedValues.lineHeight}
           onChange={handleLineHeightChange}
+          onLiveChange={handleLineHeightLiveChange}
           min={0.5}
           max={3}
           step={0.1}

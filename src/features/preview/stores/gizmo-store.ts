@@ -20,6 +20,11 @@ export interface ItemPropertiesPreview {
   volume?: number;
   audioFadeIn?: number;
   audioFadeOut?: number;
+  // Text properties
+  fontSize?: number;
+  letterSpacing?: number;
+  lineHeight?: number;
+  color?: string;
 }
 
 interface GizmoStoreState {
@@ -62,7 +67,9 @@ interface GizmoStoreActions {
     itemId: string,
     handle: GizmoHandle,
     startPoint: Point,
-    transform: Transform
+    transform: Transform,
+    itemType?: 'video' | 'audio' | 'image' | 'text' | 'shape',
+    aspectRatioLocked?: boolean
   ) => void;
 
   /** Start rotate interaction (drag rotation handle) */
@@ -141,7 +148,7 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
         snapLines: [],
       }),
 
-    startScale: (itemId, handle, startPoint, transform) =>
+    startScale: (itemId, handle, startPoint, transform, itemType, aspectRatioLocked) =>
       set({
         activeGizmo: {
           mode: 'scale',
@@ -151,6 +158,8 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
           currentPoint: startPoint,
           shiftKey: false,
           itemId,
+          itemType,
+          aspectRatioLocked,
         },
         previewTransform: { ...transform },
         snapLines: [],
@@ -175,11 +184,26 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
       const { activeGizmo, canvasSize, snappingEnabled } = get();
       if (!activeGizmo) return;
 
-      // Calculate raw transform
+      // Determine if aspect ratio should be locked:
+      // 1. If aspectRatioLocked is explicitly set on the item, use that
+      // 2. Otherwise, default based on item type (text/shape = unlocked, others = locked)
+      // Shift key inverts the current lock state
+      let aspectLocked: boolean;
+      if (activeGizmo.aspectRatioLocked !== undefined) {
+        aspectLocked = activeGizmo.aspectRatioLocked;
+      } else {
+        // Default: text/shape = unlocked, others = locked
+        const isTextOrShape = activeGizmo.itemType === 'text' || activeGizmo.itemType === 'shape';
+        aspectLocked = !isTextOrShape;
+      }
+      // Shift key inverts the lock state
+      const effectiveAspectLocked = shiftKey ? !aspectLocked : aspectLocked;
+
+      // Calculate raw transform (pass !effectiveAspectLocked because calculateTransform expects maintainAspectRatio)
       let newTransform = calculateTransform(
         activeGizmo,
         currentPoint,
-        shiftKey,
+        !effectiveAspectLocked,
         canvasSize.width,
         canvasSize.height
       );

@@ -58,6 +58,7 @@ export type TextItem = BaseTimelineItem & {
   backgroundColor?: string; // Background color behind text (optional)
   // Text layout
   textAlign?: 'left' | 'center' | 'right'; // Horizontal alignment (default: 'center')
+  verticalAlign?: 'top' | 'middle' | 'bottom'; // Vertical alignment (default: 'middle')
   lineHeight?: number; // Line height multiplier (default: 1.2)
   letterSpacing?: number; // Letter spacing in pixels (default: 0)
   // Text effects

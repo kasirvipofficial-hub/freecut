@@ -1,7 +1,7 @@
 import React from 'react';
 import { AbsoluteFill, OffthreadVideo, useVideoConfig, useCurrentFrame, interpolate } from 'remotion';
 import { useGizmoStore } from '@/features/preview/stores/gizmo-store';
-import type { TimelineItem, VideoItem } from '@/types/timeline';
+import type { TimelineItem, VideoItem, TextItem } from '@/types/timeline';
 import { DebugOverlay } from './debug-overlay';
 import { PitchCorrectedAudio } from './pitch-corrected-audio';
 import { GifPlayer } from './gif-player';
@@ -114,6 +114,102 @@ const VideoContent: React.FC<{
       pauseWhenBuffering={false}
       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
     />
+  );
+};
+
+/**
+ * Text content with live property preview support.
+ * Reads preview values from gizmo store for real-time updates during slider/picker drag.
+ */
+const TextContent: React.FC<{ item: TextItem }> = ({ item }) => {
+  // Read preview values from gizmo store
+  const itemPropertiesPreview = useGizmoStore((s) => s.itemPropertiesPreview);
+  const preview = itemPropertiesPreview?.[item.id];
+
+  // Use preview values if available, otherwise use item's stored values
+  const fontSize = preview?.fontSize ?? item.fontSize ?? 60;
+  const letterSpacing = preview?.letterSpacing ?? item.letterSpacing ?? 0;
+  const lineHeight = preview?.lineHeight ?? item.lineHeight ?? 1.2;
+  const color = preview?.color ?? item.color;
+
+  // Load the Google Font and get the CSS fontFamily value
+  // loadFont() blocks rendering until the font is ready (works for both preview and server render)
+  const fontName = item.fontFamily ?? 'Inter';
+  const fontFamily = loadFont(fontName);
+
+  // Get font weight from shared map
+  const fontWeight = FONT_WEIGHT_MAP[item.fontWeight ?? 'normal'] ?? 400;
+
+  // Map text align to flexbox justify-content (horizontal)
+  const textAlignMap: Record<string, string> = {
+    left: 'flex-start',
+    center: 'center',
+    right: 'flex-end',
+  };
+  const justifyContent = textAlignMap[item.textAlign ?? 'center'] ?? 'center';
+
+  // Map vertical align to flexbox align-items
+  const verticalAlignMap: Record<string, string> = {
+    top: 'flex-start',
+    middle: 'center',
+    bottom: 'flex-end',
+  };
+  const alignItems = verticalAlignMap[item.verticalAlign ?? 'middle'] ?? 'center';
+
+  // Build text shadow CSS if present
+  const textShadow = item.textShadow
+    ? `${item.textShadow.offsetX}px ${item.textShadow.offsetY}px ${item.textShadow.blur}px ${item.textShadow.color}`
+    : undefined;
+
+  // Build stroke/outline effect using text-stroke or text shadow workaround
+  // Note: -webkit-text-stroke is not well supported in Remotion rendering
+  // Using multiple text shadows as a fallback for stroke effect
+  const strokeShadows = item.stroke
+    ? [
+        `${item.stroke.width}px 0 ${item.stroke.color}`,
+        `-${item.stroke.width}px 0 ${item.stroke.color}`,
+        `0 ${item.stroke.width}px ${item.stroke.color}`,
+        `0 -${item.stroke.width}px ${item.stroke.color}`,
+      ].join(', ')
+    : undefined;
+
+  const finalTextShadow = [textShadow, strokeShadows].filter(Boolean).join(', ') || undefined;
+
+  return (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        alignItems,
+        justifyContent,
+        padding: '16px',
+        backgroundColor: item.backgroundColor,
+        boxSizing: 'border-box',
+      }}
+    >
+      <div
+        style={{
+          fontSize,
+          // Use the fontFamily returned by loadFont (includes proper CSS value)
+          fontFamily: fontFamily,
+          fontWeight,
+          fontStyle: item.fontStyle ?? 'normal',
+          color,
+          textAlign: item.textAlign ?? 'center',
+          lineHeight,
+          letterSpacing,
+          textShadow: finalTextShadow,
+          // Best practice: use inline-block and pre-wrap to match measureText behavior
+          display: 'inline-block',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+          width: '100%',
+        }}
+      >
+        {item.text}
+      </div>
+    </div>
   );
 };
 
@@ -445,80 +541,8 @@ export const Item: React.FC<ItemProps> = ({ item, muted = false }) => {
   }
 
   if (item.type === 'text') {
-    // Load the Google Font and get the CSS fontFamily value
-    // loadFont() blocks rendering until the font is ready (works for both preview and server render)
-    const fontName = item.fontFamily ?? 'Inter';
-    const fontFamily = loadFont(fontName);
-
-    // Get font weight from shared map
-    const fontWeight = FONT_WEIGHT_MAP[item.fontWeight ?? 'normal'] ?? 400;
-
-    // Map text align to flexbox justify-content
-    const textAlignMap: Record<string, string> = {
-      left: 'flex-start',
-      center: 'center',
-      right: 'flex-end',
-    };
-    const justifyContent = textAlignMap[item.textAlign ?? 'center'] ?? 'center';
-
-    // Build text shadow CSS if present
-    const textShadow = item.textShadow
-      ? `${item.textShadow.offsetX}px ${item.textShadow.offsetY}px ${item.textShadow.blur}px ${item.textShadow.color}`
-      : undefined;
-
-    // Build stroke/outline effect using text-stroke or text shadow workaround
-    // Note: -webkit-text-stroke is not well supported in Remotion rendering
-    // Using multiple text shadows as a fallback for stroke effect
-    const strokeShadows = item.stroke
-      ? [
-          `${item.stroke.width}px 0 ${item.stroke.color}`,
-          `-${item.stroke.width}px 0 ${item.stroke.color}`,
-          `0 ${item.stroke.width}px ${item.stroke.color}`,
-          `0 -${item.stroke.width}px ${item.stroke.color}`,
-        ].join(', ')
-      : undefined;
-
-    const finalTextShadow = [textShadow, strokeShadows].filter(Boolean).join(', ') || undefined;
-
-    const textContent = (
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent,
-          padding: '16px',
-          backgroundColor: item.backgroundColor,
-          boxSizing: 'border-box',
-        }}
-      >
-        <div
-          style={{
-            fontSize: item.fontSize ?? 60,
-            // Use the fontFamily returned by loadFont (includes proper CSS value)
-            fontFamily: fontFamily,
-            fontWeight,
-            fontStyle: item.fontStyle ?? 'normal',
-            color: item.color,
-            textAlign: item.textAlign ?? 'center',
-            lineHeight: item.lineHeight ?? 1.2,
-            letterSpacing: item.letterSpacing ?? 0,
-            textShadow: finalTextShadow,
-            // Best practice: use inline-block and pre-wrap to match measureText behavior
-            display: 'inline-block',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            width: '100%',
-          }}
-        >
-          {item.text}
-        </div>
-      </div>
-    );
-
     // Always use TransformWrapper for consistent rendering between preview and export
-    return <TransformWrapper item={item}>{textContent}</TransformWrapper>;
+    return <TransformWrapper item={item}><TextContent item={item} /></TransformWrapper>;
   }
 
   if (item.type === 'shape') {

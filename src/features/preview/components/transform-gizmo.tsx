@@ -178,7 +178,7 @@ export function TransformGizmo({
       e.preventDefault();
       const point = toCanvasPoint(e);
       const startTransformSnapshot = { ...currentTransform };
-      startScale(item.id, handle, point, currentTransform);
+      startScale(item.id, handle, point, currentTransform, item.type, item.transform?.aspectRatioLocked);
       onTransformStart();
       document.body.style.cursor = getScaleCursor(handle, currentTransform.rotation);
 

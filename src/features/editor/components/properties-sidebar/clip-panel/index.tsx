@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useCallback } from 'react';
 import { Separator } from '@/components/ui/separator';
 import { useSelectionStore } from '@/features/editor/stores/selection-store';
 import { useTimelineStore } from '@/features/timeline/stores/timeline-store';
@@ -23,9 +23,6 @@ export function ClipPanel() {
   const fps = useTimelineStore((s) => s.fps);
   const updateItemsTransform = useTimelineStore((s) => s.updateItemsTransform);
   const currentProject = useProjectStore((s) => s.currentProject);
-
-  // Local state for aspect lock (persists during session)
-  const [aspectLocked, setAspectLocked] = useState(true);
 
   // Get selected items
   const selectedItems = useMemo(
@@ -70,6 +67,38 @@ export function ClipPanel() {
     [selectedItems]
   );
 
+  // Check if selection is only text/shape items (no aspect ratio lock by default)
+  const isOnlyTextOrShape = useMemo(
+    () => selectedItems.length > 0 && selectedItems.every(
+      (item) => item.type === 'text' || item.type === 'shape'
+    ),
+    [selectedItems]
+  );
+
+  // Compute aspectLocked from items' transforms
+  // If any item has explicit aspectRatioLocked, use that; otherwise use default based on type
+  const aspectLocked = useMemo(() => {
+    if (selectedItems.length === 0) return true;
+
+    // Check if any item has explicit aspectRatioLocked set
+    const firstWithExplicit = selectedItems.find(
+      (item) => item.transform?.aspectRatioLocked !== undefined
+    );
+    if (firstWithExplicit) {
+      return firstWithExplicit.transform!.aspectRatioLocked!;
+    }
+
+    // Default based on item types: text/shape = unlocked, others = locked
+    return !isOnlyTextOrShape;
+  }, [selectedItems, isOnlyTextOrShape]);
+
+  // Toggle aspect lock - updates all selected items' transforms
+  const handleAspectLockToggle = useCallback(() => {
+    const newValue = !aspectLocked;
+    const itemIds = selectedItems.map((item) => item.id);
+    updateItemsTransform(itemIds, { aspectRatioLocked: newValue });
+  }, [aspectLocked, selectedItems, updateItemsTransform]);
+
   // Handle transform changes
   const handleTransformChange = useCallback(
     (ids: string[], updates: Partial<TransformProperties>) => {
@@ -97,7 +126,7 @@ export function ClipPanel() {
             canvas={canvas}
             onTransformChange={handleTransformChange}
             aspectLocked={aspectLocked}
-            onAspectLockToggle={() => setAspectLocked(!aspectLocked)}
+            onAspectLockToggle={handleAspectLockToggle}
           />
           <Separator />
         </>
