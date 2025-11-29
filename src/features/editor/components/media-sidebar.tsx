@@ -30,11 +30,11 @@ export function MediaSidebar() {
   const setActiveTab = useEditorStore((s) => s.setActiveTab);
 
   // Timeline and playback stores for adding elements
+  // Don't subscribe to currentFrame - read from store in callbacks to avoid re-renders during playback
   const addItem = useTimelineStore((s) => s.addItem);
   const tracks = useTimelineStore((s) => s.tracks);
   const items = useTimelineStore((s) => s.items);
   const fps = useTimelineStore((s) => s.fps);
-  const currentFrame = usePlaybackStore((s) => s.currentFrame);
   const selectItems = useSelectionStore((s) => s.selectItems);
   const activeTrackId = useSelectionStore((s) => s.activeTrackId);
   const currentProject = useProjectStore((s) => s.currentProject);
@@ -60,7 +60,8 @@ export function MediaSidebar() {
     const durationInFrames = fps * 5;
 
     // Find the best position: start at playhead, find nearest available space
-    const proposedPosition = currentFrame;
+    // Read currentFrame from store directly to avoid subscription
+    const proposedPosition = usePlaybackStore.getState().currentFrame;
     const finalPosition = findNearestAvailableSpace(
       proposedPosition,
       durationInFrames,
@@ -102,7 +103,7 @@ export function MediaSidebar() {
     addItem(textItem);
     // Select the new item
     selectItems([textItem.id]);
-  }, [tracks, items, currentFrame, fps, currentProject, addItem, selectItems, activeTrackId]);
+  }, [tracks, items, fps, currentProject, addItem, selectItems, activeTrackId]);
 
   return (
     <>
