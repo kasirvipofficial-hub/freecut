@@ -16,10 +16,10 @@ export const CLIP_HEIGHT = DEFAULT_TRACK_HEIGHT;
 export const CLIP_LABEL_HEIGHT = 16; // Shared label height for video & audio
 
 // -----------------------------------------------------------------------------
-// Video clip layout (3 rows: label | filmstrip | waveform)
+// Video clip layout (2 rows: filmstrip with overlayed label | waveform)
 // -----------------------------------------------------------------------------
-export const VIDEO_FILMSTRIP_HEIGHT = 28;
-export const VIDEO_WAVEFORM_HEIGHT = CLIP_HEIGHT - CLIP_LABEL_HEIGHT - VIDEO_FILMSTRIP_HEIGHT; // 20px
+export const VIDEO_WAVEFORM_HEIGHT = 20;
+export const VIDEO_FILMSTRIP_HEIGHT = CLIP_HEIGHT - VIDEO_WAVEFORM_HEIGHT; // 44px
 
 // -----------------------------------------------------------------------------
 // Audio clip layout (2 rows: label | waveform)

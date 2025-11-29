@@ -492,17 +492,10 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
         />
       )}
 
-      {/* Video clip 3-row layout: label | filmstrip | waveform */}
+      {/* Video clip 2-row layout: filmstrip (with overlayed label) | waveform */}
       {item.type === 'video' && item.mediaId && (
         <div className="absolute inset-0 flex flex-col">
-          {/* Row 1: Label */}
-          <div
-            className="px-2 text-[11px] font-medium truncate"
-            style={{ height: CLIP_LABEL_HEIGHT, lineHeight: `${CLIP_LABEL_HEIGHT}px` }}
-          >
-            {item.label}
-          </div>
-          {/* Row 2: Filmstrip */}
+          {/* Row 1: Filmstrip with overlayed label */}
           <div className="relative overflow-hidden" style={{ height: VIDEO_FILMSTRIP_HEIGHT }}>
             <ClipFilmstrip
               mediaId={item.mediaId}
@@ -516,8 +509,15 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
               height={VIDEO_FILMSTRIP_HEIGHT}
               className="top-0"
             />
+            {/* Overlayed label */}
+            <div
+              className="absolute top-0 left-0 right-0 px-2 text-[11px] font-medium truncate"
+              style={{ lineHeight: `${CLIP_LABEL_HEIGHT}px` }}
+            >
+              {item.label}
+            </div>
           </div>
-          {/* Row 3: Waveform */}
+          {/* Row 2: Waveform */}
           <div className="relative overflow-hidden" style={{ height: VIDEO_WAVEFORM_HEIGHT }}>
             <ClipWaveform
               mediaId={item.mediaId}
