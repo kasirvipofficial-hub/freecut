@@ -34,6 +34,7 @@ export interface UseFilmstripResult {
  * - Rendering component matches frames to slots by timestamp
  * - Caches results in memory for reuse across zoom/scroll
  * - Progressive loading: updates as frames become available
+ * - Sync cache check on mount to avoid skeleton flash when moving clips
  */
 export function useFilmstrip({
   mediaId,
@@ -42,10 +43,17 @@ export function useFilmstrip({
   isVisible,
   enabled = true,
 }: UseFilmstripOptions): UseFilmstripResult {
-  // State for filmstrip data
-  const [filmstrip, setFilmstrip] = useState<CachedFilmstrip | null>(null);
+  // State for filmstrip data - initialize from memory cache to avoid skeleton flash
+  // This is important when clips move across tracks (component remounts but cache persists)
+  const [filmstrip, setFilmstrip] = useState<CachedFilmstrip | null>(() => {
+    return filmstripCache.getFromMemoryCacheSync(mediaId);
+  });
   const [isLoading, setIsLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = useState(() => {
+    // If we have cached data, start at 100%
+    const cached = filmstripCache.getFromMemoryCacheSync(mediaId);
+    return cached?.isComplete ? 100 : 0;
+  });
   const [error, setError] = useState<string | null>(null);
 
   // Ref to track if generation is in progress

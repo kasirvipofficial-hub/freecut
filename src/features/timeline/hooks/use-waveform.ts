@@ -34,6 +34,7 @@ export interface UseWaveformResult {
  *
  * - Only generates when visible and has valid blobUrl
  * - Caches results in memory and IndexedDB
+ * - Sync cache check on mount to avoid skeleton flash when moving clips
  */
 export function useWaveform({
   mediaId,
@@ -41,10 +42,17 @@ export function useWaveform({
   isVisible,
   enabled = true,
 }: UseWaveformOptions): UseWaveformResult {
-  // State for waveform data
-  const [waveform, setWaveform] = useState<CachedWaveform | null>(null);
+  // State for waveform data - initialize from memory cache to avoid skeleton flash
+  // This is important when clips move across tracks (component remounts but cache persists)
+  const [waveform, setWaveform] = useState<CachedWaveform | null>(() => {
+    return waveformCache.getFromMemoryCacheSync(mediaId);
+  });
   const [isLoading, setIsLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = useState(() => {
+    // If we have cached data, start at 100%
+    const cached = waveformCache.getFromMemoryCacheSync(mediaId);
+    return cached ? 100 : 0;
+  });
   const [error, setError] = useState<string | null>(null);
 
   // Ref to track if generation is in progress

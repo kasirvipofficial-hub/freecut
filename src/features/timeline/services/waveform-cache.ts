@@ -44,7 +44,7 @@ class WaveformCacheService {
   private activeExtractions = new Map<string, ExtractionState>();
 
   /**
-   * Get waveform from memory cache
+   * Get waveform from memory cache (private)
    */
   private getFromMemoryCache(mediaId: string): CachedWaveform | null {
     const cached = this.memoryCache.get(mediaId);
@@ -56,6 +56,14 @@ class WaveformCacheService {
     }
 
     return null;
+  }
+
+  /**
+   * Check if waveform exists in memory cache (synchronous)
+   * Used to avoid skeleton flash when component remounts
+   */
+  getFromMemoryCacheSync(mediaId: string): CachedWaveform | null {
+    return this.getFromMemoryCache(mediaId);
   }
 
   /**

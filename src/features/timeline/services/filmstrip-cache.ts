@@ -90,7 +90,7 @@ class FilmstripCacheService {
   }
 
   /**
-   * Get filmstrip from memory cache
+   * Get filmstrip from memory cache (private)
    */
   private getFromMemoryCache(mediaId: string): CachedFilmstrip | null {
     const cached = this.memoryCache.get(mediaId);
@@ -102,6 +102,14 @@ class FilmstripCacheService {
     }
 
     return null;
+  }
+
+  /**
+   * Check if filmstrip exists in memory cache (synchronous)
+   * Used to avoid skeleton flash when component remounts
+   */
+  getFromMemoryCacheSync(mediaId: string): CachedFilmstrip | null {
+    return this.getFromMemoryCache(mediaId);
   }
 
   /**
