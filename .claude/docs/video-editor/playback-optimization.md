@@ -4,7 +4,7 @@ This document covers performance optimizations for smooth audio/video playback, 
 
 ## Problem Context
 
-The `@remotion/media` Audio component is sensitive to main thread jank. React re-renders during playback can cause audio stuttering, even when the re-renders seem minor. Video (using `OffthreadVideo`) is more resilient since it runs in a separate thread.
+The `@remotion/media` Audio component is sensitive to main thread jank. React re-renders during playback can cause audio stuttering, even when the re-renders seem minor. Video uses a hybrid approach: `OffthreadVideo` for preview (runs in separate thread, resilient to UI activity like zoom/scroll) and `@remotion/media` Video for rendering (better frame extraction with mediabunny).
 
 ## Root Cause
 

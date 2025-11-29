@@ -1,5 +1,6 @@
 import React from 'react';
-import { AbsoluteFill, OffthreadVideo, useVideoConfig, useCurrentFrame, interpolate } from 'remotion';
+import { AbsoluteFill, OffthreadVideo, useVideoConfig, useCurrentFrame, interpolate, useRemotionEnvironment } from 'remotion';
+import { Video } from '@remotion/media';
 import { useGizmoStore } from '@/features/preview/stores/gizmo-store';
 import type { TimelineItem, VideoItem, TextItem } from '@/types/timeline';
 import { DebugOverlay } from './debug-overlay';
@@ -14,7 +15,7 @@ import { loadFont, FONT_WEIGHT_MAP } from '../utils/fonts';
 
 /**
  * Hook to calculate video audio volume with fades and preview support.
- * Returns the final volume (0-1) to apply to OffthreadVideo.
+ * Returns the final volume (0-1) to apply to the video component.
  */
 function useVideoAudioVolume(item: VideoItem, muted: boolean): number {
   const { fps } = useVideoConfig();
@@ -96,6 +97,9 @@ function isGifUrl(url: string): boolean {
 /**
  * Video content with audio volume/fades support.
  * Separate component so we can use hooks for audio calculation.
+ *
+ * Uses OffthreadVideo for preview (Player/Studio) - more resilient to main thread activity.
+ * Uses @remotion/media Video for rendering - better frame extraction.
  */
 const VideoContent: React.FC<{
   item: VideoItem;
@@ -104,14 +108,31 @@ const VideoContent: React.FC<{
   playbackRate: number;
 }> = ({ item, muted, safeTrimBefore, playbackRate }) => {
   const audioVolume = useVideoAudioVolume(item, muted);
+  const env = useRemotionEnvironment();
+
+  // Use OffthreadVideo for preview (Player/Studio) - runs in separate thread, resilient to UI activity
+  // Use @remotion/media Video for rendering - better frame extraction with mediabunny
+  const isPreview = env.isPlayer || env.isStudio;
+
+  if (isPreview) {
+    return (
+      <OffthreadVideo
+        src={item.src!}
+        trimBefore={safeTrimBefore > 0 ? safeTrimBefore : undefined}
+        volume={audioVolume}
+        playbackRate={playbackRate}
+        pauseWhenBuffering={false}
+        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+      />
+    );
+  }
 
   return (
-    <OffthreadVideo
+    <Video
       src={item.src!}
       trimBefore={safeTrimBefore > 0 ? safeTrimBefore : undefined}
       volume={audioVolume}
       playbackRate={playbackRate}
-      pauseWhenBuffering={false}
       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
     />
   );
@@ -338,7 +359,7 @@ const TransformWrapper: React.FC<{
  * Remotion Item Component
  *
  * Renders different item types following Remotion best practices:
- * - Video: Uses OffthreadVideo for better performance with trim support
+ * - Video: OffthreadVideo for preview (resilient to UI), @remotion/media Video for rendering
  * - Audio: Uses Audio component with trim support
  * - Image: Uses img tag
  * - Text: Renders text with styling
