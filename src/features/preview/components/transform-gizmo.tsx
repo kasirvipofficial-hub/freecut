@@ -148,7 +148,7 @@ export function TransformGizmo({
 
       const handleMouseMove = (moveEvent: MouseEvent) => {
         const movePoint = toCanvasPoint(moveEvent);
-        updateInteraction(movePoint, moveEvent.shiftKey);
+        updateInteraction(movePoint, moveEvent.shiftKey, moveEvent.ctrlKey);
       };
 
       const handleMouseUp = () => {
@@ -184,7 +184,7 @@ export function TransformGizmo({
 
       const handleMouseMove = (moveEvent: MouseEvent) => {
         const movePoint = toCanvasPoint(moveEvent);
-        updateInteraction(movePoint, moveEvent.shiftKey);
+        updateInteraction(movePoint, moveEvent.shiftKey, moveEvent.ctrlKey);
       };
 
       const handleMouseUp = () => {
@@ -219,7 +219,7 @@ export function TransformGizmo({
 
       const handleMouseMove = (moveEvent: MouseEvent) => {
         const movePoint = toCanvasPoint(moveEvent);
-        updateInteraction(movePoint, moveEvent.shiftKey);
+        updateInteraction(movePoint, moveEvent.shiftKey, moveEvent.ctrlKey);
       };
 
       const handleMouseUp = () => {

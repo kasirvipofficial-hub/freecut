@@ -396,7 +396,7 @@ export function GizmoOverlay({
 
       const handleMouseMove = (moveEvent: MouseEvent) => {
         const movePoint = screenToCanvas(moveEvent.clientX, moveEvent.clientY, coordParams);
-        updateInteraction(movePoint, moveEvent.shiftKey);
+        updateInteraction(movePoint, moveEvent.shiftKey, moveEvent.ctrlKey);
       };
 
       const handleMouseUp = () => {

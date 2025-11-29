@@ -80,7 +80,7 @@ interface GizmoStoreActions {
   ) => void;
 
   /** Update interaction with current mouse position */
-  updateInteraction: (currentPoint: Point, shiftKey: boolean) => void;
+  updateInteraction: (currentPoint: Point, shiftKey: boolean, ctrlKey?: boolean) => void;
 
   /** End interaction and return final transform (or null if cancelled) */
   endInteraction: () => Transform | null;
@@ -142,6 +142,7 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
           startTransform: { ...transform },
           currentPoint: startPoint,
           shiftKey: false,
+          ctrlKey: false,
           itemId,
         },
         previewTransform: { ...transform },
@@ -157,6 +158,7 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
           startTransform: { ...transform },
           currentPoint: startPoint,
           shiftKey: false,
+          ctrlKey: false,
           itemId,
           itemType,
           aspectRatioLocked,
@@ -174,13 +176,14 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
           startTransform: { ...transform },
           currentPoint: startPoint,
           shiftKey: false,
+          ctrlKey: false,
           itemId,
         },
         previewTransform: { ...transform },
         snapLines: [],
       }),
 
-    updateInteraction: (currentPoint, shiftKey) => {
+    updateInteraction: (currentPoint, shiftKey, ctrlKey = false) => {
       const { activeGizmo, canvasSize, snappingEnabled } = get();
       if (!activeGizmo) return;
 
@@ -200,12 +203,14 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
       const effectiveAspectLocked = shiftKey ? !aspectLocked : aspectLocked;
 
       // Calculate raw transform (pass !effectiveAspectLocked because calculateTransform expects maintainAspectRatio)
+      // ctrlKey enables corner-anchored scaling instead of center-anchored
       let newTransform = calculateTransform(
         activeGizmo,
         currentPoint,
         !effectiveAspectLocked,
         canvasSize.width,
-        canvasSize.height
+        canvasSize.height,
+        ctrlKey
       );
 
       // Apply snapping based on mode
@@ -220,7 +225,7 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
       }
 
       set({
-        activeGizmo: { ...activeGizmo, currentPoint, shiftKey },
+        activeGizmo: { ...activeGizmo, currentPoint, shiftKey, ctrlKey },
         previewTransform: newTransform,
         snapLines,
       });

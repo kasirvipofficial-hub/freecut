@@ -58,6 +58,8 @@ export interface GizmoState {
   currentPoint: Point;
   /** Whether shift key is held (for free resize) */
   shiftKey: boolean;
+  /** Whether ctrl key is held (for corner-anchored scaling) */
+  ctrlKey: boolean;
   /** Item ID being transformed */
   itemId: string;
   /** Item type (for type-specific behavior like text free scaling) */
