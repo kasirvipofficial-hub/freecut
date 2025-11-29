@@ -1,5 +1,6 @@
 import React from 'react';
 import { AbsoluteFill, OffthreadVideo, useVideoConfig } from 'remotion';
+import { useGizmoStore } from '@/features/preview/stores/gizmo-store';
 import type { TimelineItem } from '@/types/timeline';
 import { DebugOverlay } from './debug-overlay';
 import { PitchCorrectedAudio } from './pitch-corrected-audio';
@@ -30,6 +31,8 @@ export interface ItemProps {
 /**
  * Wrapper component that applies transform properties to visual items.
  * Uses canvas-centered positioning from transform resolver.
+ * Reads preview transform directly from gizmo store to avoid prop drilling
+ * and unnecessary re-renders of the parent composition.
  */
 const TransformWrapper: React.FC<{
   item: TimelineItem;
@@ -38,11 +41,17 @@ const TransformWrapper: React.FC<{
   const { width: canvasWidth, height: canvasHeight, fps } = useVideoConfig();
   const canvas = { width: canvasWidth, height: canvasHeight, fps };
 
-  // Get source dimensions if available
-  const sourceDimensions = getSourceDimensions(item);
+  // Read preview transform directly from store - only re-renders this component
+  const activeGizmo = useGizmoStore((s) => s.activeGizmo);
+  const previewTransform = useGizmoStore((s) => s.previewTransform);
 
-  // Resolve transform to concrete values
-  const resolved = resolveTransform(item, canvas, sourceDimensions);
+  // Check if this item has an active preview transform
+  const isPreviewActive = activeGizmo?.itemId === item.id && previewTransform !== null;
+
+  // Use preview transform if active, otherwise resolve from item
+  const resolved = isPreviewActive
+    ? { ...previewTransform, cornerRadius: previewTransform.cornerRadius ?? 0 }
+    : resolveTransform(item, canvas, getSourceDimensions(item));
 
   // Get CSS styles for positioning
   const style = toTransformStyle(resolved, canvas);
@@ -147,9 +156,6 @@ export const Item: React.FC<ItemProps> = ({ item, muted = false }) => {
       );
     }
 
-    // Check if item has transform properties set
-    const hasTransform = item.transform !== undefined;
-
     const videoContent = (
       <>
         <OffthreadVideo
@@ -157,7 +163,7 @@ export const Item: React.FC<ItemProps> = ({ item, muted = false }) => {
           trimBefore={safeTrimBefore > 0 ? safeTrimBefore : undefined}
           volume={muted ? 0 : 1}
           playbackRate={playbackRate}
-          pauseWhenBuffering
+          pauseWhenBuffering={false}
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
         />
         {DEBUG_VIDEO_OVERLAY && (
@@ -178,16 +184,9 @@ export const Item: React.FC<ItemProps> = ({ item, muted = false }) => {
       </>
     );
 
-    // Use TransformWrapper if transform is set, otherwise use AbsoluteFill for backward compatibility
-    if (hasTransform) {
-      return <TransformWrapper item={item}>{videoContent}</TransformWrapper>;
-    }
-
-    return (
-      <AbsoluteFill style={{ backgroundColor: '#000' }}>
-        {videoContent}
-      </AbsoluteFill>
-    );
+    // Always use TransformWrapper for consistent rendering between preview and export
+    // resolveTransform handles defaults (fit-to-canvas) when no explicit transform is set
+    return <TransformWrapper item={item}>{videoContent}</TransformWrapper>;
   }
 
   if (item.type === 'audio') {
@@ -224,9 +223,6 @@ export const Item: React.FC<ItemProps> = ({ item, muted = false }) => {
       );
     }
 
-    // Check if item has transform properties set
-    const hasTransform = item.transform !== undefined;
-
     // Use Remotion's Gif component for animated GIFs
     // This ensures proper frame-by-frame rendering during export
     // Check both src URL and item label (original filename) for .gif extension
@@ -246,11 +242,8 @@ export const Item: React.FC<ItemProps> = ({ item, muted = false }) => {
         />
       );
 
-      if (hasTransform) {
-        return <TransformWrapper item={item}>{gifContent}</TransformWrapper>;
-      }
-
-      return <AbsoluteFill>{gifContent}</AbsoluteFill>;
+      // Always use TransformWrapper for consistent rendering
+      return <TransformWrapper item={item}>{gifContent}</TransformWrapper>;
     }
 
     // Regular static images
@@ -266,17 +259,11 @@ export const Item: React.FC<ItemProps> = ({ item, muted = false }) => {
       />
     );
 
-    if (hasTransform) {
-      return <TransformWrapper item={item}>{imageContent}</TransformWrapper>;
-    }
-
-    return <AbsoluteFill>{imageContent}</AbsoluteFill>;
+    // Always use TransformWrapper for consistent rendering between preview and export
+    return <TransformWrapper item={item}>{imageContent}</TransformWrapper>;
   }
 
   if (item.type === 'text') {
-    // Check if item has transform properties set
-    const hasTransform = item.transform !== undefined;
-
     const textContent = (
       <div
         style={{
@@ -300,17 +287,11 @@ export const Item: React.FC<ItemProps> = ({ item, muted = false }) => {
       </div>
     );
 
-    if (hasTransform) {
-      return <TransformWrapper item={item}>{textContent}</TransformWrapper>;
-    }
-
-    return <AbsoluteFill>{textContent}</AbsoluteFill>;
+    // Always use TransformWrapper for consistent rendering between preview and export
+    return <TransformWrapper item={item}>{textContent}</TransformWrapper>;
   }
 
   if (item.type === 'shape') {
-    // Check if item has transform properties set
-    const hasTransform = item.transform !== undefined;
-
     const shapeContent = (
       <div
         style={{
@@ -321,11 +302,8 @@ export const Item: React.FC<ItemProps> = ({ item, muted = false }) => {
       />
     );
 
-    if (hasTransform) {
-      return <TransformWrapper item={item}>{shapeContent}</TransformWrapper>;
-    }
-
-    return <AbsoluteFill style={{ backgroundColor: item.fillColor }} />;
+    // Always use TransformWrapper for consistent rendering between preview and export
+    return <TransformWrapper item={item}>{shapeContent}</TransformWrapper>;
   }
 
   throw new Error(`Unknown item type: ${JSON.stringify(item)}`);

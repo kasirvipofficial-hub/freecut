@@ -11,7 +11,6 @@ import {
   screenToCanvas,
   getScaleCursor,
 } from '../utils/coordinate-transform';
-import { cn } from '@/lib/utils';
 
 const HANDLE_SIZE = 8;
 const ROTATION_HANDLE_OFFSET = 24;
@@ -43,6 +42,7 @@ export function TransformGizmo({
   const startRotate = useGizmoStore((s) => s.startRotate);
   const updateInteraction = useGizmoStore((s) => s.updateInteraction);
   const endInteraction = useGizmoStore((s) => s.endInteraction);
+  const clearInteraction = useGizmoStore((s) => s.clearInteraction);
   const cancelInteraction = useGizmoStore((s) => s.cancelInteraction);
 
   const isInteracting = activeGizmo?.itemId === item.id;
@@ -68,6 +68,7 @@ export function TransformGizmo({
       height: resolved.height,
       rotation: resolved.rotation,
       opacity: resolved.opacity,
+      cornerRadius: resolved.cornerRadius,
     };
   }, [item, coordParams, isInteracting, previewTransform]);
 
@@ -112,12 +113,25 @@ export function TransformGizmo({
     [screenBounds, currentTransform.rotation]
   );
 
+  // Check if transform actually changed (within tolerance)
+  const transformChanged = useCallback((a: Transform, b: Transform): boolean => {
+    const tolerance = 0.01;
+    return (
+      Math.abs(a.x - b.x) > tolerance ||
+      Math.abs(a.y - b.y) > tolerance ||
+      Math.abs(a.width - b.width) > tolerance ||
+      Math.abs(a.height - b.height) > tolerance ||
+      Math.abs(a.rotation - b.rotation) > tolerance
+    );
+  }, []);
+
   // Mouse event handlers
   const handleTranslateStart = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
       e.preventDefault();
       const point = toCanvasPoint(e);
+      const startTransformSnapshot = { ...currentTransform };
       startTranslate(item.id, point, currentTransform);
       onTransformStart();
       document.body.style.cursor = 'move';
@@ -128,19 +142,24 @@ export function TransformGizmo({
       };
 
       const handleMouseUp = () => {
-        const finalTransform = endInteraction();
-        if (finalTransform) {
-          onTransformEnd(finalTransform);
-        }
-        document.body.style.cursor = '';
         window.removeEventListener('mousemove', handleMouseMove);
         window.removeEventListener('mouseup', handleMouseUp);
+        document.body.style.cursor = '';
+
+        const finalTransform = endInteraction();
+        // Only update timeline if transform actually changed
+        if (finalTransform && transformChanged(startTransformSnapshot, finalTransform)) {
+          onTransformEnd(finalTransform);
+        }
+        requestAnimationFrame(() => {
+          clearInteraction();
+        });
       };
 
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     },
-    [item.id, currentTransform, toCanvasPoint, startTranslate, updateInteraction, endInteraction, onTransformStart, onTransformEnd]
+    [item.id, currentTransform, toCanvasPoint, startTranslate, updateInteraction, endInteraction, clearInteraction, onTransformStart, onTransformEnd, transformChanged]
   );
 
   const handleScaleStart = useCallback(
@@ -148,6 +167,7 @@ export function TransformGizmo({
       e.stopPropagation();
       e.preventDefault();
       const point = toCanvasPoint(e);
+      const startTransformSnapshot = { ...currentTransform };
       startScale(item.id, handle, point, currentTransform);
       onTransformStart();
       document.body.style.cursor = getScaleCursor(handle, currentTransform.rotation);
@@ -158,19 +178,23 @@ export function TransformGizmo({
       };
 
       const handleMouseUp = () => {
-        const finalTransform = endInteraction();
-        if (finalTransform) {
-          onTransformEnd(finalTransform);
-        }
-        document.body.style.cursor = '';
         window.removeEventListener('mousemove', handleMouseMove);
         window.removeEventListener('mouseup', handleMouseUp);
+        document.body.style.cursor = '';
+
+        const finalTransform = endInteraction();
+        if (finalTransform && transformChanged(startTransformSnapshot, finalTransform)) {
+          onTransformEnd(finalTransform);
+        }
+        requestAnimationFrame(() => {
+          clearInteraction();
+        });
       };
 
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     },
-    [item.id, currentTransform, toCanvasPoint, startScale, updateInteraction, endInteraction, onTransformStart, onTransformEnd]
+    [item.id, currentTransform, toCanvasPoint, startScale, updateInteraction, endInteraction, clearInteraction, onTransformStart, onTransformEnd, transformChanged]
   );
 
   const handleRotateStart = useCallback(
@@ -178,6 +202,7 @@ export function TransformGizmo({
       e.stopPropagation();
       e.preventDefault();
       const point = toCanvasPoint(e);
+      const startTransformSnapshot = { ...currentTransform };
       startRotate(item.id, point, currentTransform);
       onTransformStart();
       document.body.style.cursor = 'crosshair';
@@ -188,19 +213,23 @@ export function TransformGizmo({
       };
 
       const handleMouseUp = () => {
-        const finalTransform = endInteraction();
-        if (finalTransform) {
-          onTransformEnd(finalTransform);
-        }
-        document.body.style.cursor = '';
         window.removeEventListener('mousemove', handleMouseMove);
         window.removeEventListener('mouseup', handleMouseUp);
+        document.body.style.cursor = '';
+
+        const finalTransform = endInteraction();
+        if (finalTransform && transformChanged(startTransformSnapshot, finalTransform)) {
+          onTransformEnd(finalTransform);
+        }
+        requestAnimationFrame(() => {
+          clearInteraction();
+        });
       };
 
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     },
-    [item.id, currentTransform, toCanvasPoint, startRotate, updateInteraction, endInteraction, onTransformStart, onTransformEnd]
+    [item.id, currentTransform, toCanvasPoint, startRotate, updateInteraction, endInteraction, clearInteraction, onTransformStart, onTransformEnd, transformChanged]
   );
 
   // Handle escape key to cancel interaction
@@ -232,11 +261,14 @@ export function TransformGizmo({
     >
       {/* Selection border */}
       <div
-        className={cn(
-          'absolute inset-0 border-2 border-dashed pointer-events-auto cursor-move',
-          isInteracting ? 'border-primary' : 'border-blue-500'
-        )}
+        className="absolute pointer-events-auto cursor-move"
+        style={{
+          inset: -2,
+          border: `2px dashed ${isInteracting ? '#2563eb' : '#3b82f6'}`,
+          boxSizing: 'border-box',
+        }}
         onMouseDown={handleTranslateStart}
+        onDoubleClick={(e) => e.stopPropagation()}
       />
 
       {/* Scale handles */}

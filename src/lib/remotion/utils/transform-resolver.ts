@@ -88,17 +88,29 @@ export function toTransformStyle(
   const left = centerX + resolved.x - resolved.width / 2;
   const top = centerY + resolved.y - resolved.height / 2;
 
+  // Round rotation to avoid floating point precision issues
+  const rotation = Math.abs(resolved.rotation) < 0.01 ? 0 : Math.round(resolved.rotation * 100) / 100;
+
+  // Build transform string for GPU-accelerated rendering
+  // Using translate3d and rotate3d for better performance
+  const transforms: string[] = [];
+  transforms.push(`translate3d(${left}px, ${top}px, 0)`);
+  if (rotation !== 0) {
+    transforms.push(`rotate(${rotation}deg)`);
+  }
+
   return {
     position: 'absolute',
-    left,
-    top,
+    left: 0,
+    top: 0,
     width: resolved.width,
     height: resolved.height,
-    transform: resolved.rotation !== 0 ? `rotate(${resolved.rotation}deg)` : undefined,
-    transformOrigin: 'center center',
+    transform: transforms.join(' '),
+    transformOrigin: 'top left',
     opacity: resolved.opacity,
     borderRadius: resolved.cornerRadius > 0 ? resolved.cornerRadius : undefined,
     overflow: resolved.cornerRadius > 0 ? 'hidden' : undefined,
+    willChange: 'transform', // Hint for GPU acceleration
   };
 }
 

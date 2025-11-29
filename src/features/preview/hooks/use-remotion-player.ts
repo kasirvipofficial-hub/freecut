@@ -29,14 +29,6 @@ export function useRemotionPlayer(playerRef: RefObject<PlayerRef>) {
   const wasPlayingRef = useRef(isPlaying);
   const pendingFrameRef = useRef<number | null>(null);
 
-  // Subscribe to currentFrame changes via store subscription (no re-renders)
-  const currentFrameRef = useRef(usePlaybackStore.getState().currentFrame);
-  useEffect(() => {
-    return usePlaybackStore.subscribe((state) => {
-      currentFrameRef.current = state.currentFrame;
-    });
-  }, []);
-
   /**
    * Timeline → Player: Sync play/pause state
    */
@@ -214,11 +206,9 @@ export function useRemotionPlayer(playerRef: RefObject<PlayerRef>) {
           const stillWantsToPlay = usePlaybackStore.getState().isPlaying;
           if (stillWantsToPlay && playerRef.current) {
             try {
-              // Use async/await to properly catch play() promise rejections
               await playerRef.current.play();
             } catch (e) {
-              // Play failed - this can happen at clip boundaries during buffering
-              // Retry once after a longer delay before giving up
+              // Play failed - retry once after a longer delay
               console.warn('[Remotion Sync] Play failed, retrying:', e);
               setTimeout(async () => {
                 const stillWants = usePlaybackStore.getState().isPlaying;

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { GizmoState, GizmoMode, GizmoHandle, Transform, Point } from '../types/gizmo';
 import { calculateTransform } from '../utils/transform-calculations';
+import { applySnapping, applyScaleSnapping, type SnapLine } from '../utils/snap-utils';
 
 // IMPORTANT: Always use granular selectors to prevent unnecessary re-renders!
 //
@@ -18,11 +19,18 @@ interface GizmoStoreState {
   previewTransform: Transform | null;
   /** Canvas dimensions for calculations */
   canvasSize: { width: number; height: number };
+  /** Active snap lines for visual feedback */
+  snapLines: SnapLine[];
+  /** Whether snapping is enabled */
+  snappingEnabled: boolean;
 }
 
 interface GizmoStoreActions {
   /** Set canvas size for coordinate calculations */
   setCanvasSize: (width: number, height: number) => void;
+
+  /** Toggle snapping on/off */
+  setSnappingEnabled: (enabled: boolean) => void;
 
   /** Start translate interaction (drag to move) */
   startTranslate: (
@@ -52,6 +60,9 @@ interface GizmoStoreActions {
   /** End interaction and return final transform (or null if cancelled) */
   endInteraction: () => Transform | null;
 
+  /** Clear interaction state (call after timeline is updated) */
+  clearInteraction: () => void;
+
   /** Cancel interaction without committing changes */
   cancelInteraction: () => void;
 }
@@ -62,10 +73,15 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
     activeGizmo: null,
     previewTransform: null,
     canvasSize: { width: 1920, height: 1080 },
+    snapLines: [],
+    snappingEnabled: true,
 
     // Actions
     setCanvasSize: (width, height) =>
       set({ canvasSize: { width, height } }),
+
+    setSnappingEnabled: (enabled) =>
+      set({ snappingEnabled: enabled }),
 
     startTranslate: (itemId, startPoint, transform) =>
       set({
@@ -79,6 +95,7 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
           itemId,
         },
         previewTransform: { ...transform },
+        snapLines: [],
       }),
 
     startScale: (itemId, handle, startPoint, transform) =>
@@ -93,6 +110,7 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
           itemId,
         },
         previewTransform: { ...transform },
+        snapLines: [],
       }),
 
     startRotate: (itemId, startPoint, transform) =>
@@ -107,13 +125,15 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
           itemId,
         },
         previewTransform: { ...transform },
+        snapLines: [],
       }),
 
     updateInteraction: (currentPoint, shiftKey) => {
-      const { activeGizmo, canvasSize } = get();
+      const { activeGizmo, canvasSize, snappingEnabled } = get();
       if (!activeGizmo) return;
 
-      const newTransform = calculateTransform(
+      // Calculate raw transform
+      let newTransform = calculateTransform(
         activeGizmo,
         currentPoint,
         shiftKey,
@@ -121,19 +141,35 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
         canvasSize.height
       );
 
+      // Apply snapping based on mode
+      let snapLines: SnapLine[] = [];
+      if (snappingEnabled && activeGizmo.mode !== 'rotate') {
+        const snapResult =
+          activeGizmo.mode === 'translate'
+            ? applySnapping(newTransform, canvasSize.width, canvasSize.height)
+            : applyScaleSnapping(newTransform, canvasSize.width, canvasSize.height);
+        newTransform = snapResult.transform;
+        snapLines = snapResult.snapLines;
+      }
+
       set({
         activeGizmo: { ...activeGizmo, currentPoint, shiftKey },
         previewTransform: newTransform,
+        snapLines,
       });
     },
 
     endInteraction: () => {
       const { previewTransform } = get();
-      set({ activeGizmo: null, previewTransform: null });
+      // Don't clear state here - let caller clear after timeline update
+      // This prevents a "gap" where preview is null but items aren't updated yet
       return previewTransform;
     },
 
+    clearInteraction: () =>
+      set({ activeGizmo: null, previewTransform: null, snapLines: [] }),
+
     cancelInteraction: () =>
-      set({ activeGizmo: null, previewTransform: null }),
+      set({ activeGizmo: null, previewTransform: null, snapLines: [] }),
   })
 );

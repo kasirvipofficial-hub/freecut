@@ -56,6 +56,7 @@ function calculateTranslation(
 
 /**
  * Calculate scale based on handle drag.
+ * Scaling is center-anchored (center stays fixed).
  * Handles maintain aspect ratio unless shift is held.
  */
 function calculateScale(
@@ -76,85 +77,77 @@ function calculateScale(
   const localStart = rotatePoint(startPoint, center, -start.rotation);
   const localCurrent = rotatePoint(currentPoint, center, -start.rotation);
 
-  const dx = localCurrent.x - localStart.x;
-  const dy = localCurrent.y - localStart.y;
-
-  let newWidth = start.width;
-  let newHeight = start.height;
-  let newX = start.x;
-  let newY = start.y;
-
   // Determine which edges are affected
   const affectsLeft = handle.includes('w');
   const affectsRight = handle.includes('e');
   const affectsTop = handle.includes('n');
   const affectsBottom = handle.includes('s');
+  const isCornerHandle = (affectsLeft || affectsRight) && (affectsTop || affectsBottom);
 
-  // Calculate new dimensions based on handle
-  if (affectsRight) {
-    newWidth = Math.max(MIN_SIZE, start.width + dx);
-  }
-  if (affectsLeft) {
-    const widthDelta = -dx;
+  let newWidth: number;
+  let newHeight: number;
+
+  if (maintainAspectRatio && isCornerHandle) {
+    // For corner handles with aspect ratio lock, use scale factor approach
+    // This prevents direction flipping by using distance from center
+    const aspectRatio = start.width / start.height;
+
+    // Calculate distances from center to start and current points
+    // Use the diagonal distance for uniform scaling
+    const startDist = Math.sqrt(
+      Math.pow(localStart.x - centerX, 2) + Math.pow(localStart.y - centerY, 2)
+    );
+    const currentDist = Math.sqrt(
+      Math.pow(localCurrent.x - centerX, 2) + Math.pow(localCurrent.y - centerY, 2)
+    );
+
+    // Calculate scale factor (avoid division by zero)
+    const scaleFactor = startDist > 0 ? currentDist / startDist : 1;
+
+    // Apply uniform scale
+    newWidth = Math.max(MIN_SIZE, start.width * scaleFactor);
+    newHeight = Math.max(MIN_SIZE, start.height * scaleFactor);
+  } else {
+    // Edge handles or free scaling (shift held)
+    const dx = localCurrent.x - localStart.x;
+    const dy = localCurrent.y - localStart.y;
+
+    // Calculate width/height deltas based on handle
+    // For center-anchored scaling, multiply by 2 since we scale from center
+    let widthDelta = 0;
+    let heightDelta = 0;
+
+    if (affectsRight) {
+      widthDelta = dx * 2;
+    } else if (affectsLeft) {
+      widthDelta = -dx * 2;
+    }
+
+    if (affectsBottom) {
+      heightDelta = dy * 2;
+    } else if (affectsTop) {
+      heightDelta = -dy * 2;
+    }
+
     newWidth = Math.max(MIN_SIZE, start.width + widthDelta);
-    // Adjust position to keep right edge fixed
-    newX = start.x - (newWidth - start.width) / 2;
-  }
-  if (affectsBottom) {
-    newHeight = Math.max(MIN_SIZE, start.height + dy);
-  }
-  if (affectsTop) {
-    const heightDelta = -dy;
     newHeight = Math.max(MIN_SIZE, start.height + heightDelta);
-    // Adjust position to keep bottom edge fixed
-    newY = start.y - (newHeight - start.height) / 2;
-  }
 
-  // Maintain aspect ratio for corner handles
-  if (maintainAspectRatio && (affectsLeft || affectsRight) && (affectsTop || affectsBottom)) {
-    const aspectRatio = start.width / start.height;
-    const widthFromHeight = newHeight * aspectRatio;
-    const heightFromWidth = newWidth / aspectRatio;
+    // Maintain aspect ratio for edge handles
+    if (maintainAspectRatio) {
+      const aspectRatio = start.width / start.height;
+      const isHorizontalEdge = (affectsLeft || affectsRight) && !(affectsTop || affectsBottom);
 
-    // Use the dimension that changed more
-    const widthChange = Math.abs(newWidth - start.width);
-    const heightChange = Math.abs(newHeight - start.height);
-
-    if (widthChange > heightChange) {
-      // Width changed more, adjust height
-      const oldHeight = newHeight;
-      newHeight = heightFromWidth;
-      // Adjust Y position for the height change
-      if (affectsTop) {
-        newY = start.y - (newHeight - start.height) / 2;
-      }
-    } else {
-      // Height changed more, adjust width
-      const oldWidth = newWidth;
-      newWidth = widthFromHeight;
-      // Adjust X position for the width change
-      if (affectsLeft) {
-        newX = start.x - (newWidth - start.width) / 2;
+      if (isHorizontalEdge) {
+        newHeight = newWidth / aspectRatio;
+      } else {
+        newWidth = newHeight * aspectRatio;
       }
     }
   }
 
-  // For edge handles (n, s, e, w), maintain aspect ratio if enabled
-  if (maintainAspectRatio && !((affectsLeft || affectsRight) && (affectsTop || affectsBottom))) {
-    const aspectRatio = start.width / start.height;
-    if (affectsLeft || affectsRight) {
-      // Horizontal edge: adjust height
-      newHeight = newWidth / aspectRatio;
-    } else {
-      // Vertical edge: adjust width
-      newWidth = newHeight * aspectRatio;
-    }
-  }
-
+  // Center stays fixed, so x and y don't change
   return {
     ...start,
-    x: newX,
-    y: newY,
     width: newWidth,
     height: newHeight,
   };

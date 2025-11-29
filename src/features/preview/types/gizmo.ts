@@ -30,6 +30,8 @@ export interface Transform {
   height: number;
   rotation: number;
   opacity: number;
+  /** Corner radius for rounded corners (optional, preserved during transform) */
+  cornerRadius?: number;
 }
 
 /**
