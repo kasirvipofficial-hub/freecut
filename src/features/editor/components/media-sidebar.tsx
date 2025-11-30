@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, memo } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -22,25 +22,24 @@ import { MediaLibrary } from '@/features/media-library/components/media-library'
 import { findNearestAvailableSpace } from '@/features/timeline/utils/collision-utils';
 import type { TextItem, ShapeItem, ShapeType, AdjustmentItem } from '@/types/timeline';
 
-export function MediaSidebar() {
+export const MediaSidebar = memo(function MediaSidebar() {
   // Use granular selectors - Zustand v5 best practice
   const leftSidebarOpen = useEditorStore((s) => s.leftSidebarOpen);
   const toggleLeftSidebar = useEditorStore((s) => s.toggleLeftSidebar);
   const activeTab = useEditorStore((s) => s.activeTab);
   const setActiveTab = useEditorStore((s) => s.setActiveTab);
 
-  // Timeline and playback stores for adding elements
-  // Don't subscribe to currentFrame - read from store in callbacks to avoid re-renders during playback
-  const addItem = useTimelineStore((s) => s.addItem);
-  const tracks = useTimelineStore((s) => s.tracks);
-  const items = useTimelineStore((s) => s.items);
-  const fps = useTimelineStore((s) => s.fps);
-  const selectItems = useSelectionStore((s) => s.selectItems);
-  const activeTrackId = useSelectionStore((s) => s.activeTrackId);
-  const currentProject = useProjectStore((s) => s.currentProject);
+  // NOTE: Don't subscribe to tracks, items, currentProject here!
+  // These change frequently and would cause re-renders cascading to MediaLibrary/MediaCards
+  // Read from store directly in callbacks using getState()
 
   // Add text item to timeline at the best available position
   const handleAddText = useCallback(() => {
+    // Read all needed state from stores directly to avoid subscriptions
+    const { tracks, items, fps, addItem } = useTimelineStore.getState();
+    const { activeTrackId, selectItems } = useSelectionStore.getState();
+    const currentProject = useProjectStore.getState().currentProject;
+
     // Use active track if available and not locked, otherwise find first available
     let targetTrack = activeTrackId
       ? tracks.find((t) => t.id === activeTrackId && t.visible !== false && !t.locked)
@@ -60,7 +59,6 @@ export function MediaSidebar() {
     const durationInFrames = fps * 5;
 
     // Find the best position: start at playhead, find nearest available space
-    // Read currentFrame from store directly to avoid subscription
     const proposedPosition = usePlaybackStore.getState().currentFrame;
     const finalPosition = findNearestAvailableSpace(
       proposedPosition,
@@ -103,10 +101,15 @@ export function MediaSidebar() {
     addItem(textItem);
     // Select the new item
     selectItems([textItem.id]);
-  }, [tracks, items, fps, currentProject, addItem, selectItems, activeTrackId]);
+  }, []);
 
   // Add shape item to timeline at the best available position
   const handleAddShape = useCallback((shapeType: ShapeType) => {
+    // Read all needed state from stores directly to avoid subscriptions
+    const { tracks, items, fps, addItem } = useTimelineStore.getState();
+    const { activeTrackId, selectItems } = useSelectionStore.getState();
+    const currentProject = useProjectStore.getState().currentProject;
+
     // Use active track if available and not locked, otherwise find first available
     let targetTrack = activeTrackId
       ? tracks.find((t) => t.id === activeTrackId && t.visible !== false && !t.locked)
@@ -172,10 +175,14 @@ export function MediaSidebar() {
     addItem(shapeItem);
     // Select the new item
     selectItems([shapeItem.id]);
-  }, [tracks, items, fps, currentProject, addItem, selectItems, activeTrackId]);
+  }, []);
 
   // Add adjustment layer to timeline at the best available position
   const handleAddAdjustmentLayer = useCallback(() => {
+    // Read all needed state from stores directly to avoid subscriptions
+    const { tracks, items, fps, addItem } = useTimelineStore.getState();
+    const { activeTrackId, selectItems } = useSelectionStore.getState();
+
     // Use active track if available and not locked, otherwise find first available
     let targetTrack = activeTrackId
       ? tracks.find((t) => t.id === activeTrackId && t.visible !== false && !t.locked)
@@ -218,7 +225,7 @@ export function MediaSidebar() {
     addItem(adjustmentItem);
     // Select the new item
     selectItems([adjustmentItem.id]);
-  }, [tracks, items, fps, addItem, selectItems, activeTrackId]);
+  }, []);
 
   // Category items for the vertical nav
   const categories = [
@@ -427,4 +434,4 @@ export function MediaSidebar() {
       </div>
     </div>
   );
-}
+});

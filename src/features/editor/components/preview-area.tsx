@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo, useMemo } from 'react';
 import {
   VideoPreview,
   PlaybackControls,
@@ -27,24 +27,30 @@ interface PreviewAreaProps {
  *
  * Uses granular Zustand selectors in child components
  */
-export function PreviewArea({ project }: PreviewAreaProps) {
+export const PreviewArea = memo(function PreviewArea({ project }: PreviewAreaProps) {
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   // Read current project from store for live updates (e.g., dimension swaps)
-  // Falls back to prop values if store hasn't been set yet
-  const currentProject = useProjectStore((s) => s.currentProject);
-  const width = currentProject?.metadata.width ?? project.width;
-  const height = currentProject?.metadata.height ?? project.height;
-  const fps = currentProject?.metadata.fps ?? project.fps;
-  // Pass stored color to composition; live preview is read directly from gizmo store
-  const backgroundColor = currentProject?.metadata.backgroundColor ?? '#000000';
+  // Use granular selectors to avoid re-renders when unrelated properties change
+  const projectWidth = useProjectStore((s) => s.currentProject?.metadata.width);
+  const projectHeight = useProjectStore((s) => s.currentProject?.metadata.height);
+  const projectFps = useProjectStore((s) => s.currentProject?.metadata.fps);
+  const projectBgColor = useProjectStore((s) => s.currentProject?.metadata.backgroundColor);
 
-  // Calculate total frames from timeline items
-  const items = useTimelineStore((s) => s.items);
-  const totalFrames = items.length > 0
-    ? Math.max(...items.map(item => item.from + item.durationInFrames))
-    : fps * 10; // Default 10 seconds if no items
+  const width = projectWidth ?? project.width;
+  const height = projectHeight ?? project.height;
+  const fps = projectFps ?? project.fps;
+  const backgroundColor = projectBgColor ?? '#000000';
+
+  // Calculate total frames from timeline items using a derived selector
+  // Only re-renders when the computed totalFrames actually changes
+  const totalFrames = useTimelineStore(
+    useMemo(() => (s) => {
+      if (s.items.length === 0) return fps * 10; // Default 10 seconds if no items
+      return Math.max(...s.items.map(item => item.from + item.durationInFrames));
+    }, [fps])
+  );
 
   // Measure preview container size for zoom calculations
   useEffect(() => {
@@ -107,4 +113,4 @@ export function PreviewArea({ project }: PreviewAreaProps) {
       </div>
     </div>
   );
-}
+});

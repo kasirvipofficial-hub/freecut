@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, memo } from 'react';
 import { TimelineHeader } from './timeline-header';
 import { TimelineContent } from './timeline-content';
 import { TrackHeader } from './track-header';
@@ -26,7 +26,7 @@ export interface TimelineProps {
  *
  * Follows modular architecture with granular Zustand selectors
  */
-export function Timeline({ duration }: TimelineProps) {
+export const Timeline = memo(function Timeline({ duration }: TimelineProps) {
   const {
     tracks,
     addTrack,
@@ -338,4 +338,4 @@ export function Timeline({ duration }: TimelineProps) {
       </div>
     </div>
   );
-}
+});

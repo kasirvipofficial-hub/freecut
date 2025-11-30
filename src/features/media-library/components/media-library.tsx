@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, memo } from 'react';
 import { Search, Filter, SortAsc, Video, FileAudio, Image as ImageIcon, Trash2, Grid3x3, List, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,7 +28,7 @@ export interface MediaLibraryProps {
   onMediaSelect?: (mediaId: string) => void;
 }
 
-export function MediaLibrary({ onMediaSelect }: MediaLibraryProps) {
+export const MediaLibrary = memo(function MediaLibrary({ onMediaSelect }: MediaLibraryProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [idsToDelete, setIdsToDelete] = useState<string[]>([]);
@@ -385,4 +385,4 @@ export function MediaLibrary({ onMediaSelect }: MediaLibraryProps) {
       </AlertDialog>
     </div>
   );
-}
+});
