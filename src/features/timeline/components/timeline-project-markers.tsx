@@ -1,5 +1,5 @@
 // React and external libraries
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, memo } from 'react';
 
 // Stores and selectors
 import { useTimelineStore } from '../stores/timeline-store';
@@ -20,7 +20,7 @@ import type { ProjectMarker } from '@/types/timeline';
  * - Draggable for repositioning
  * - Shows label tooltip on hover
  */
-export function TimelineProjectMarkers() {
+export const TimelineProjectMarkers = memo(function TimelineProjectMarkers() {
   const markers = useTimelineStore((s) => s.markers);
   const updateMarker = useTimelineStore((s) => s.updateMarker);
   const selectedMarkerId = useSelectionStore((s) => s.selectedMarkerId);
@@ -89,25 +89,32 @@ export function TimelineProjectMarkers() {
         <MarkerIndicator
           key={marker.id}
           marker={marker}
+          markerId={marker.id}
           leftPosition={frameToPixels(marker.frame)}
           isDragging={draggingId === marker.id}
           isSelected={selectedMarkerId === marker.id}
-          onMouseDown={(e) => handleMouseDown(e, marker.id)}
+          onMouseDown={handleMouseDown}
         />
       ))}
     </div>
   );
-}
+});
 
 interface MarkerIndicatorProps {
   marker: ProjectMarker;
+  markerId: string;
   leftPosition: number;
   isDragging: boolean;
   isSelected: boolean;
-  onMouseDown: (e: React.MouseEvent) => void;
+  onMouseDown: (e: React.MouseEvent, markerId: string) => void;
 }
 
-function MarkerIndicator({ marker, leftPosition, isDragging, isSelected, onMouseDown }: MarkerIndicatorProps) {
+const MarkerIndicator = memo(function MarkerIndicator({ marker, markerId, leftPosition, isDragging, isSelected, onMouseDown }: MarkerIndicatorProps) {
+  // Stable callback that passes markerId
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    onMouseDown(e, markerId);
+  }, [onMouseDown, markerId]);
+
   return (
     <div
       className="absolute pointer-events-auto"
@@ -118,7 +125,7 @@ function MarkerIndicator({ marker, leftPosition, isDragging, isSelected, onMouse
         cursor: isDragging ? 'grabbing' : 'grab',
         zIndex: isSelected ? 20 : 15,
       }}
-      onMouseDown={onMouseDown}
+      onMouseDown={handleMouseDown}
       title={marker.label || `Marker at frame ${marker.frame}`}
     >
       {/* Invisible larger hit area */}
@@ -162,4 +169,4 @@ function MarkerIndicator({ marker, leftPosition, isDragging, isSelected, onMouse
       />
     </div>
   );
-}
+});

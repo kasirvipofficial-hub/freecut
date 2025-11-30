@@ -66,7 +66,9 @@ export function TimelineContent({ duration, scrollRef, onZoomHandlersReady }: Ti
   const selectItems = useSelectionStore((s) => s.selectItems);
   const selectMarker = useSelectionStore((s) => s.selectMarker);
   const clearItemSelection = useSelectionStore((s) => s.clearItemSelection);
-  const dragState = useSelectionStore((s) => s.dragState);
+  // Granular selectors for drag state - avoid subscribing to entire dragState object
+  const isDragging = useSelectionStore((s) => !!s.dragState?.isDragging);
+  const activeSnapTarget = useSelectionStore((s) => s.dragState?.activeSnapTarget ?? null);
   const activeTool = useSelectionStore((s) => s.activeTool);
 
   // Track cursor position for razor tool - only when hovering over an item
@@ -276,7 +278,7 @@ export function TimelineContent({ duration, scrollRef, onZoomHandlersReady }: Ti
 
   // Track drag state to prevent deselection after drop
   useEffect(() => {
-    if (dragState?.isDragging) {
+    if (isDragging) {
       dragWasActiveRef.current = true;
     } else if (dragWasActiveRef.current) {
       // Reset after a short delay when drag ends
@@ -285,7 +287,7 @@ export function TimelineContent({ duration, scrollRef, onZoomHandlersReady }: Ti
       }, 100);
       return () => clearTimeout(timeout);
     }
-  }, [dragState?.isDragging]);
+  }, [isDragging]);
 
   // Track playhead/ruler scrubbing to prevent deselection after scrub ends
   useEffect(() => {
@@ -678,9 +680,9 @@ export function TimelineContent({ duration, scrollRef, onZoomHandlersReady }: Ti
         ))}
 
         {/* Snap guidelines (shown during drag) */}
-        {dragState?.isDragging && (
+        {isDragging && (
           <TimelineGuidelines
-            activeSnapTarget={dragState.activeSnapTarget ?? null}
+            activeSnapTarget={activeSnapTarget}
           />
         )}
 

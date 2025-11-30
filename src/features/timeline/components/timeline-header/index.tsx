@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, memo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import {
@@ -44,7 +44,7 @@ export interface TimelineHeaderProps {
  * - In/Out points, Snap toggle
  * - Zoom controls
  */
-export function TimelineHeader({ onZoomChange, onZoomIn, onZoomOut, onZoomToFit }: TimelineHeaderProps) {
+export const TimelineHeader = memo(function TimelineHeader({ onZoomChange, onZoomIn, onZoomOut, onZoomToFit }: TimelineHeaderProps) {
   const { zoomLevel, zoomIn, zoomOut, setZoom } = useTimelineZoom();
   const snapEnabled = useTimelineStore((s) => s.snapEnabled);
   const toggleSnap = useTimelineStore((s) => s.toggleSnap);
@@ -54,7 +54,8 @@ export function TimelineHeader({ onZoomChange, onZoomIn, onZoomOut, onZoomToFit 
   const setOutPoint = useTimelineStore((s) => s.setOutPoint);
   const clearInOutPoints = useTimelineStore((s) => s.clearInOutPoints);
   const addMarker = useTimelineStore((s) => s.addMarker);
-  const markers = useTimelineStore((s) => s.markers);
+  // Only subscribe to marker count for disabled state - avoids re-render on marker changes
+  const hasMarkers = useTimelineStore((s) => s.markers.length > 0);
   const removeMarker = useTimelineStore((s) => s.removeMarker);
   const clearAllMarkers = useTimelineStore((s) => s.clearAllMarkers);
   // NOTE: Don't subscribe to currentFrame - only needed in click handlers
@@ -303,7 +304,7 @@ export function TimelineHeader({ onZoomChange, onZoomIn, onZoomOut, onZoomToFit 
             size="icon"
             className="h-7 w-7"
             onClick={clearAllMarkers}
-            disabled={markers.length === 0}
+            disabled={!hasMarkers}
             data-tooltip="Clear All Markers"
           >
             <X className="w-3.5 h-3.5" />
@@ -386,4 +387,4 @@ export function TimelineHeader({ onZoomChange, onZoomIn, onZoomOut, onZoomToFit 
       </div>
     </div>
   );
-}
+});

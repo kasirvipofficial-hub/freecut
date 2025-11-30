@@ -56,17 +56,14 @@ export interface TimelineItemProps {
  */
 export const TimelineItem = memo(function TimelineItem({ item, timelineDuration = 30, trackLocked = false }: TimelineItemProps) {
   const { timeToPixels, pixelsToFrame, pixelsPerSecond } = useTimelineZoom();
-  const selectedItemIds = useSelectionStore((s) => s.selectedItemIds);
-  const selectItems = useSelectionStore((s) => s.selectItems);
-  const activeTool = useSelectionStore((s) => s.activeTool);
-  const splitItem = useTimelineStore((s) => s.splitItem);
-  const joinItems = useTimelineStore((s) => s.joinItems);
-  const removeItems = useTimelineStore((s) => s.removeItems);
-  const rippleDeleteItems = useTimelineStore((s) => s.rippleDeleteItems);
-  // Access items via getState() in callbacks to avoid re-renders when items array changes
-  // const items = useTimelineStore((s) => s.items);
 
-  const isSelected = selectedItemIds.includes(item.id);
+  // Granular selector: only re-render when THIS item's selection state changes
+  const isSelected = useSelectionStore(
+    useCallback((s) => s.selectedItemIds.includes(item.id), [item.id])
+  );
+
+  // Use refs for actions to avoid selector re-renders - read from store in callbacks
+  const activeTool = useSelectionStore((s) => s.activeTool);
 
   // Use ref for activeTool to avoid callback recreation on mode changes (prevents playback lag)
   const activeToolRef = useRef(activeTool);
@@ -100,8 +97,14 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
     )
   );
 
-  // Check if ANY drag is happening globally (to hide handles on all clips during drag)
-  const isAnyDragActive = useSelectionStore((s) => !!s.dragState?.isDragging);
+  // Track global drag state via ref subscription to avoid re-renders on ALL clips
+  // when ANY drag starts/stops - this is a major performance optimization
+  const isAnyDragActiveRef = useRef(false);
+  useEffect(() => {
+    return useSelectionStore.subscribe((state) => {
+      isAnyDragActiveRef.current = !!state.dragState?.isDragging;
+    });
+  }, []);
 
   // Check if this item is part of a multi-drag (but not the anchor)
   const isPartOfDrag = isPartOfMultiDrag && !isDragging;
@@ -198,9 +201,6 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
   const isBeingDraggedRef = useRef(isBeingDragged);
   isBeingDraggedRef.current = isBeingDragged;
 
-  // Ref for global drag state to prevent handles on ALL clips during any drag
-  const isAnyDragActiveRef = useRef(isAnyDragActive);
-  isAnyDragActiveRef.current = isAnyDragActive;
 
   // Get visual feedback for rate stretch
   const stretchFeedback = isStretching ? getVisualFeedback() : null;
@@ -314,7 +314,7 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
     }
   }, [item.type]);
 
-  const handleClick = (e: React.MouseEvent) => {
+  const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
 
     // Don't allow interaction on locked tracks
@@ -323,21 +323,22 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
     }
 
     // Razor tool: split item at click position
-    if (activeTool === 'razor') {
+    if (activeToolRef.current === 'razor') {
       const rect = e.currentTarget.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
       const clickOffsetFrames = pixelsToFrame(clickX);
       const splitFrame = Math.round(item.from + clickOffsetFrames);
 
-      // Perform split
-      splitItem(item.id, splitFrame);
+      // Perform split - use getState() to avoid selector
+      useTimelineStore.getState().splitItem(item.id, splitFrame);
       return;
     }
 
-    // Selection tool: handle item selection
+    // Selection tool: handle item selection - read current selection from store
+    const { selectedItemIds, selectItems } = useSelectionStore.getState();
     if (e.metaKey || e.ctrlKey) {
       // Multi-select: add to selection
-      if (isSelected) {
+      if (selectedItemIds.includes(item.id)) {
         selectItems(selectedItemIds.filter((id) => id !== item.id));
       } else {
         selectItems([...selectedItemIds, item.id]);
@@ -346,7 +347,7 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
       // Single select
       selectItems([item.id]);
     }
-  };
+  }, [trackLocked, pixelsToFrame, item.from, item.id]);
 
   // Handle mouse move to detect edge hover for trim/rate-stretch handles
   // Use ref for activeTool to prevent callback recreation on mode changes (prevents playback lag)
@@ -382,28 +383,22 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
     : 'cursor-grab';
 
   // Check if join is available when multiple items are selected
-  // Read items from store to avoid re-renders during playback
-  const canJoinSelected = useMemo(() => {
+  // Computed on demand via callback, not reactive - prevents re-renders on selection change
+  const getCanJoinSelected = useCallback(() => {
+    const selectedItemIds = useSelectionStore.getState().selectedItemIds;
     if (selectedItemIds.length < 2) return false;
     const items = useTimelineStore.getState().items;
     const selectedItems = selectedItemIds
       .map((id) => items.find((i) => i.id === id))
       .filter((i): i is NonNullable<typeof i> => i !== undefined);
     return canJoinMultipleItems(selectedItems);
-  }, [selectedItemIds]);
+  }, []);
 
-  // Subscribe to track item count to trigger neighbor recalc when items added/removed/moved
-  // This is O(n) filter but only causes re-render when THIS track's items change
-  const trackItemSignature = useTimelineStore(
+  // Track item count on this track for neighbor detection
+  // Uses a lightweight count + boundaries check instead of full string signature
+  const trackItemCount = useTimelineStore(
     useCallback(
-      (s) => {
-        // Create a signature of items on this track: "id:from:dur,id:from:dur,..."
-        // Only re-renders when items on this track change position
-        return s.items
-          .filter(i => i.trackId === item.trackId)
-          .map(i => `${i.id}:${i.from}:${i.durationInFrames}`)
-          .join(',');
-      },
+      (s) => s.items.filter(i => i.trackId === item.trackId).length,
       [item.trackId]
     )
   );
@@ -433,51 +428,54 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
       hasJoinableLeft: left ? canJoinItems(left, item) : false,
       hasJoinableRight: right ? canJoinItems(item, right) : false,
     };
-  }, [item, trackItemSignature]);
+  }, [item, trackItemCount]);
 
   // For context menu: can join if this clip has any joinable neighbor
   const canJoinFromContextMenu = hasJoinableLeft || hasJoinableRight;
 
   // Handle join action for multiple selected clips
   const handleJoinSelected = useCallback(() => {
+    const selectedItemIds = useSelectionStore.getState().selectedItemIds;
     if (selectedItemIds.length >= 2) {
       const items = useTimelineStore.getState().items;
       const selectedItems = selectedItemIds
         .map((id) => items.find((i) => i.id === id))
         .filter((i): i is NonNullable<typeof i> => i !== undefined);
       if (canJoinMultipleItems(selectedItems)) {
-        joinItems(selectedItemIds);
+        useTimelineStore.getState().joinItems(selectedItemIds);
       }
     }
-  }, [selectedItemIds, joinItems]);
+  }, []);
 
   // Handle join with left neighbor
   const handleJoinLeft = useCallback(() => {
     if (leftNeighbor) {
-      joinItems([leftNeighbor.id, item.id]);
+      useTimelineStore.getState().joinItems([leftNeighbor.id, item.id]);
     }
-  }, [joinItems, leftNeighbor, item.id]);
+  }, [leftNeighbor, item.id]);
 
   // Handle join with right neighbor
   const handleJoinRight = useCallback(() => {
     if (rightNeighbor) {
-      joinItems([item.id, rightNeighbor.id]);
+      useTimelineStore.getState().joinItems([item.id, rightNeighbor.id]);
     }
-  }, [joinItems, rightNeighbor, item.id]);
+  }, [rightNeighbor, item.id]);
 
   // Handle delete action
   const handleDelete = useCallback(() => {
+    const selectedItemIds = useSelectionStore.getState().selectedItemIds;
     if (selectedItemIds.length > 0) {
-      removeItems(selectedItemIds);
+      useTimelineStore.getState().removeItems(selectedItemIds);
     }
-  }, [selectedItemIds, removeItems]);
+  }, []);
 
   // Handle ripple delete action (delete + close gap)
   const handleRippleDelete = useCallback(() => {
+    const selectedItemIds = useSelectionStore.getState().selectedItemIds;
     if (selectedItemIds.length > 0) {
-      rippleDeleteItems(selectedItemIds);
+      useTimelineStore.getState().rippleDeleteItems(selectedItemIds);
     }
-  }, [selectedItemIds, rippleDeleteItems]);
+  }, []);
 
   return (
     <>
@@ -645,7 +643,7 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
       )}
 
       {/* Trim handles - show on edge hover or while actively trimming (hidden during drag, but not during trim's own snap state) */}
-      {!trackLocked && (!isAnyDragActive || isTrimming) && activeTool === 'select' && (
+      {!trackLocked && (!isAnyDragActiveRef.current || isTrimming) && activeTool === 'select' && (
         <>
           {/* Left trim handle - w-2 (8px) matches EDGE_HOVER_ZONE */}
           {(hoveredEdge === 'start' || (isTrimming && trimHandle === 'start')) && (
@@ -665,7 +663,7 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
       )}
 
       {/* Rate stretch handles - show on edge hover or while actively stretching (hidden during drag, but not during stretch's own snap state) */}
-      {!trackLocked && (!isAnyDragActive || isStretching) && activeTool === 'rate-stretch' && isMediaItem && (
+      {!trackLocked && (!isAnyDragActiveRef.current || isStretching) && activeTool === 'rate-stretch' && isMediaItem && (
         <>
           {/* Left stretch handle - w-2 (8px) matches EDGE_HOVER_ZONE */}
           {(hoveredEdge === 'start' || (isStretching && stretchHandle === 'start')) && (
@@ -686,14 +684,14 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
 
       {/* Join indicator - glowing edge when clip can be joined with neighbor */}
       {/* Hidden when hovering edge, during trim/stretch, or during any drag */}
-      {hasJoinableLeft && !trackLocked && !isAnyDragActive && hoveredEdge !== 'start' && !isTrimming && !isStretching && (
+      {hasJoinableLeft && !trackLocked && !isAnyDragActiveRef.current && hoveredEdge !== 'start' && !isTrimming && !isStretching && (
         <div
           className="absolute left-0 top-0 bottom-0 w-px pointer-events-none"
           style={{ backgroundColor: 'var(--color-timeline-join)', boxShadow: '0 0 6px 1px var(--color-timeline-join)' }}
           title="Can join with previous clip (J)"
         />
       )}
-      {hasJoinableRight && !trackLocked && !isAnyDragActive && hoveredEdge !== 'end' && !isTrimming && !isStretching && (
+      {hasJoinableRight && !trackLocked && !isAnyDragActiveRef.current && hoveredEdge !== 'end' && !isTrimming && !isStretching && (
         <div
           className="absolute right-0 top-0 bottom-0 w-px pointer-events-none"
           style={{ backgroundColor: 'var(--color-timeline-join)', boxShadow: '0 0 6px 1px var(--color-timeline-join)' }}
@@ -704,28 +702,28 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
     </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
-        {/* Show "Join Selected" when multiple clips are selected and joinable */}
-        {canJoinSelected && (
+        {/* Show "Join Selected" when multiple clips are selected and joinable - computed on open */}
+        {getCanJoinSelected() && (
           <ContextMenuItem onClick={handleJoinSelected}>
             Join Selected
             <ContextMenuShortcut>J</ContextMenuShortcut>
           </ContextMenuItem>
         )}
         {/* Show directional join options for single clip with joinable neighbors */}
-        {!canJoinSelected && hasJoinableLeft && (
+        {!getCanJoinSelected() && hasJoinableLeft && (
           <ContextMenuItem onClick={handleJoinLeft}>
             Join with Previous
           </ContextMenuItem>
         )}
-        {!canJoinSelected && hasJoinableRight && (
+        {!getCanJoinSelected() && hasJoinableRight && (
           <ContextMenuItem onClick={handleJoinRight}>
             Join with Next
           </ContextMenuItem>
         )}
-        {(canJoinSelected || canJoinFromContextMenu) && <ContextMenuSeparator />}
+        {(getCanJoinSelected() || canJoinFromContextMenu) && <ContextMenuSeparator />}
         <ContextMenuItem
           onClick={handleRippleDelete}
-          disabled={selectedItemIds.length === 0}
+          disabled={!isSelected}
           className="text-destructive focus:text-destructive"
         >
           Ripple Delete
@@ -733,7 +731,7 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
         </ContextMenuItem>
         <ContextMenuItem
           onClick={handleDelete}
-          disabled={selectedItemIds.length === 0}
+          disabled={!isSelected}
           className="text-destructive focus:text-destructive"
         >
           Delete

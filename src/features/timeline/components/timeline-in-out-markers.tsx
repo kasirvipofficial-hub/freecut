@@ -1,5 +1,5 @@
 // React and external libraries
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, memo } from 'react';
 
 // Stores and selectors
 import { useTimelineStore } from '../stores/timeline-store';
@@ -15,7 +15,7 @@ import { useTimelineZoom } from '../hooks/use-timeline-zoom';
  * - Draggable for adjusting marker positions
  * - Synchronized with timeline store
  */
-export function TimelineInOutMarkers() {
+export const TimelineInOutMarkers = memo(function TimelineInOutMarkers() {
   const inPoint = useTimelineStore((s) => s.inPoint);
   const outPoint = useTimelineStore((s) => s.outPoint);
   const setInPoint = useTimelineStore((s) => s.setInPoint);
@@ -300,4 +300,4 @@ export function TimelineInOutMarkers() {
       )}
     </>
   );
-}
+});
