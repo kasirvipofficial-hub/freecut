@@ -1,7 +1,9 @@
 import type { Transform } from '../types/gizmo';
 
-/** Snap threshold in canvas pixels */
-const SNAP_THRESHOLD = 8;
+/** Snap threshold to enter a snap (in canvas pixels) */
+const SNAP_ENTER_THRESHOLD = 8;
+/** Snap threshold to exit a snap - larger for "sticky" feeling */
+const SNAP_EXIT_THRESHOLD = 18;
 
 /** Snap line type for visual feedback */
 export interface SnapLine {
@@ -79,26 +81,26 @@ function getItemBounds(transform: Transform, canvasWidth: number, canvasHeight: 
 /**
  * Apply snapping to a transform during drag operations.
  * Snaps item edges and center to canvas snap points.
+ * Uses hysteresis (sticky snapping) - harder to exit a snap than to enter it.
  */
 export function applySnapping(
   transform: Transform,
   canvasWidth: number,
   canvasHeight: number,
-  enabled: boolean = true
+  currentSnapLines: SnapLine[] = []
 ): SnapResult {
-  if (!enabled) {
-    return { transform, snapLines: [] };
-  }
-
   const snapPoints = getTranslateSnapPoints(canvasWidth, canvasHeight);
   const bounds = getItemBounds(transform, canvasWidth, canvasHeight);
   const snapLines: SnapLine[] = [];
+
+  // Check if currently snapped to vertical/horizontal lines
+  const currentVerticalSnap = currentSnapLines.find((l) => l.type === 'vertical');
+  const currentHorizontalSnap = currentSnapLines.find((l) => l.type === 'horizontal');
 
   let deltaX = 0;
   let deltaY = 0;
 
   // Check vertical snap points (for horizontal position)
-  // Try to snap left edge, center, or right edge
   const xEdges = [
     { edge: bounds.left, type: 'left' },
     { edge: bounds.centerX, type: 'center' },
@@ -106,15 +108,16 @@ export function applySnapping(
   ];
 
   for (const snapPoint of snapPoints.vertical) {
-    for (const { edge, type } of xEdges) {
+    for (const { edge } of xEdges) {
       const distance = Math.abs(edge - snapPoint.pos);
-      if (distance < SNAP_THRESHOLD) {
-        // Calculate offset needed to snap
+      // Use exit threshold if currently snapped to this point, enter threshold otherwise
+      const isCurrentSnap = currentVerticalSnap?.position === snapPoint.pos;
+      const threshold = isCurrentSnap ? SNAP_EXIT_THRESHOLD : SNAP_ENTER_THRESHOLD;
+
+      if (distance < threshold) {
         const snapDelta = snapPoint.pos - edge;
-        // Only snap if this is closer than current snap
         if (deltaX === 0 || Math.abs(snapDelta) < Math.abs(deltaX)) {
           deltaX = snapDelta;
-          // Add snap line
           const existingLine = snapLines.find(
             (l) => l.type === 'vertical' && l.position === snapPoint.pos
           );
@@ -126,13 +129,12 @@ export function applySnapping(
             });
           }
         }
-        break; // Found snap for this edge, move to next snap point
+        break;
       }
     }
   }
 
   // Check horizontal snap points (for vertical position)
-  // Try to snap top edge, center, or bottom edge
   const yEdges = [
     { edge: bounds.top, type: 'top' },
     { edge: bounds.centerY, type: 'center' },
@@ -140,9 +142,12 @@ export function applySnapping(
   ];
 
   for (const snapPoint of snapPoints.horizontal) {
-    for (const { edge, type } of yEdges) {
+    for (const { edge } of yEdges) {
       const distance = Math.abs(edge - snapPoint.pos);
-      if (distance < SNAP_THRESHOLD) {
+      const isCurrentSnap = currentHorizontalSnap?.position === snapPoint.pos;
+      const threshold = isCurrentSnap ? SNAP_EXIT_THRESHOLD : SNAP_ENTER_THRESHOLD;
+
+      if (distance < threshold) {
         const snapDelta = snapPoint.pos - edge;
         if (deltaY === 0 || Math.abs(snapDelta) < Math.abs(deltaY)) {
           deltaY = snapDelta;
@@ -163,11 +168,11 @@ export function applySnapping(
   }
 
   // Apply snap deltas to transform
-  // Since transform.x/y is offset from center, we just add the delta
+  // Round to integers to avoid subpixel values
   const snappedTransform: Transform = {
     ...transform,
-    x: transform.x + deltaX,
-    y: transform.y + deltaY,
+    x: Math.round(transform.x + deltaX),
+    y: Math.round(transform.y + deltaY),
   };
 
   return {
@@ -180,22 +185,26 @@ export function applySnapping(
  * Apply snapping during scale operations.
  * Snaps item edges to canvas snap points while maintaining aspect ratio.
  * Uses uniform scaling to prevent visual distortion.
- * Shows all 4 edge lines when at 100% scale (or other symmetric positions).
+ * Uses hysteresis (sticky snapping) - harder to exit a snap than to enter it.
  */
 export function applyScaleSnapping(
   transform: Transform,
   canvasWidth: number,
   canvasHeight: number,
-  enabled: boolean = true
+  currentSnapLines: SnapLine[] = []
 ): SnapResult {
-  if (!enabled) {
-    return { transform, snapLines: [] };
-  }
-
   const snapPoints = getScaleSnapPoints(canvasWidth, canvasHeight);
   const bounds = getItemBounds(transform, canvasWidth, canvasHeight);
   const snapLines: SnapLine[] = [];
   const aspectRatio = transform.width / transform.height;
+
+  // Check current snap positions for hysteresis
+  const currentVerticalSnaps = currentSnapLines
+    .filter((l) => l.type === 'vertical')
+    .map((l) => l.position);
+  const currentHorizontalSnaps = currentSnapLines
+    .filter((l) => l.type === 'horizontal')
+    .map((l) => l.position);
 
   // Find the best snap (closest edge to a snap point)
   let bestSnap: {
@@ -207,9 +216,12 @@ export function applyScaleSnapping(
 
   // Check vertical snap points (affects width via left/right edges)
   for (const snapPoint of snapPoints.vertical) {
+    const isCurrentSnap = currentVerticalSnaps.includes(snapPoint.pos);
+    const threshold = isCurrentSnap ? SNAP_EXIT_THRESHOLD : SNAP_ENTER_THRESHOLD;
+
     // Check left edge
     const leftDist = Math.abs(bounds.left - snapPoint.pos);
-    if (leftDist < SNAP_THRESHOLD) {
+    if (leftDist < threshold) {
       const halfWidth = bounds.centerX - snapPoint.pos;
       const newWidth = halfWidth * 2;
       if (!bestSnap || leftDist < bestSnap.distance) {
@@ -224,7 +236,7 @@ export function applyScaleSnapping(
 
     // Check right edge
     const rightDist = Math.abs(bounds.right - snapPoint.pos);
-    if (rightDist < SNAP_THRESHOLD) {
+    if (rightDist < threshold) {
       const halfWidth = snapPoint.pos - bounds.centerX;
       const newWidth = halfWidth * 2;
       if (!bestSnap || rightDist < bestSnap.distance) {
@@ -240,9 +252,12 @@ export function applyScaleSnapping(
 
   // Check horizontal snap points (affects height via top/bottom edges)
   for (const snapPoint of snapPoints.horizontal) {
+    const isCurrentSnap = currentHorizontalSnaps.includes(snapPoint.pos);
+    const threshold = isCurrentSnap ? SNAP_EXIT_THRESHOLD : SNAP_ENTER_THRESHOLD;
+
     // Check top edge
     const topDist = Math.abs(bounds.top - snapPoint.pos);
-    if (topDist < SNAP_THRESHOLD) {
+    if (topDist < threshold) {
       const halfHeight = bounds.centerY - snapPoint.pos;
       const newHeight = halfHeight * 2;
       if (!bestSnap || topDist < bestSnap.distance) {
@@ -257,7 +272,7 @@ export function applyScaleSnapping(
 
     // Check bottom edge
     const bottomDist = Math.abs(bounds.bottom - snapPoint.pos);
-    if (bottomDist < SNAP_THRESHOLD) {
+    if (bottomDist < threshold) {
       const halfHeight = snapPoint.pos - bounds.centerY;
       const newHeight = halfHeight * 2;
       if (!bestSnap || bottomDist < bestSnap.distance) {
@@ -288,18 +303,39 @@ export function applyScaleSnapping(
     newWidth = newHeight * aspectRatio;
   }
 
-  // Calculate snapped bounds to check for symmetric edge alignment
+  // Track position adjustments for 100% snap
+  let newX = transform.x;
+  let newY = transform.y;
+
+  // Snap to exact canvas dimensions when width/height is close to canvas size
+  // This handles 100% scale regardless of center position drift during fast movement
+  const sizeTolerance = 15; // Generous tolerance for fast movement
+
+  if (Math.abs(newWidth - canvasWidth) < sizeTolerance) {
+    newWidth = canvasWidth;
+    newHeight = newWidth / aspectRatio;
+    newX = 0; // Also center horizontally for perfect 100%
+  }
+
+  if (Math.abs(newHeight - canvasHeight) < sizeTolerance) {
+    newHeight = canvasHeight;
+    newWidth = newHeight * aspectRatio;
+    newY = 0; // Also center vertically for perfect 100%
+  }
+
+  const edgeTolerance = 3;
+
+  // Recalculate bounds with adjusted position for snap line display
+  const finalCenterX = canvasWidth / 2 + newX;
+  const finalCenterY = canvasHeight / 2 + newY;
   const snappedBounds = {
-    left: bounds.centerX - newWidth / 2,
-    right: bounds.centerX + newWidth / 2,
-    top: bounds.centerY - newHeight / 2,
-    bottom: bounds.centerY + newHeight / 2,
+    left: finalCenterX - newWidth / 2,
+    right: finalCenterX + newWidth / 2,
+    top: finalCenterY - newHeight / 2,
+    bottom: finalCenterY + newHeight / 2,
   };
 
-  // Check if all 4 edges align with snap points (e.g., 100% scale)
-  // Show all aligned edges for visual confirmation
-  const edgeTolerance = 1; // 1px tolerance for "aligned"
-
+  // Check if edges align with snap points for visual feedback
   for (const snapPoint of snapPoints.vertical) {
     if (Math.abs(snappedBounds.left - snapPoint.pos) < edgeTolerance) {
       snapLines.push({ type: 'vertical', position: snapPoint.pos, label: snapPoint.label });
@@ -318,10 +354,13 @@ export function applyScaleSnapping(
     }
   }
 
+  // Round to integers to avoid subpixel values
   const snappedTransform: Transform = {
     ...transform,
-    width: Math.max(20, newWidth),
-    height: Math.max(20, newHeight),
+    x: Math.round(newX),
+    y: Math.round(newY),
+    width: Math.round(Math.max(20, newWidth)),
+    height: Math.round(Math.max(20, newHeight)),
   };
 
   return {

@@ -44,6 +44,7 @@ export function calculateTransform(
 
 /**
  * Calculate translation (drag to move).
+ * Note: Values are NOT rounded here - rounding happens in snap functions.
  */
 function calculateTranslation(
   start: Transform,
@@ -195,6 +196,7 @@ function calculateScale(
     }
   }
 
+  // Note: Values are NOT rounded here - rounding happens in snap functions
   return {
     ...start,
     x: newX,

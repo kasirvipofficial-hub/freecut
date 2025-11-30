@@ -213,15 +213,25 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
         ctrlKey
       );
 
-      // Apply snapping based on mode
+      // Apply snapping based on mode (pass current snapLines for hysteresis)
+      const { snapLines: currentSnapLines } = get();
       let snapLines: SnapLine[] = [];
       if (snappingEnabled && activeGizmo.mode !== 'rotate') {
         const snapResult =
           activeGizmo.mode === 'translate'
-            ? applySnapping(newTransform, canvasSize.width, canvasSize.height)
-            : applyScaleSnapping(newTransform, canvasSize.width, canvasSize.height);
+            ? applySnapping(newTransform, canvasSize.width, canvasSize.height, currentSnapLines)
+            : applyScaleSnapping(newTransform, canvasSize.width, canvasSize.height, currentSnapLines);
         newTransform = snapResult.transform;
         snapLines = snapResult.snapLines;
+      } else {
+        // Round values when snapping is disabled or for rotation
+        newTransform = {
+          ...newTransform,
+          x: Math.round(newTransform.x),
+          y: Math.round(newTransform.y),
+          width: Math.round(newTransform.width),
+          height: Math.round(newTransform.height),
+        };
       }
 
       set({
