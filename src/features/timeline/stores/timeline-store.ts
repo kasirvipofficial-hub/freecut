@@ -716,7 +716,26 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
           } else if (item.type === 'audio') {
             return { ...baseItem, src: item.src, waveformData: item.waveformData, offset: item.offset, ...(item.speed !== undefined && item.speed !== 1 && { speed: item.speed }) };
           } else if (item.type === 'text') {
-            return { ...baseItem, text: item.text, fontSize: item.fontSize, fontFamily: item.fontFamily, color: item.color };
+            return {
+              ...baseItem,
+              text: item.text,
+              color: item.color,
+              // Typography
+              ...(item.fontSize !== undefined && { fontSize: item.fontSize }),
+              ...(item.fontFamily && { fontFamily: item.fontFamily }),
+              ...(item.fontWeight && { fontWeight: item.fontWeight }),
+              ...(item.fontStyle && { fontStyle: item.fontStyle }),
+              // Colors
+              ...(item.backgroundColor && { backgroundColor: item.backgroundColor }),
+              // Text layout
+              ...(item.textAlign && { textAlign: item.textAlign }),
+              ...(item.verticalAlign && { verticalAlign: item.verticalAlign }),
+              ...(item.lineHeight !== undefined && { lineHeight: item.lineHeight }),
+              ...(item.letterSpacing !== undefined && { letterSpacing: item.letterSpacing }),
+              // Text effects
+              ...(item.textShadow && { textShadow: item.textShadow }),
+              ...(item.stroke && { stroke: item.stroke }),
+            };
           } else if (item.type === 'image') {
             return {
               ...baseItem,
@@ -726,7 +745,24 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
               ...(item.sourceHeight !== undefined && { sourceHeight: item.sourceHeight }),
             };
           } else if (item.type === 'shape') {
-            return { ...baseItem, shapeType: item.shapeType, fillColor: item.fillColor };
+            return {
+              ...baseItem,
+              shapeType: item.shapeType,
+              fillColor: item.fillColor,
+              // Stroke properties
+              ...(item.strokeColor && { strokeColor: item.strokeColor }),
+              ...(item.strokeWidth !== undefined && { strokeWidth: item.strokeWidth }),
+              // Shape-specific properties
+              ...(item.cornerRadius !== undefined && { cornerRadius: item.cornerRadius }),
+              ...(item.direction && { direction: item.direction }),
+              ...(item.points !== undefined && { points: item.points }),
+              ...(item.innerRadius !== undefined && { innerRadius: item.innerRadius }),
+              // Mask properties
+              ...(item.isMask !== undefined && { isMask: item.isMask }),
+              ...(item.maskType && { maskType: item.maskType }),
+              ...(item.maskFeather !== undefined && { maskFeather: item.maskFeather }),
+              ...(item.maskInvert !== undefined && { maskInvert: item.maskInvert }),
+            };
           }
           return baseItem as any;
         }),

@@ -7,6 +7,7 @@ import {
   makeEllipse,
   makeStar,
   makePolygon,
+  makeHeart,
 } from '@remotion/shapes';
 import { scalePath, translatePath } from '@remotion/paths';
 
@@ -179,26 +180,24 @@ export function getShapePath(
     }
 
     case 'heart': {
-      // Heart uses custom path matching ShapeContent (100x100 viewBox)
-      // This matches the exact path used in ShapeContent for consistency
-      const heartPath100 = 'M50 88.9C25 71.4 5 52.4 5 33.9c0-13.3 10.7-24 24-24 7.4 0 14.5 3.4 19.1 8.8L50 21l1.9-2.3C56.5 13.4 63.6 10 71 10c13.3 0 24 10.7 24 24 0 18.5-20 37.5-45 55z';
-      // Heart is designed for 100x100 viewBox
-      const shapeSize = 100;
+      // Use Remotion's makeHeart for consistent path generation
+      // Heart output width = 1.1 × input height, so we scale input to fit within baseSize
+      // Using height = baseSize / 1.1 ensures output width = baseSize (matches ShapeContent)
+      const heartHeight = baseSize / 1.1;
+      const result = makeHeart({ height: heartHeight });
+      const shapeWidth = result.width;
+      const shapeHeight = result.height;
 
       if (aspectLocked) {
-        // Scale from 100x100 to baseSize, then center
-        const scale = baseSize / shapeSize;
-        const scaledPath = scalePath(heartPath100, scale, scale);
-        const scaledWidth = shapeSize * scale;
-        const scaledHeight = shapeSize * scale;
-        const offsetX = (width - scaledWidth) / 2;
-        const offsetY = (height - scaledHeight) / 2;
-        path = translatePath(scaledPath, boxLeft + offsetX, boxTop + offsetY);
+        // Flexbox centers the shape within the container
+        const offsetX = (width - shapeWidth) / 2;
+        const offsetY = (height - shapeHeight) / 2;
+        path = translatePath(result.path, boxLeft + offsetX, boxTop + offsetY);
       } else {
         // Scale to fill full container
-        const scaleX = width / shapeSize;
-        const scaleY = height / shapeSize;
-        const scaledPath = scalePath(heartPath100, scaleX, scaleY);
+        const scaleX = width / shapeWidth;
+        const scaleY = height / shapeHeight;
+        const scaledPath = scalePath(result.path, scaleX, scaleY);
         path = translatePath(scaledPath, boxLeft, boxTop);
       }
       break;

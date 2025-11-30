@@ -101,7 +101,7 @@ export type ShapeItem = BaseTimelineItem & {
   // Mask properties
   isMask?: boolean;             // When true, shape acts as mask for lower tracks
   maskType?: 'clip' | 'alpha';  // clip = hard edges, alpha = soft edges
-  maskFeather?: number;         // Feather amount for alpha masks (0-50px)
+  maskFeather?: number;         // Feather amount for alpha masks (0-100px, default: 10)
   maskInvert?: boolean;         // Invert mask (show outside, hide inside)
 };
 

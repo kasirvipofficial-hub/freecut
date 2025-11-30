@@ -1,7 +1,7 @@
 import React from 'react';
 import { AbsoluteFill, OffthreadVideo, useVideoConfig, useCurrentFrame, interpolate, useRemotionEnvironment } from 'remotion';
 import { Video } from '@remotion/media';
-import { Rect, Circle, Triangle, Ellipse, Star, Polygon } from '@remotion/shapes';
+import { Rect, Circle, Triangle, Ellipse, Star, Polygon, Heart } from '@remotion/shapes';
 import { useGizmoStore } from '@/features/preview/stores/gizmo-store';
 import { usePlaybackStore } from '@/features/preview/stores/playback-store';
 import type { TimelineItem, VideoItem, TextItem, ShapeItem } from '@/types/timeline';
@@ -445,25 +445,19 @@ const ShapeContent: React.FC<{ item: ShapeItem }> = ({ item }) => {
     }
 
     case 'heart': {
-      // Heart: custom SVG path, squish/squash when aspect unlocked
-      // SVG heart path designed for 100x100 viewBox, centered at 50,50
-      const heartPath = 'M50 88.9C25 71.4 5 52.4 5 33.9c0-13.3 10.7-24 24-24 7.4 0 14.5 3.4 19.1 8.8L50 21l1.9-2.3C56.5 13.4 63.6 10 71 10c13.3 0 24 10.7 24 24 0 18.5-20 37.5-45 55z';
+      // Heart: use Remotion's Heart component for consistency with mask path generation
+      // Heart output width = 1.1 × input height, so we scale input to fit within baseSize
+      // Using height = baseSize / 1.1 ensures output width = baseSize (fits container)
+      const heartHeight = baseSize / 1.1;
       return (
         <div style={centerStyle}>
           <div style={scaleStyle}>
-            <svg
-              width={baseSize}
-              height={baseSize}
-              viewBox="0 0 100 100"
-              style={{ overflow: 'visible' }}
-            >
-              <path
-                d={heartPath}
-                fill={fillColor}
-                stroke={strokeColor}
-                strokeWidth={strokeWidth > 0 ? (strokeWidth / baseSize) * 100 : 0}
-              />
-            </svg>
+            <Heart
+              height={heartHeight}
+              fill={fillColor}
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+            />
           </div>
         </div>
       );
@@ -490,12 +484,19 @@ const DEBUG_VIDEO_OVERLAY = false;
 /**
  * MaskWrapper applies clipping to content using CSS clip-path.
  * This approach is more compatible with Remotion's server-side rendering than SVG foreignObject.
+ * Supports real-time preview by reading from gizmo store when masks are being transformed.
  */
 const MaskWrapper: React.FC<{
   masks: MaskInfo[];
   children: React.ReactNode;
 }> = ({ masks, children }) => {
   const { width: canvasWidth, height: canvasHeight } = useVideoConfig();
+
+  // Read gizmo store for real-time mask preview during drag operations
+  const activeGizmo = useGizmoStore((s) => s.activeGizmo);
+  const previewTransform = useGizmoStore((s) => s.previewTransform);
+  const propertiesPreview = useGizmoStore((s) => s.propertiesPreview);
+  const groupPreviewTransforms = useGizmoStore((s) => s.groupPreviewTransforms);
 
   if (!masks || masks.length === 0) {
     return <>{children}</>;
@@ -508,15 +509,47 @@ const MaskWrapper: React.FC<{
   const maskInvert = firstMask.shape.maskInvert ?? false;
 
   // Generate paths for all masks with rotation baked in
-  const maskPaths = masks.map(({ shape, transform }) => {
-    const resolvedTransform = {
+  // Check gizmo store for real-time preview transforms (same as ShapeContent)
+  const maskPathsWithStroke = masks.map(({ shape, transform }) => {
+    // Check if this mask has an active preview transform
+    const groupPreviewForMask = groupPreviewTransforms?.get(shape.id);
+    const isGizmoPreviewActive = activeGizmo?.itemId === shape.id && previewTransform !== null;
+    const propertiesPreviewForMask = propertiesPreview?.[shape.id];
+
+    // Priority: Group preview > Single gizmo preview > Properties preview > Base transform
+    let resolvedTransform = {
       x: transform.x ?? 0,
       y: transform.y ?? 0,
-      width: transform.width ?? 200,
-      height: transform.height ?? 200,
+      width: transform.width ?? canvasWidth,
+      height: transform.height ?? canvasHeight,
       rotation: transform.rotation ?? 0,
       opacity: transform.opacity ?? 1,
     };
+
+    if (groupPreviewForMask) {
+      resolvedTransform = {
+        x: groupPreviewForMask.x,
+        y: groupPreviewForMask.y,
+        width: groupPreviewForMask.width,
+        height: groupPreviewForMask.height,
+        rotation: groupPreviewForMask.rotation,
+        opacity: groupPreviewForMask.opacity,
+      };
+    } else if (isGizmoPreviewActive && previewTransform) {
+      resolvedTransform = {
+        x: previewTransform.x,
+        y: previewTransform.y,
+        width: previewTransform.width,
+        height: previewTransform.height,
+        rotation: previewTransform.rotation,
+        opacity: previewTransform.opacity,
+      };
+    } else if (propertiesPreviewForMask) {
+      resolvedTransform = {
+        ...resolvedTransform,
+        ...propertiesPreviewForMask,
+      };
+    }
 
     let path = getShapePath(shape, resolvedTransform, {
       canvasWidth,
@@ -530,14 +563,24 @@ const MaskWrapper: React.FC<{
       path = rotatePath(path, resolvedTransform.rotation, centerX, centerY);
     }
 
-    return path;
+    // Include stroke width for SVG mask rendering
+    const strokeWidth = shape.strokeWidth ?? 0;
+
+    return { path, strokeWidth };
   });
+
+  // Extract just the paths for combining
+  const maskPaths = maskPathsWithStroke.map(m => m.path);
 
   // Combine all mask paths into one (for multiple masks)
   const combinedPath = maskPaths.join(' ');
 
-  // For clip mode, use CSS clip-path which works reliably in Remotion
-  if (maskType === 'clip' && !maskInvert && maskFeather === 0) {
+  // Check if any mask has stroke (need SVG mask instead of clip-path for stroke support)
+  const hasStroke = maskPathsWithStroke.some(m => m.strokeWidth > 0);
+
+  // For clip mode without stroke, use CSS clip-path which works reliably in Remotion
+  // If stroke is present, fall through to SVG mask (clip-path doesn't support stroke)
+  if (maskType === 'clip' && !maskInvert && maskFeather === 0 && !hasStroke) {
     // Simple clip mode - use CSS clip-path directly
     return (
       <div
@@ -552,9 +595,8 @@ const MaskWrapper: React.FC<{
     );
   }
 
-  // For inverted clip, alpha mask, or feathering, we need SVG
-
-  if (maskType === 'clip' && maskInvert) {
+  // For inverted clip without stroke, use CSS clip-path with evenodd
+  if (maskType === 'clip' && maskInvert && !hasStroke) {
     // Inverted clip: show everything EXCEPT the mask area
     // Use evenodd fill rule with a full-canvas rect + the mask paths
     const invertedPath = `M 0 0 L ${canvasWidth} 0 L ${canvasWidth} ${canvasHeight} L 0 ${canvasHeight} Z ${combinedPath}`;
@@ -571,9 +613,10 @@ const MaskWrapper: React.FC<{
     );
   }
 
-  // Alpha mask or feathering: use inline SVG mask with CSS reference
+  // Alpha mask, feathering, or stroke: use inline SVG mask with CSS reference
+  // SVG masks support stroke which CSS clip-path doesn't
   // Generate unique ID for this mask instance
-  const maskId = `alpha-mask-${masks.map(m => m.shape.id).join('-')}`;
+  const maskId = `svg-mask-${masks.map(m => m.shape.id).join('-')}`;
   const filterId = `blur-${maskId}`;
 
   return (
@@ -611,12 +654,14 @@ const MaskWrapper: React.FC<{
               height={canvasHeight}
               fill={maskInvert ? 'white' : 'black'}
             />
-            {/* Mask shapes */}
-            {maskPaths.map((pathD, i) => (
+            {/* Mask shapes with optional stroke */}
+            {maskPathsWithStroke.map(({ path: pathD, strokeWidth }, i) => (
               <path
                 key={i}
                 d={pathD}
                 fill={maskInvert ? 'black' : 'white'}
+                stroke={strokeWidth > 0 ? (maskInvert ? 'black' : 'white') : undefined}
+                strokeWidth={strokeWidth > 0 ? strokeWidth : undefined}
                 filter={maskFeather > 0 ? `url(#${filterId})` : undefined}
               />
             ))}

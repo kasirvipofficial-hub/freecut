@@ -5,6 +5,7 @@ import type { TextItem, ShapeItem, TimelineItem } from '@/types/timeline';
 import { Item, type MaskInfo } from '../components/item';
 import { generateStableKey } from '../utils/generate-stable-key';
 import { loadFonts } from '../utils/fonts';
+import { resolveTransform } from '../utils/transform-resolver';
 
 /** Mask shape with its track order for scope calculation */
 interface MaskWithTrackOrder {
@@ -55,8 +56,9 @@ function shouldApplyMask(
  * - Pre-mounts media items 2 seconds early for smooth transitions
  */
 export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, backgroundColor = '#000000' }) => {
-  const { fps } = useVideoConfig();
+  const { fps, width: canvasWidth, height: canvasHeight } = useVideoConfig();
   const currentFrame = useCurrentFrame();
+  const canvas = { width: canvasWidth, height: canvasHeight, fps };
   const hasSoloTracks = tracks.some((track) => track.solo);
 
   // Calculate max order for z-index inversion (top track should have highest z-index)
@@ -111,23 +113,29 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, backgrou
   /**
    * Get masks that apply to a specific item at the current frame.
    * Returns MaskInfo array for the Item component.
+   * Uses resolveTransform to ensure masks use the same coordinate system as rendered shapes.
    */
   const getMasksForItem = (item: TimelineItem, trackOrder: number): MaskInfo[] => {
     return allMasks
       .filter(({ mask, trackOrder: maskTrackOrder }) =>
         shouldApplyMask(mask, maskTrackOrder, item, trackOrder, currentFrame)
       )
-      .map(({ mask }) => ({
-        shape: mask,
-        transform: mask.transform ?? {
-          x: 0,
-          y: 0,
-          width: 200,
-          height: 200,
-          rotation: 0,
-          opacity: 1,
-        },
-      }));
+      .map(({ mask }) => {
+        // Use resolveTransform to get proper defaults matching how shapes are rendered
+        // Shapes don't have source dimensions, so defaults to canvas size
+        const resolved = resolveTransform(mask, canvas);
+        return {
+          shape: mask,
+          transform: {
+            x: resolved.x,
+            y: resolved.y,
+            width: resolved.width,
+            height: resolved.height,
+            rotation: resolved.rotation,
+            opacity: resolved.opacity,
+          },
+        };
+      });
   };
 
   // Load fonts for all text items

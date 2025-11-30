@@ -609,7 +609,7 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
 
       {/* Mask indicator for shape items */}
       {item.type === 'shape' && item.isMask && (
-        <div className="absolute top-1 left-1 px-1 py-0.5 text-[10px] font-bold bg-cyan-500/80 text-white rounded">
+        <div className="absolute top-1 right-1 px-1 py-0.5 text-[10px] font-bold bg-cyan-500/80 text-white rounded">
           M
         </div>
       )}

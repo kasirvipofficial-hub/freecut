@@ -173,7 +173,7 @@ export function ShapeSection({ items }: ShapeSectionProps) {
       // Mask properties
       isMask: shapeItems.every(i => (i.isMask ?? false) === (first.isMask ?? false)) ? (first.isMask ?? false) : 'mixed' as const,
       maskType: shapeItems.every(i => (i.maskType ?? 'clip') === (first.maskType ?? 'clip')) ? (first.maskType ?? 'clip') : undefined,
-      maskFeather: shapeItems.every(i => (i.maskFeather ?? 0) === (first.maskFeather ?? 0)) ? (first.maskFeather ?? 0) : 'mixed' as const,
+      maskFeather: shapeItems.every(i => (i.maskFeather ?? 10) === (first.maskFeather ?? 10)) ? (first.maskFeather ?? 10) : 'mixed' as const,
       maskInvert: shapeItems.every(i => (i.maskInvert ?? false) === (first.maskInvert ?? false)) ? (first.maskInvert ?? false) : 'mixed' as const,
     };
   }, [shapeItems]);
@@ -194,10 +194,12 @@ export function ShapeSection({ items }: ShapeSectionProps) {
     [shapeItems, updateItem]
   );
 
-  // Shape type change
+  // Shape type change - also update label to match shape type
   const handleShapeTypeChange = useCallback(
     (value: string) => {
-      updateShapeItems({ shapeType: value as ShapeType });
+      const shapeOption = SHAPE_TYPE_OPTIONS.find(opt => opt.value === value);
+      const label = shapeOption?.label ?? value;
+      updateShapeItems({ shapeType: value as ShapeType, label });
     },
     [updateShapeItems]
   );
@@ -347,7 +349,7 @@ export function ShapeSection({ items }: ShapeSectionProps) {
         isMask: checked,
         // Set defaults when enabling mask
         maskType: checked ? 'clip' : undefined,
-        maskFeather: checked ? 0 : undefined,
+        maskFeather: checked ? 10 : undefined,
         maskInvert: checked ? false : undefined,
       });
     },
@@ -557,7 +559,7 @@ export function ShapeSection({ items }: ShapeSectionProps) {
                 onChange={handleMaskFeatherChange}
                 onLiveChange={handleMaskFeatherLiveChange}
                 min={0}
-                max={50}
+                max={100}
                 step={1}
                 unit="px"
               />
