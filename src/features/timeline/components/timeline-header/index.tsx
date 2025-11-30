@@ -1,10 +1,5 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { Slider } from '@/components/ui/slider';
 import {
   Film,
@@ -172,213 +167,163 @@ export function TimelineHeader({ onZoomChange, onZoomIn, onZoomOut }: TimelineHe
 
         {/* Select/Razor Tools */}
         <div className="flex items-center gap-1 px-1.5 py-1 bg-secondary/50 rounded-md border border-border">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`h-7 w-7 ${
-                  activeTool === 'select' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''
-                }`}
-                onClick={() => setActiveTool('select')}
-              >
-                <MousePointer2 className="w-3.5 h-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Select Tool (V)</TooltipContent>
-          </Tooltip>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`h-7 w-7 ${
+              activeTool === 'select' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''
+            }`}
+            onClick={() => setActiveTool('select')}
+            data-tooltip="Select Tool (V)"
+          >
+            <MousePointer2 className="w-3.5 h-3.5" />
+          </Button>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`h-7 w-7 ${
-                  activeTool === 'razor' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''
-                }`}
-                onClick={() => setActiveTool(activeTool === 'razor' ? 'select' : 'razor')}
-              >
-                <Scissors className="w-3.5 h-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Razor Tool (C)</TooltipContent>
-          </Tooltip>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`h-7 w-7 ${
+              activeTool === 'razor' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''
+            }`}
+            onClick={() => setActiveTool(activeTool === 'razor' ? 'select' : 'razor')}
+            data-tooltip="Razor Tool (C)"
+          >
+            <Scissors className="w-3.5 h-3.5" />
+          </Button>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`h-7 w-7 ${
-                  activeTool === 'rate-stretch' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''
-                }`}
-                onClick={() => setActiveTool(activeTool === 'rate-stretch' ? 'select' : 'rate-stretch')}
-              >
-                <Gauge className="w-3.5 h-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Rate Stretch Tool (R)</TooltipContent>
-          </Tooltip>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`h-7 w-7 ${
+              activeTool === 'rate-stretch' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''
+            }`}
+            onClick={() => setActiveTool(activeTool === 'rate-stretch' ? 'select' : 'rate-stretch')}
+            data-tooltip="Rate Stretch Tool (R)"
+          >
+            <Gauge className="w-3.5 h-3.5" />
+          </Button>
         </div>
 
         <Separator orientation="vertical" className="h-6 mx-2" />
 
         {/* Undo/Redo */}
         <div className="flex items-center gap-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={handleUndo}
-              >
-                <Undo2 className="w-3.5 h-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Undo (Ctrl+Z)</TooltipContent>
-          </Tooltip>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={handleUndo}
+            data-tooltip="Undo (Ctrl+Z)"
+          >
+            <Undo2 className="w-3.5 h-3.5" />
+          </Button>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={handleRedo}
-              >
-                <Redo2 className="w-3.5 h-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Redo (Ctrl+Shift+Z)</TooltipContent>
-          </Tooltip>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={handleRedo}
+            data-tooltip="Redo (Ctrl+Shift+Z)"
+          >
+            <Redo2 className="w-3.5 h-3.5" />
+          </Button>
         </div>
 
         <Separator orientation="vertical" className="h-6 mx-2" />
 
         {/* In/Out Points */}
         <div className="flex items-center gap-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => setInPoint(usePlaybackStore.getState().currentFrame)}
-              >
-                <CornerRightDown className="w-3.5 h-3.5" style={{ color: 'oklch(0.65 0.18 142)' }} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Set In Point (I)</TooltipContent>
-          </Tooltip>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setInPoint(usePlaybackStore.getState().currentFrame)}
+            data-tooltip="Set In Point (I)"
+          >
+            <CornerRightDown className="w-3.5 h-3.5" style={{ color: 'oklch(0.65 0.18 142)' }} />
+          </Button>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => setOutPoint(usePlaybackStore.getState().currentFrame)}
-              >
-                <CornerRightUp className="w-3.5 h-3.5" style={{ color: 'oklch(0.61 0.22 29)' }} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Set Out Point (O)</TooltipContent>
-          </Tooltip>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setOutPoint(usePlaybackStore.getState().currentFrame)}
+            data-tooltip="Set Out Point (O)"
+          >
+            <CornerRightUp className="w-3.5 h-3.5" style={{ color: 'oklch(0.61 0.22 29)' }} />
+          </Button>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={clearInOutPoints}
-                disabled={inPoint === null && outPoint === null}
-              >
-                <X className="w-3.5 h-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Clear In/Out Points</TooltipContent>
-          </Tooltip>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={clearInOutPoints}
+            disabled={inPoint === null && outPoint === null}
+            data-tooltip="Clear In/Out Points"
+          >
+            <X className="w-3.5 h-3.5" />
+          </Button>
         </div>
 
         <Separator orientation="vertical" className="h-6 mx-2" />
 
         {/* Markers */}
         <div className="flex items-center gap-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => addMarker(usePlaybackStore.getState().currentFrame)}
-              >
-                <Flag className="w-3.5 h-3.5" style={{ color: 'oklch(0.65 0.20 250)' }} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Add Marker (M)</TooltipContent>
-          </Tooltip>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => addMarker(usePlaybackStore.getState().currentFrame)}
+            data-tooltip="Add Marker (M)"
+          >
+            <Flag className="w-3.5 h-3.5" style={{ color: 'oklch(0.65 0.20 250)' }} />
+          </Button>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={clearAllMarkers}
-                disabled={markers.length === 0}
-              >
-                <FlagOff className="w-3.5 h-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Clear All Markers</TooltipContent>
-          </Tooltip>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={clearAllMarkers}
+            disabled={markers.length === 0}
+            data-tooltip="Clear All Markers"
+          >
+            <FlagOff className="w-3.5 h-3.5" />
+          </Button>
         </div>
 
         <Separator orientation="vertical" className="h-6 mx-2" />
 
         {/* Snap Toggle */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className={`h-7 w-7 ${
-                snapEnabled ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''
-              }`}
-              onClick={toggleSnap}
-            >
-              <Magnet className="w-3.5 h-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {snapEnabled ? 'Snap Enabled' : 'Snap Disabled'}
-          </TooltipContent>
-        </Tooltip>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={`h-7 w-7 ${
+            snapEnabled ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''
+          }`}
+          onClick={toggleSnap}
+          data-tooltip={snapEnabled ? 'Snap Enabled' : 'Snap Disabled'}
+        >
+          <Magnet className="w-3.5 h-3.5" />
+        </Button>
       </div>
 
       {/* Right: Zoom Controls */}
       <div className="flex items-center gap-2">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => {
-                if (onZoomOut) {
-                  onZoomOut();
-                } else {
-                  zoomOut();
-                }
-              }}
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Zoom Out</TooltipContent>
-        </Tooltip>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={() => {
+            if (onZoomOut) {
+              onZoomOut();
+            } else {
+              zoomOut();
+            }
+          }}
+          data-tooltip="Zoom Out"
+        >
+          <ZoomOut className="w-3.5 h-3.5" />
+        </Button>
 
         <Slider
           value={[zoomLevel]}
@@ -390,25 +335,21 @@ export function TimelineHeader({ onZoomChange, onZoomIn, onZoomOut }: TimelineHe
           className="w-24"
         />
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => {
-                if (onZoomIn) {
-                  onZoomIn();
-                } else {
-                  zoomIn();
-                }
-              }}
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Zoom In</TooltipContent>
-        </Tooltip>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={() => {
+            if (onZoomIn) {
+              onZoomIn();
+            } else {
+              zoomIn();
+            }
+          }}
+          data-tooltip="Zoom In"
+        >
+          <ZoomIn className="w-3.5 h-3.5" />
+        </Button>
 
         <span className="text-xs text-muted-foreground font-mono w-12 text-right">
           {Math.round(zoomLevel * 100)}%

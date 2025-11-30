@@ -21,7 +21,8 @@ export interface ZoomActions {
 // const { level, zoomIn } = useZoomStore();
 
 // Throttle zoom updates to reduce re-render frequency during rapid zoom
-const ZOOM_THROTTLE_MS = 32; // ~30fps max for zoom updates
+// Set to 50ms to match typical render time - prevents queueing renders faster than they complete
+const ZOOM_THROTTLE_MS = 50;
 let lastZoomUpdate = 0;
 let pendingZoomLevel: number | null = null;
 let zoomThrottleTimeout: ReturnType<typeof setTimeout> | null = null;

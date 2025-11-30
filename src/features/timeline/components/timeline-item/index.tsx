@@ -55,7 +55,7 @@ export interface TimelineItemProps {
  * - Stores trimStart, trimEnd, sourceStart, sourceEnd for each item
  */
 export const TimelineItem = memo(function TimelineItem({ item, timelineDuration = 30, trackLocked = false }: TimelineItemProps) {
-  const { timeToPixels, pixelsToFrame } = useTimelineZoom();
+  const { timeToPixels, pixelsToFrame, pixelsPerSecond } = useTimelineZoom();
   const selectedItemIds = useSelectionStore((s) => s.selectedItemIds);
   const selectItems = useSelectionStore((s) => s.selectItems);
   const activeTool = useSelectionStore((s) => s.activeTool);
@@ -375,43 +375,48 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
     return canJoinMultipleItems(selectedItems);
   }, [selectedItemIds]);
 
-  // Subscribe to adjacent neighbors for join indicator updates
-  // Uses a selector that only returns the neighbor info we need, minimizing re-renders
-  const leftNeighbor = useTimelineStore(
+  // Subscribe to track item count to trigger neighbor recalc when items added/removed/moved
+  // This is O(n) filter but only causes re-render when THIS track's items change
+  const trackItemSignature = useTimelineStore(
     useCallback(
-      (s) => s.items.find(
-        (other) =>
-          other.id !== item.id &&
-          other.trackId === item.trackId &&
-          other.from + other.durationInFrames === item.from
-      ),
-      [item.id, item.trackId, item.from]
+      (s) => {
+        // Create a signature of items on this track: "id:from:dur,id:from:dur,..."
+        // Only re-renders when items on this track change position
+        return s.items
+          .filter(i => i.trackId === item.trackId)
+          .map(i => `${i.id}:${i.from}:${i.durationInFrames}`)
+          .join(',');
+      },
+      [item.trackId]
     )
   );
 
-  const rightNeighbor = useTimelineStore(
-    useCallback(
-      (s) => s.items.find(
-        (other) =>
-          other.id !== item.id &&
-          other.trackId === item.trackId &&
-          other.from === item.from + item.durationInFrames
-      ),
-      [item.id, item.trackId, item.from, item.durationInFrames]
-    )
-  );
+  // Neighbor calculation for join indicators
+  // Re-computes when this item changes OR when track items change
+  const { leftNeighbor, rightNeighbor, hasJoinableLeft, hasJoinableRight } = useMemo(() => {
+    const items = useTimelineStore.getState().items;
 
-  // Check if this clip has a joinable neighbor on the left (this clip is the "right" one)
-  const hasJoinableLeft = useMemo(() => {
-    if (!leftNeighbor) return false;
-    return canJoinItems(leftNeighbor, item);
-  }, [leftNeighbor, item]);
+    const left = items.find(
+      (other) =>
+        other.id !== item.id &&
+        other.trackId === item.trackId &&
+        other.from + other.durationInFrames === item.from
+    ) ?? null;
 
-  // Check if this clip has a joinable neighbor on the right (this clip is the "left" one)
-  const hasJoinableRight = useMemo(() => {
-    if (!rightNeighbor) return false;
-    return canJoinItems(item, rightNeighbor);
-  }, [rightNeighbor, item]);
+    const right = items.find(
+      (other) =>
+        other.id !== item.id &&
+        other.trackId === item.trackId &&
+        other.from === item.from + item.durationInFrames
+    ) ?? null;
+
+    return {
+      leftNeighbor: left,
+      rightNeighbor: right,
+      hasJoinableLeft: left ? canJoinItems(left, item) : false,
+      hasJoinableRight: right ? canJoinItems(item, right) : false,
+    };
+  }, [item, trackItemSignature]);
 
   // For context menu: can join if this clip has any joinable neighbor
   const canJoinFromContextMenu = hasJoinableLeft || hasJoinableRight;
@@ -508,6 +513,7 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
               speed={item.speed ?? 1}
               fps={fps}
               isVisible={isClipVisible}
+              pixelsPerSecond={pixelsPerSecond}
               height={VIDEO_FILMSTRIP_HEIGHT}
               className="top-0"
             />
@@ -530,6 +536,7 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
               speed={item.speed ?? 1}
               fps={fps}
               isVisible={isClipVisible}
+              pixelsPerSecond={pixelsPerSecond}
               height={VIDEO_WAVEFORM_HEIGHT}
               className="top-0"
             />
@@ -558,6 +565,7 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
               speed={item.speed ?? 1}
               fps={fps}
               isVisible={isClipVisible}
+              pixelsPerSecond={pixelsPerSecond}
               height={AUDIO_WAVEFORM_HEIGHT}
               className="top-0"
             />

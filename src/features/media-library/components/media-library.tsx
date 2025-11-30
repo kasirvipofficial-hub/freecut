@@ -33,8 +33,8 @@ export function MediaLibrary({ onMediaSelect }: MediaLibraryProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [idsToDelete, setIdsToDelete] = useState<string[]>([]);
 
-  // Timeline store selectors
-  const timelineItems = useTimelineStore((s) => s.items);
+  // Timeline store selectors - don't subscribe to items to avoid re-renders
+  // Read items from store directly when needed (in delete handler)
   const removeTimelineItems = useTimelineStore((s) => s.removeItems);
 
   // Store selectors
@@ -93,10 +93,12 @@ export function MediaLibrary({ onMediaSelect }: MediaLibraryProps) {
   };
 
   // Find timeline items that reference the media being deleted (for batch delete from selection)
+  // Read from store directly to avoid subscribing to items array
   const affectedTimelineItems = useMemo(() => {
     if (idsToDelete.length === 0) return [];
+    const timelineItems = useTimelineStore.getState().items;
     return timelineItems.filter((item) => item.mediaId && idsToDelete.includes(item.mediaId));
-  }, [idsToDelete, timelineItems]);
+  }, [idsToDelete]);
 
   const handleDeleteSelected = () => {
     if (selectedMediaIds.length === 0) return;

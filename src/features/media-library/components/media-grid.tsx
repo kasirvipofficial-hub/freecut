@@ -40,15 +40,16 @@ export function MediaGrid({ onMediaSelect, onUpload, disabled = false, viewMode 
   const selectMedia = useMediaLibraryStore((s) => s.selectMedia);
   const deleteMedia = useMediaLibraryStore((s) => s.deleteMedia);
 
-  // Timeline store for checking references
-  const timelineItems = useTimelineStore((s) => s.items);
+  // Timeline store for checking references - don't subscribe to items to avoid re-renders
   const removeTimelineItems = useTimelineStore((s) => s.removeItems);
 
   // Find timeline items that reference the media being deleted
+  // Read from store directly to avoid subscribing to items array
   const affectedTimelineItems = useMemo(() => {
     if (!mediaIdToDelete) return [];
+    const timelineItems = useTimelineStore.getState().items;
     return timelineItems.filter((item) => item.mediaId === mediaIdToDelete);
-  }, [mediaIdToDelete, timelineItems]);
+  }, [mediaIdToDelete]);
 
   // Create marquee items from filtered media
   const marqueeItems: MarqueeItem[] = useMemo(

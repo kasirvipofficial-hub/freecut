@@ -2,7 +2,6 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { TiledCanvas } from './tiled-canvas';
 import { FilmstripSkeleton } from './filmstrip-skeleton';
 import { useFilmstrip } from '../../hooks/use-filmstrip';
-import { useZoomStore } from '../../stores/zoom-store';
 import { mediaLibraryService } from '@/features/media-library/services/media-library-service';
 import { THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT } from '../../services/filmstrip-cache';
 
@@ -23,6 +22,8 @@ export interface ClipFilmstripProps {
   fps: number;
   /** Whether the clip is visible (from IntersectionObserver) */
   isVisible: boolean;
+  /** Pixels per second from parent (avoids redundant zoom subscription) */
+  pixelsPerSecond: number;
   /** Optional height override */
   height?: number;
   /** Optional className for positioning */
@@ -45,11 +46,11 @@ export const ClipFilmstrip = memo(function ClipFilmstrip({
   speed,
   fps: _fps,
   isVisible,
+  pixelsPerSecond,
   height = THUMBNAIL_HEIGHT,
   className = 'top-1',
 }: ClipFilmstripProps) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const pixelsPerSecond = useZoomStore((s) => s.pixelsPerSecond);
 
   // Load blob URL for the media
   useEffect(() => {
@@ -174,9 +175,10 @@ export const ClipFilmstrip = memo(function ClipFilmstrip({
     return null;
   }
 
-  // Include pixelsPerSecond in version to force re-render on zoom changes
-  // Using Math.round to avoid floating point noise triggering unnecessary re-renders
-  const renderVersion = frames.length * 10000 + Math.round(pixelsPerSecond * 100);
+  // Include quantized pixelsPerSecond in version to force re-render on zoom changes
+  // Quantize to steps of 5 to reduce canvas redraws on small zoom changes
+  const quantizedPPS = Math.round(pixelsPerSecond / 5) * 5;
+  const renderVersion = frames.length * 10000 + quantizedPPS;
 
   return (
     <TiledCanvas
