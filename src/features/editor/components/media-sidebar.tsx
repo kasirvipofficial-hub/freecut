@@ -5,13 +5,13 @@ import {
   Film,
   Layers,
   Type,
-  Shapes,
   Square,
   Circle,
   Triangle,
   Star,
   Hexagon,
   Heart,
+  Pentagon,
 } from 'lucide-react';
 import { useEditorStore } from '../stores/editor-store';
 import { useTimelineStore } from '@/features/timeline/stores/timeline-store';
@@ -177,7 +177,8 @@ export function MediaSidebar() {
   // Category items for the vertical nav
   const categories = [
     { id: 'media' as const, icon: Film, label: 'Media' },
-    { id: 'elements' as const, icon: Shapes, label: 'Elements' },
+    { id: 'text' as const, icon: Type, label: 'Text' },
+    { id: 'shapes' as const, icon: Pentagon, label: 'Shapes' },
     { id: 'effects' as const, icon: Layers, label: 'Effects' },
   ];
 
@@ -249,33 +250,26 @@ export function MediaSidebar() {
             <MediaLibrary />
           </div>
 
-          {/* Elements Tab - Text and Shapes */}
-          <div className={`flex-1 overflow-y-auto p-3 ${activeTab === 'elements' ? 'block' : 'hidden'}`}>
-            <div className="space-y-4">
-              {/* Text Section */}
-              <div>
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                  Text
-                </h3>
-                <button
-                  onClick={handleAddText}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-secondary/30 hover:bg-secondary/50 hover:border-primary/50 transition-colors group"
-                >
-                  <div className="w-9 h-9 rounded-md bg-timeline-text/20 border border-timeline-text/50 flex items-center justify-center group-hover:bg-timeline-text/30 flex-shrink-0">
-                    <Type className="w-4 h-4 text-timeline-text" />
-                  </div>
-                  <span className="text-sm text-muted-foreground group-hover:text-foreground">
-                    Add Text
-                  </span>
-                </button>
-              </div>
+          {/* Text Tab */}
+          <div className={`flex-1 overflow-y-auto p-3 ${activeTab === 'text' ? 'block' : 'hidden'}`}>
+            <div className="space-y-3">
+              <button
+                onClick={handleAddText}
+                className="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-secondary/30 hover:bg-secondary/50 hover:border-primary/50 transition-colors group"
+              >
+                <div className="w-9 h-9 rounded-md bg-timeline-text/20 border border-timeline-text/50 flex items-center justify-center group-hover:bg-timeline-text/30 flex-shrink-0">
+                  <Type className="w-4 h-4 text-timeline-text" />
+                </div>
+                <span className="text-sm text-muted-foreground group-hover:text-foreground">
+                  Add Text
+                </span>
+              </button>
+            </div>
+          </div>
 
-              {/* Shapes Section */}
-              <div>
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                  Shapes
-                </h3>
-                <div className="grid grid-cols-3 gap-1.5">
+          {/* Shapes Tab */}
+          <div className={`flex-1 overflow-y-auto p-3 ${activeTab === 'shapes' ? 'block' : 'hidden'}`}>
+            <div className="grid grid-cols-3 gap-1.5">
                   <button
                     onClick={() => handleAddShape('rectangle')}
                     className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-border bg-secondary/30 hover:bg-secondary/50 hover:border-primary/50 transition-colors group"
@@ -359,8 +353,6 @@ export function MediaSidebar() {
                       Heart
                     </span>
                   </button>
-                </div>
-              </div>
             </div>
           </div>
 

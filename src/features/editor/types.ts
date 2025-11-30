@@ -2,7 +2,7 @@ export interface EditorState {
   activePanel: 'media' | 'effects' | 'properties' | null;
   leftSidebarOpen: boolean;
   rightSidebarOpen: boolean;
-  activeTab: 'media' | 'elements' | 'effects';
+  activeTab: 'media' | 'text' | 'shapes' | 'effects';
   sidebarWidth: number;
   timelineHeight: number;
 }
@@ -13,7 +13,7 @@ export interface EditorActions {
   setRightSidebarOpen: (open: boolean) => void;
   toggleLeftSidebar: () => void;
   toggleRightSidebar: () => void;
-  setActiveTab: (tab: 'media' | 'elements' | 'effects') => void;
+  setActiveTab: (tab: 'media' | 'text' | 'shapes' | 'effects') => void;
   setSidebarWidth: (width: number) => void;
   setTimelineHeight: (height: number) => void;
 }
