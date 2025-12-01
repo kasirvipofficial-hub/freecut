@@ -29,14 +29,19 @@ function shouldMaskAffectItem(maskTrackOrder: number, targetTrackOrder: number):
  * Renders SVG mask definitions with OPACITY-CONTROLLED activation.
  * The mask is always present in the DOM; its effect is toggled via internal opacity.
  * This prevents DOM structure changes when masks activate/deactivate.
+ *
+ * IMPORTANT: When hasPotentialMasks is true but masks is empty, we render an
+ * "empty" mask (just the base white rect) that shows everything. This ensures
+ * the mask reference is always valid when StableMaskedGroup applies it.
  */
 const MaskDefinitions: React.FC<{
   masks: MaskWithTrackOrder[];
+  hasPotentialMasks: boolean;
   currentFrame: number;
   canvasWidth: number;
   canvasHeight: number;
   fps: number;
-}> = ({ masks, currentFrame, canvasWidth, canvasHeight, fps }) => {
+}> = ({ masks, hasPotentialMasks, currentFrame, canvasWidth, canvasHeight, fps }) => {
   const canvas = { width: canvasWidth, height: canvasHeight, fps };
 
   // Read gizmo store for real-time mask preview during drag operations
@@ -45,7 +50,49 @@ const MaskDefinitions: React.FC<{
   const propertiesPreview = useGizmoStore((s) => s.propertiesPreview);
   const groupPreviewTransforms = useGizmoStore((s) => s.groupPreviewTransforms);
 
-  if (masks.length === 0) return null;
+  // Only render if there are potential masks (shapes that could be masks)
+  // This keeps DOM structure stable when isMask is toggled
+  if (!hasPotentialMasks) return null;
+
+  // Generate combined mask ID for the group
+  const groupMaskId = 'group-composition-mask';
+
+  // Handle empty active masks case - render SVG with just base white rect
+  // This ensures mask reference is valid when StableMaskedGroup applies it
+  if (masks.length === 0) {
+    return (
+      <svg
+        style={{
+          position: 'absolute',
+          width: 0,
+          height: 0,
+          overflow: 'hidden',
+          pointerEvents: 'none',
+        }}
+        aria-hidden="true"
+      >
+        <defs>
+          <mask
+            id={groupMaskId}
+            maskUnits="userSpaceOnUse"
+            x="0"
+            y="0"
+            width={canvasWidth}
+            height={canvasHeight}
+          >
+            {/* No active masks - show everything (white = visible) */}
+            <rect
+              x="0"
+              y="0"
+              width={canvasWidth}
+              height={canvasHeight}
+              fill="white"
+            />
+          </mask>
+        </defs>
+      </svg>
+    );
+  }
 
   // Compute mask data with opacity for activation
   const maskData = masks.map(({ mask, trackOrder }) => {
@@ -102,13 +149,11 @@ const MaskDefinitions: React.FC<{
     };
   });
 
-  // Generate combined mask ID for the group
-  const groupMaskId = 'group-composition-mask';
-  const filterId = `blur-${groupMaskId}`;
-
-  // Use first mask's settings for the group
-  const firstMask = masks[0]!.mask;
-  const maskFeather = firstMask.maskFeather ?? 0;
+  // Compute per-mask feather values (only for alpha type, clip type = hard edges)
+  const maskFeatherValues = masks.map(({ mask }) => {
+    const type = mask.maskType ?? 'clip';
+    return type === 'alpha' ? (mask.maskFeather ?? 0) : 0;
+  });
 
   return (
     <svg
@@ -122,11 +167,23 @@ const MaskDefinitions: React.FC<{
       aria-hidden="true"
     >
       <defs>
-        {maskFeather > 0 && (
-          <filter id={filterId} x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation={maskFeather} />
-          </filter>
-        )}
+        {/* Render individual blur filters for each mask that needs feathering */}
+        {masks.map(({ mask }, index) => {
+          const feather = maskFeatherValues[index]!;
+          if (feather <= 0) return null;
+          return (
+            <filter
+              key={`filter-${mask.id}`}
+              id={`blur-mask-${mask.id}`}
+              x="-50%"
+              y="-50%"
+              width="200%"
+              height="200%"
+            >
+              <feGaussianBlur stdDeviation={feather} />
+            </filter>
+          );
+        })}
         <mask
           id={groupMaskId}
           maskUnits="userSpaceOnUse"
@@ -146,8 +203,10 @@ const MaskDefinitions: React.FC<{
           />
 
           {/* For each mask: when active (opacity=1), apply the mask effect */}
-          {maskData.map(({ id, path, opacity, strokeWidth, mask: shapeItem }) => {
+          {maskData.map(({ id, path, opacity, strokeWidth, mask: shapeItem }, index) => {
             const itemMaskInvert = shapeItem.maskInvert ?? false;
+            // Per-mask feather: only apply for alpha type (soft edges)
+            const itemMaskFeather = maskFeatherValues[index]!;
 
             // When mask is active (opacity=1):
             // - Draw black rect to hide everything
@@ -169,7 +228,7 @@ const MaskDefinitions: React.FC<{
                   fill={itemMaskInvert ? 'black' : 'white'}
                   stroke={strokeWidth > 0 ? (itemMaskInvert ? 'black' : 'white') : undefined}
                   strokeWidth={strokeWidth > 0 ? strokeWidth : undefined}
-                  filter={maskFeather > 0 ? `url(#${filterId})` : undefined}
+                  filter={itemMaskFeather > 0 ? `url(#blur-mask-${shapeItem.id})` : undefined}
                 />
               </g>
             );
@@ -235,17 +294,25 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, backgrou
       }))
   );
 
-  const allMasks: MaskWithTrackOrder[] = useMemo(() => {
+  // All shapes that COULD be masks (for stable item grouping)
+  // This ensures DOM structure doesn't change when isMask is toggled
+  const allPotentialMasks: MaskWithTrackOrder[] = useMemo(() => {
     const masks: MaskWithTrackOrder[] = [];
     visibleTracks.forEach((track) => {
       track.items.forEach((item) => {
-        if (item.type === 'shape' && item.isMask) {
+        if (item.type === 'shape') {
           masks.push({ mask: item, trackOrder: track.order ?? 0 });
         }
       });
     });
     return masks;
   }, [visibleTracks]);
+
+  // Only active masks (shapes with isMask: true) for actual rendering
+  const activeMasks = useMemo(() =>
+    allPotentialMasks.filter(({ mask }) => mask.isMask),
+    [allPotentialMasks]
+  );
 
   // Collect adjustment layers with their track orders
   const allAdjustmentLayers: AdjustmentLayerWithTrackOrder[] = useMemo(() => {
@@ -271,11 +338,12 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, backgrou
     ),
   }));
 
-  // FRAME-INDEPENDENT: Find lowest mask track order across ALL masks
+  // FRAME-INDEPENDENT: Find lowest mask track order across ALL potential masks (shapes)
+  // Using potential masks ensures item grouping is stable when isMask is toggled
   const lowestMaskTrackOrder = useMemo(() => {
-    if (allMasks.length === 0) return null;
-    return Math.min(...allMasks.map(({ trackOrder }) => trackOrder));
-  }, [allMasks]);
+    if (allPotentialMasks.length === 0) return null;
+    return Math.min(...allPotentialMasks.map(({ trackOrder }) => trackOrder));
+  }, [allPotentialMasks]);
 
   // Separate items by POTENTIAL masking (FRAME-INDEPENDENT)
   const { maskedMediaItems, unmaskedMediaItems } = useMemo(() => {
@@ -329,14 +397,18 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, backgrou
       currentFrame < item.from + item.durationInFrames
   );
 
-  const hasMasks = allMasks.length > 0;
+  // hasPotentialMasks: any shapes exist that could be masks (for stable DOM structure)
+  // hasActiveMasks: shapes with isMask: true (for actual mask rendering)
+  const hasPotentialMasks = allPotentialMasks.length > 0;
+  const hasActiveMasks = activeMasks.length > 0;
   const hasAdjustmentLayers = allAdjustmentLayers.length > 0;
 
   return (
     <AbsoluteFill>
       {/* SVG MASK DEFINITIONS - opacity controls activation, no DOM changes */}
       <MaskDefinitions
-        masks={allMasks}
+        masks={activeMasks}
+        hasPotentialMasks={hasPotentialMasks}
         currentFrame={currentFrame}
         canvasWidth={canvasWidth}
         canvasHeight={canvasHeight}
@@ -366,7 +438,7 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, backgrou
         })}
 
         {/* MASKED MEDIA LAYER - grouped together, mask applied to group */}
-        <StableMaskedGroup hasMasks={hasMasks}>
+        <StableMaskedGroup hasMasks={hasPotentialMasks}>
           {maskedMediaItems.map((item) => {
             const premountFrames = Math.round(fps * 2);
             return (
@@ -406,7 +478,7 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, backgrou
           })}
 
         {/* MASKED NON-MEDIA LAYERS - grouped together */}
-        <StableMaskedGroup hasMasks={hasMasks}>
+        <StableMaskedGroup hasMasks={hasPotentialMasks}>
           {maskedNonMediaTracks
             .filter((track) => track.items.length > 0)
             .map((track) => {
