@@ -3,8 +3,9 @@
  *
  * Manages filmstrip thumbnail caching with:
  * - In-memory LRU cache for fast access
- * - Hardware-accelerated frame extraction via mediabunny (WebCodecs)
+ * - Hardware-accelerated frame extraction via 4 parallel workers (WebCodecs)
  * - Fixed frame density for consistent quality
+ * - Progressive streaming of thumbnails
  * - Rendering matches frames to display slots by timestamp
  */
 
@@ -15,17 +16,11 @@ import {
 } from '@/lib/storage/indexeddb';
 import type { FilmstripData } from '@/types/storage';
 import { THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT } from '@/constants/timeline';
-
-// Dynamically import mediabunny (heavy library)
-const mediabunnyModule = () => import('mediabunny');
+import { filmstripWorkerPool } from './filmstrip-worker-pool';
 
 // Re-export for consumers that import from this file
 export { THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT };
 const JPEG_QUALITY = 0.7;
-
-// Target frame interval for filmstrip (pick one frame per this many seconds)
-// ~0.042s = keep ~24 frames per second for frame-accurate scrubbing
-const TARGET_FRAME_INTERVAL = 1 / 24;
 
 // Memory cache configuration
 const MAX_CACHE_SIZE_BYTES = 100 * 1024 * 1024; // 100MB
@@ -46,7 +41,7 @@ export interface CachedFilmstrip {
 
 interface PendingRequest {
   promise: Promise<CachedFilmstrip>;
-  abortController: AbortController;
+  requestId: string; // Worker pool request ID for abort
 }
 
 export type FilmstripUpdateCallback = (filmstrip: CachedFilmstrip) => void;
@@ -55,7 +50,6 @@ class FilmstripCacheService {
   private memoryCache = new Map<string, CachedFilmstrip>();
   private currentCacheSize = 0;
   private pendingRequests = new Map<string, PendingRequest>();
-  private activeExtractions = new Map<string, { aborted: boolean }>();
   private updateCallbacks = new Map<string, Set<FilmstripUpdateCallback>>();
 
   /**
@@ -160,179 +154,159 @@ class FilmstripCacheService {
   }
 
   /**
-   * Generate filmstrip using mediabunny (hardware-accelerated WebCodecs)
-   * Uses samples() to iterate through actual video frames for proper distribution
+   * Binary search to find insertion index for sorted timestamp array
    */
-  private async generateFilmstrip(
+  private binarySearchInsert(timestamps: number[], timestamp: number): number {
+    let left = 0;
+    let right = timestamps.length;
+
+    while (left < right) {
+      const mid = Math.floor((left + right) / 2);
+      if (timestamps[mid]! < timestamp) {
+        left = mid + 1;
+      } else {
+        right = mid;
+      }
+    }
+
+    return left;
+  }
+
+  /**
+   * Generate filmstrip using 4 parallel workers (hardware-accelerated WebCodecs)
+   * Uses CanvasSink.canvasesAtTimestamps() for sparse extraction (only decodes needed frames)
+   */
+  private generateFilmstrip(
     mediaId: string,
     blobUrl: string,
     duration: number,
     onProgress?: (progress: number) => void
-  ): Promise<CachedFilmstrip> {
-    const extractionState = { aborted: false };
-    this.activeExtractions.set(mediaId, extractionState);
+  ): { promise: Promise<CachedFilmstrip>; requestId: string } {
+    // Track frames and timestamps (will be inserted in sorted order)
+    const frames: ImageBitmap[] = [];
+    const timestamps: number[] = [];
 
-    // Load mediabunny
-    const mediabunny = await mediabunnyModule();
-    const { Input, UrlSource, VideoSampleSink, MP4, WEBM, MATROSKA } = mediabunny;
+    // Expected frame count at 24 fps for progress calculation
+    const expectedFrames = Math.ceil(duration * 24);
+    let receivedFrames = 0;
+    let lastUpdateCount = 0;
 
-    let input: InstanceType<typeof Input> | null = null;
+    const promise = new Promise<CachedFilmstrip>((resolve, reject) => {
+      const requestId = filmstripWorkerPool.extract({
+        mediaId,
+        blobUrl,
+        duration,
 
-    try {
-      onProgress?.(5);
+        onFrame: (timestamp: number, bitmap: ImageBitmap) => {
+          // Insert in sorted position (frames arrive out of order from parallel workers)
+          const insertIndex = this.binarySearchInsert(timestamps, timestamp);
+          timestamps.splice(insertIndex, 0, timestamp);
+          frames.splice(insertIndex, 0, bitmap);
 
-      // Create input from blob URL with common video formats
-      input = new Input({
-        source: new UrlSource(blobUrl),
-        formats: [MP4, WEBM, MATROSKA],
-      });
+          receivedFrames++;
 
-      // Get primary video track
-      const videoTrack = await input.getPrimaryVideoTrack();
-      if (!videoTrack) {
-        throw new Error('No video track found');
-      }
+          // Update progress
+          const progress = Math.round((receivedFrames / expectedFrames) * 100);
+          onProgress?.(Math.min(progress, 99));
 
-      onProgress?.(10);
+          // Progressive update every FRAMES_PER_BATCH frames
+          if (receivedFrames - lastUpdateCount >= FRAMES_PER_BATCH) {
+            lastUpdateCount = receivedFrames;
 
-      // Create video sample sink for frame extraction
-      const sink = new VideoSampleSink(videoTrack);
+            const intermediate: CachedFilmstrip = {
+              frames: [...frames],
+              blobs: [], // Don't persist intermediate
+              timestamps: [...timestamps],
+              width: THUMBNAIL_WIDTH,
+              height: THUMBNAIL_HEIGHT,
+              sizeBytes: frames.length * 5000, // Estimate ~5KB per frame
+              lastAccessed: Date.now(),
+              isComplete: false,
+            };
 
-      // Create canvas for rendering frames
-      const canvas = document.createElement('canvas');
-      canvas.width = THUMBNAIL_WIDTH;
-      canvas.height = THUMBNAIL_HEIGHT;
-      const ctx = canvas.getContext('2d');
-
-      if (!ctx) {
-        throw new Error('Failed to get 2D context');
-      }
-
-      // Sample frames at regular intervals from actual video frames
-      const imageBitmaps: ImageBitmap[] = [];
-      const blobs: Blob[] = [];
-      const timestamps: number[] = [];
-      let sizeBytes = 0;
-      let lastUpdateCount = 0;
-      let nextTargetTime = 0; // Next time we want to capture a frame
-      let framesSampled = 0;
-
-      // Iterate through ALL actual video frames and pick at intervals
-      try {
-        for await (const sample of sink.samples()) {
-          // Check for abort
-          if (extractionState.aborted) {
-            sample.close();
-            throw new Error('Aborted');
+            // Update memory cache
+            this.addToMemoryCache(mediaId, intermediate);
+            // Notify subscribers
+            this.notifyUpdate(mediaId, intermediate);
           }
+        },
 
-          // Get the actual timestamp of this frame (already in seconds)
-          const frameTime = sample.timestamp;
+        onComplete: async () => {
+          try {
+            onProgress?.(95);
 
-          // Check if this frame is at or past our target time
-          if (frameTime >= nextTargetTime) {
-            // Capture this frame
-            sample.drawWithFit(ctx, { fit: 'cover' });
+            // Convert ImageBitmaps to Blobs for IndexedDB persistence
+            const blobs: Blob[] = [];
+            let sizeBytes = 0;
 
-            // Convert to JPEG blob
-            const blob = await new Promise<Blob>((resolve, reject) => {
-              canvas.toBlob(
-                (b) => {
-                  if (b) resolve(b);
-                  else reject(new Error('Failed to create blob'));
-                },
-                'image/jpeg',
-                JPEG_QUALITY
-              );
-            });
+            const canvas = new OffscreenCanvas(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT);
+            const ctx = canvas.getContext('2d');
 
-            // Create ImageBitmap for display
-            const bitmap = await createImageBitmap(blob);
-            imageBitmaps.push(bitmap);
-            blobs.push(blob); // Keep for IndexedDB persistence
-            timestamps.push(frameTime);
-            sizeBytes += blob.size;
-            framesSampled++;
+            if (ctx) {
+              for (const bitmap of frames) {
+                ctx.drawImage(bitmap, 0, 0);
+                const blob = await canvas.convertToBlob({
+                  type: 'image/jpeg',
+                  quality: JPEG_QUALITY,
+                });
+                blobs.push(blob);
+                sizeBytes += blob.size;
+              }
+            }
 
-            // Set next target time
-            nextTargetTime = frameTime + TARGET_FRAME_INTERVAL;
+            const cached: CachedFilmstrip = {
+              frames,
+              blobs,
+              timestamps,
+              width: THUMBNAIL_WIDTH,
+              height: THUMBNAIL_HEIGHT,
+              sizeBytes,
+              lastAccessed: Date.now(),
+              isComplete: true,
+            };
 
-            // Update progress based on time through video
-            const progress = 10 + Math.round((frameTime / duration) * 80);
-            onProgress?.(Math.min(progress, 90));
+            // Final update to memory cache
+            this.addToMemoryCache(mediaId, cached);
+            this.notifyUpdate(mediaId, cached);
 
-            // Progressive update: notify subscribers every FRAMES_PER_BATCH frames
-            if (framesSampled - lastUpdateCount >= FRAMES_PER_BATCH) {
-              lastUpdateCount = framesSampled;
-
-              const intermediate: CachedFilmstrip = {
-                frames: [...imageBitmaps],
-                blobs: [...blobs],
-                timestamps: [...timestamps],
+            // Persist to IndexedDB for reload persistence
+            try {
+              const filmstripData: FilmstripData = {
+                id: `${mediaId}:high`,
+                mediaId,
+                density: 'high',
+                frames: blobs,
+                timestamps,
                 width: THUMBNAIL_WIDTH,
                 height: THUMBNAIL_HEIGHT,
-                sizeBytes,
-                lastAccessed: Date.now(),
-                isComplete: false,
+                createdAt: Date.now(),
               };
-
-              // Update memory cache
-              this.addToMemoryCache(mediaId, intermediate);
-              // Notify subscribers
-              this.notifyUpdate(mediaId, intermediate);
+              await saveFilmstrip(filmstripData);
+            } catch (err) {
+              console.warn('Failed to persist filmstrip to IndexedDB:', err);
             }
+
+            onProgress?.(100);
+            resolve(cached);
+          } catch (err) {
+            reject(err);
           }
+        },
 
-          // Release VideoFrame resources
-          sample.close();
-        }
-      } catch (loopError) {
-        // Re-throw errors (aborts are handled by caller)
-        throw loopError;
-      }
+        onError: (error: Error) => {
+          reject(error);
+        },
+      });
 
-      onProgress?.(95);
+      // Store requestId for abort support (accessed via closure)
+      (promise as any).__requestId = requestId;
+    });
 
-      const cached: CachedFilmstrip = {
-        frames: imageBitmaps,
-        blobs,
-        timestamps,
-        width: THUMBNAIL_WIDTH,
-        height: THUMBNAIL_HEIGHT,
-        sizeBytes,
-        lastAccessed: Date.now(),
-        isComplete: true,
-      };
-
-      // Final update to memory cache
-      this.addToMemoryCache(mediaId, cached);
-      this.notifyUpdate(mediaId, cached);
-
-      // Persist to IndexedDB for reload persistence
-      try {
-        const filmstripData: FilmstripData = {
-          id: `${mediaId}:high`,
-          mediaId,
-          density: 'high',
-          frames: blobs,
-          timestamps,
-          width: THUMBNAIL_WIDTH,
-          height: THUMBNAIL_HEIGHT,
-          createdAt: Date.now(),
-        };
-        await saveFilmstrip(filmstripData);
-      } catch (err) {
-        console.warn('Failed to persist filmstrip to IndexedDB:', err);
-      }
-
-      onProgress?.(100);
-
-      return cached;
-    } finally {
-      // Clean up mediabunny input
-      input?.dispose();
-      this.activeExtractions.delete(mediaId);
-    }
+    // Return both promise and requestId
+    return {
+      promise,
+      requestId: (promise as any).__requestId || '',
+    };
   }
 
   /**
@@ -382,7 +356,7 @@ class FilmstripCacheService {
 
   /**
    * Get filmstrip for a media item
-   * Extracts frames at fixed intervals across the full duration
+   * Extracts frames at fixed intervals across the full duration using 4 parallel workers
    */
   async getFilmstrip(
     mediaId: string,
@@ -410,11 +384,10 @@ class FilmstripCacheService {
       return stored;
     }
 
-    // Generate new filmstrip
-    const abortController = new AbortController();
-    const promise = this.generateFilmstrip(mediaId, blobUrl, duration, onProgress);
+    // Generate new filmstrip using worker pool
+    const { promise, requestId } = this.generateFilmstrip(mediaId, blobUrl, duration, onProgress);
 
-    this.pendingRequests.set(mediaId, { promise, abortController });
+    this.pendingRequests.set(mediaId, { promise, requestId });
 
     try {
       const result = await promise;
@@ -428,15 +401,11 @@ class FilmstripCacheService {
    * Abort pending generation for a media item
    */
   abort(mediaId: string): void {
-    // Abort pending requests
     const pending = this.pendingRequests.get(mediaId);
-    if (pending) {
-      pending.abortController.abort();
-    }
-    // Abort active extractions
-    const state = this.activeExtractions.get(mediaId);
-    if (state) {
-      state.aborted = true;
+    if (pending && pending.requestId) {
+      // Abort via worker pool
+      filmstripWorkerPool.abort(pending.requestId);
+      this.pendingRequests.delete(mediaId);
     }
   }
 
@@ -478,12 +447,16 @@ class FilmstripCacheService {
    */
   dispose(): void {
     this.clearAll();
-    // Abort all active extractions
-    for (const state of this.activeExtractions.values()) {
-      state.aborted = true;
+    // Abort all pending extractions
+    for (const pending of this.pendingRequests.values()) {
+      if (pending.requestId) {
+        filmstripWorkerPool.abort(pending.requestId);
+      }
     }
-    this.activeExtractions.clear();
+    this.pendingRequests.clear();
     this.updateCallbacks.clear();
+    // Dispose worker pool
+    filmstripWorkerPool.dispose();
   }
 }
 
