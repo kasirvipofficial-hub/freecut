@@ -119,7 +119,8 @@ function drawTile(
   if (markerWidthPx <= 0) return;
 
   // Calculate which markers fall within this tile
-  const startMarkerIndex = Math.max(0, Math.floor(tileOffset / markerWidthPx));
+  // Include one extra marker before tile start to catch minor ticks that extend into the tile
+  const startMarkerIndex = Math.max(0, Math.floor(tileOffset / markerWidthPx) - 1);
   const endMarkerIndex = Math.ceil((tileOffset + actualTileWidth) / markerWidthPx);
 
   // Performance: skip minor ticks when many markers
@@ -131,21 +132,25 @@ function drawTile(
     const absoluteX = timeToPixels(timeInSeconds);
     const x = absoluteX - tileOffset; // Convert to tile-relative coordinate
 
-    // Skip if outside tile
-    if (x < 0 || x > actualTileWidth) continue;
+    // Major tick line - only draw if within tile bounds
+    if (x >= 0 && x <= actualTileWidth) {
+      const lineX = Math.round(x) + 0.5;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(lineX, 0);
+      ctx.lineTo(lineX, canvasHeight);
+      ctx.stroke();
+    }
 
-    // Major tick line - use integer position for sharp rendering
-    const lineX = Math.round(x) + 0.5;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(lineX, 0);
-    ctx.lineTo(lineX, canvasHeight);
-    ctx.stroke();
-
-    // Minor ticks
+    // Minor ticks - check each tick individually (they may extend from markers outside tile)
     if (showMinorTicks && markerConfig.minorTicks > 0) {
       const tickSpacing = markerWidthPx / markerConfig.minorTicks;
+
+      // Skip if all minor ticks would be outside tile
+      const lastTickX = x + tickSpacing * (markerConfig.minorTicks - 1);
+      if (lastTickX < 0 || x > actualTileWidth) continue;
+
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
       ctx.lineWidth = 1;
 
