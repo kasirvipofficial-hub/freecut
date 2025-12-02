@@ -17,13 +17,6 @@ interface MaskWithTrackOrder {
 }
 
 /**
- * Check if a mask should affect a target item based on track order.
- */
-function shouldMaskAffectItem(maskTrackOrder: number, targetTrackOrder: number): boolean {
-  return maskTrackOrder < targetTrackOrder;
-}
-
-/**
  * SVG Mask Definitions Component
  *
  * Renders SVG mask definitions with OPACITY-CONTROLLED activation.
@@ -270,11 +263,11 @@ const StableMaskedGroup: React.FC<{
 /**
  * Main Remotion Composition
  *
- * MASKING ARCHITECTURE (prevents re-render on mask boundary crossing):
- * 1. MaskDefinitions: SVG mask defs with OPACITY-CONTROLLED activation
- * 2. Item placement is FRAME-INDEPENDENT (based on mask existence, not activity)
- * 3. StableMaskedGroup: Always applies same CSS mask reference
- * 4. Mask effect toggled via SVG internal opacity, not DOM changes
+ * MASKING ARCHITECTURE (prevents re-render on item add/delete):
+ * 1. ALL content rendered through single StableMaskedGroup wrapper
+ * 2. MaskDefinitions: SVG mask defs with OPACITY-CONTROLLED activation
+ * 3. Mask effect toggled via SVG internal opacity, not DOM structure changes
+ * 4. Deleting/adding masks doesn't move items between DOM parents → no remount
  */
 export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, backgroundColor = '#000000' }) => {
   const { fps, width: canvasWidth, height: canvasHeight } = useVideoConfig();
@@ -298,25 +291,18 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, backgrou
       }))
   );
 
-  // All shapes that COULD be masks (for stable item grouping)
-  // This ensures DOM structure doesn't change when isMask is toggled
-  const allPotentialMasks: MaskWithTrackOrder[] = useMemo(() => {
+  // Active masks: shapes with isMask: true
+  const activeMasks: MaskWithTrackOrder[] = useMemo(() => {
     const masks: MaskWithTrackOrder[] = [];
     visibleTracks.forEach((track) => {
       track.items.forEach((item) => {
-        if (item.type === 'shape') {
+        if (item.type === 'shape' && item.isMask) {
           masks.push({ mask: item, trackOrder: track.order ?? 0 });
         }
       });
     });
     return masks;
   }, [visibleTracks]);
-
-  // Only active masks (shapes with isMask: true) for actual rendering
-  const activeMasks = useMemo(() =>
-    allPotentialMasks.filter(({ mask }) => mask.isMask),
-    [allPotentialMasks]
-  );
 
   // Collect adjustment layers with their track orders
   const allAdjustmentLayers: AdjustmentLayerWithTrackOrder[] = useMemo(() => {
@@ -342,47 +328,10 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, backgrou
     ),
   }));
 
-  // FRAME-INDEPENDENT: Find lowest mask track order across ALL potential masks (shapes)
-  // Using potential masks ensures item grouping is stable when isMask is toggled
-  const lowestMaskTrackOrder = useMemo(() => {
-    if (allPotentialMasks.length === 0) return null;
-    return Math.min(...allPotentialMasks.map(({ trackOrder }) => trackOrder));
-  }, [allPotentialMasks]);
-
-  // Separate items by POTENTIAL masking (FRAME-INDEPENDENT)
-  const { maskedMediaItems, unmaskedMediaItems } = useMemo(() => {
-    if (lowestMaskTrackOrder === null) {
-      return { maskedMediaItems: [], unmaskedMediaItems: mediaItems };
-    }
-    const masked: typeof mediaItems = [];
-    const unmasked: typeof mediaItems = [];
-    mediaItems.forEach((item) => {
-      const trackOrder = maxOrder - item.zIndex;
-      if (shouldMaskAffectItem(lowestMaskTrackOrder, trackOrder)) {
-        masked.push(item);
-      } else {
-        unmasked.push(item);
-      }
-    });
-    return { maskedMediaItems: masked, unmaskedMediaItems: unmasked };
-  }, [mediaItems, lowestMaskTrackOrder, maxOrder]);
-
-  const { maskedNonMediaTracks, unmaskedNonMediaTracks } = useMemo(() => {
-    if (lowestMaskTrackOrder === null) {
-      return { maskedNonMediaTracks: [], unmaskedNonMediaTracks: nonMediaByTrack };
-    }
-    const masked: typeof nonMediaByTrack = [];
-    const unmasked: typeof nonMediaByTrack = [];
-    nonMediaByTrack.forEach((track) => {
-      const trackOrder = track.order ?? 0;
-      if (shouldMaskAffectItem(lowestMaskTrackOrder, trackOrder)) {
-        masked.push(track);
-      } else {
-        unmasked.push(track);
-      }
-    });
-    return { maskedNonMediaTracks: masked, unmaskedNonMediaTracks: unmasked };
-  }, [nonMediaByTrack, lowestMaskTrackOrder]);
+  // NOTE: We no longer split items between masked/unmasked groups.
+  // Previously, deleting a shape caused items to move between groups → remounts.
+  // Now ALL content goes through a single StableMaskedGroup wrapper.
+  // The SVG mask handles show/hide via opacity, keeping DOM structure stable.
 
   useMemo(() => {
     const textItems = visibleTracks
@@ -401,18 +350,17 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, backgrou
       currentFrame < item.from + item.durationInFrames
   );
 
-  // hasPotentialMasks: any shapes exist that could be masks (for stable DOM structure)
   // hasActiveMasks: shapes with isMask: true (for actual mask rendering)
-  const hasPotentialMasks = allPotentialMasks.length > 0;
   const hasActiveMasks = activeMasks.length > 0;
   const hasAdjustmentLayers = allAdjustmentLayers.length > 0;
 
   return (
     <AbsoluteFill>
       {/* SVG MASK DEFINITIONS - opacity controls activation, no DOM changes */}
+      {/* Always render when there are active masks; mask shows everything when inactive */}
       <MaskDefinitions
         masks={activeMasks}
-        hasPotentialMasks={hasPotentialMasks}
+        hasPotentialMasks={hasActiveMasks}
         currentFrame={currentFrame}
         canvasWidth={canvasWidth}
         canvasHeight={canvasHeight}
@@ -424,26 +372,10 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, backgrou
 
       {/* ADJUSTMENT WRAPPER - applies effects from adjustment layers to all content */}
       <AdjustmentWrapper adjustmentLayers={hasAdjustmentLayers ? allAdjustmentLayers : []}>
-        {/* UNMASKED MEDIA LAYER */}
-        {unmaskedMediaItems.map((item) => {
-          const premountFrames = Math.round(fps * 2);
-          return (
-            <Sequence
-              key={generateStableKey(item)}
-              from={item.from}
-              durationInFrames={item.durationInFrames}
-              premountFor={premountFrames}
-            >
-              <AbsoluteFill style={{ zIndex: item.zIndex }}>
-                <Item item={item} muted={item.muted} masks={[]} />
-              </AbsoluteFill>
-            </Sequence>
-          );
-        })}
-
-        {/* MASKED MEDIA LAYER - grouped together, mask applied to group */}
-        <StableMaskedGroup hasMasks={hasPotentialMasks}>
-          {maskedMediaItems.map((item) => {
+        {/* ALL MEDIA - single consistent DOM structure, mask applied uniformly */}
+        {/* StableMaskedGroup always renders same div; mask effect controlled via SVG opacity */}
+        <StableMaskedGroup hasMasks={hasActiveMasks}>
+          {mediaItems.map((item) => {
             const premountFrames = Math.round(fps * 2);
             return (
               <Sequence
@@ -465,25 +397,9 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, backgrou
           <AbsoluteFill style={{ backgroundColor, zIndex: 1000 }} />
         )}
 
-        {/* UNMASKED NON-MEDIA LAYERS */}
-        {unmaskedNonMediaTracks
-          .filter((track) => track.items.length > 0)
-          .map((track) => {
-            const trackOrder = track.order ?? 0;
-            return (
-              <AbsoluteFill key={track.id} style={{ zIndex: 1001 + (maxOrder - trackOrder) }}>
-                {track.items.map((item) => (
-                  <Sequence key={item.id} from={item.from} durationInFrames={item.durationInFrames}>
-                    <Item item={item} muted={false} masks={[]} />
-                  </Sequence>
-                ))}
-              </AbsoluteFill>
-            );
-          })}
-
-        {/* MASKED NON-MEDIA LAYERS - grouped together */}
-        <StableMaskedGroup hasMasks={hasPotentialMasks}>
-          {maskedNonMediaTracks
+        {/* ALL NON-MEDIA LAYERS - single consistent DOM structure */}
+        <StableMaskedGroup hasMasks={hasActiveMasks}>
+          {nonMediaByTrack
             .filter((track) => track.items.length > 0)
             .map((track) => {
               const trackOrder = track.order ?? 0;
