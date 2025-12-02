@@ -315,20 +315,40 @@ export function useTimelineDrag(
         document.body.style.cursor = e.altKey ? 'copy' : 'grabbing';
       }
 
+      // Calculate clamped delta to prevent visual preview from going below frame 0
+      const deltaFrames = pixelsToFrameRef.current(deltaX);
+      const draggedItems = dragStateRef.current.draggedItems;
+
+      // Find the minimum starting frame among all dragged items
+      let minInitialFrame = Infinity;
+      for (const draggedItem of draggedItems) {
+        if (draggedItem.initialFrame < minInitialFrame) {
+          minInitialFrame = draggedItem.initialFrame;
+        }
+      }
+
+      // Calculate the maximum allowed negative deltaX (in pixels)
+      // to prevent the earliest item from going below frame 0
+      const maxNegativeDeltaFrames = -minInitialFrame;
+      const clampedDeltaFrames = Math.max(maxNegativeDeltaFrames, deltaFrames);
+
+      // Convert back to pixels for the clamped X offset
+      // Use the ratio of clamped to original to maintain precision
+      const clampedDeltaX = deltaFrames !== 0
+        ? deltaX * (clampedDeltaFrames / deltaFrames)
+        : deltaX;
+
       // Update drag offset for visual preview (local state for anchor item)
-      setDragOffset({ x: deltaX, y: deltaY });
+      setDragOffset({ x: clampedDeltaX, y: deltaY });
 
       // Update shared ref for other items to read (no re-renders)
-      dragOffsetRef.current = { x: deltaX, y: deltaY };
+      dragOffsetRef.current = { x: clampedDeltaX, y: deltaY };
 
       dragStateRef.current.currentMouseX = e.clientX;
       dragStateRef.current.currentMouseY = e.clientY;
 
-      // Calculate proposed position and snap for visual feedback
-      const deltaFrames = pixelsToFrameRef.current(deltaX);
-      const draggedItems = dragStateRef.current.draggedItems;
-
       // For multi-item drag, calculate group bounding box for snap visualization
+      // Note: deltaFrames and draggedItems already calculated above for clamping
       let snapStartFrame: number;
       let snapDuration: number;
 
@@ -373,7 +393,7 @@ export function useTimelineDrag(
         setDragState({
           isDragging: true,
           draggedItemIds: draggedIds,
-          offset: { x: deltaX, y: deltaY },
+          offset: { x: clampedDeltaX, y: deltaY },
           activeSnapTarget: snapResult.snapTarget,
           isAltDrag: e.altKey,
         });
