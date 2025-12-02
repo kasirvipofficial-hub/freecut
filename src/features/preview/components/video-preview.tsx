@@ -6,7 +6,7 @@ import { useSelectionStore } from '@/features/editor/stores/selection-store';
 import { useGizmoStore } from '@/features/preview/stores/gizmo-store';
 import { MainComposition } from '@/lib/remotion/compositions/main-composition';
 import { useRemotionPlayer } from '../hooks/use-remotion-player';
-import { resolveMediaUrl, cleanupBlobUrls } from '../utils/media-resolver';
+import { resolveMediaUrl } from '../utils/media-resolver';
 import { capturePlayerFrame } from '../utils/player-capture';
 import { GizmoOverlay } from './gizmo-overlay';
 import type { RemotionInputProps } from '@/types/export';
@@ -94,13 +94,17 @@ export function VideoPreview({ project, containerSize }: VideoPreviewProps) {
 
   // Create resolved tracks by merging cached URLs with current items
   // This updates instantly when items change, without re-resolving media
+  // IMPORTANT: For media items (video/audio/image), we only set src if we have a
+  // resolved URL. This prevents using stale blob URLs from saved state after page refresh.
   const resolvedTracks = useMemo(() => {
     return combinedTracks.map((track) => ({
       ...track,
       items: track.items.map((item) => {
-        if (item.mediaId && resolvedUrls.has(item.mediaId)) {
+        // For media items with mediaId, only use resolved URLs (not stale saved src)
+        if (item.mediaId && (item.type === 'video' || item.type === 'audio' || item.type === 'image')) {
           const resolvedSrc = resolvedUrls.get(item.mediaId);
-          return { ...item, src: resolvedSrc };
+          // Clear src if not resolved yet - Item component will show placeholder
+          return { ...item, src: resolvedSrc ?? '' };
         }
         return item;
       }),
@@ -126,22 +130,10 @@ export function VideoPreview({ project, containerSize }: VideoPreviewProps) {
     return itemsEnd + (fps * 5);
   }, [items, fps]);
 
-  // Cleanup on mount to clear any stale blob URLs from previous sessions
-  // Add small delay to allow garbage collection of old Blob objects
-  useEffect(() => {
-    cleanupBlobUrls();
-    setResolvedUrls(new Map());
-
-    // Small delay to allow GC to clear Blob references before creating new ones
-    const cleanup = setTimeout(() => {
-      // Trigger GC hint (if available in dev tools)
-      if (typeof globalThis.gc === 'function') {
-        globalThis.gc();
-      }
-    }, 100);
-
-    return () => clearTimeout(cleanup);
-  }, []);
+  // Note: We intentionally do NOT cleanup blob URLs on mount.
+  // Cleanup happens only on unmount (see effect below) to prevent race conditions
+  // where the Player tries to use revoked blob URLs before re-resolution completes.
+  // The media resolver's cache persists across HMR, so URLs remain valid.
 
   // Resolve media URLs when media fingerprint changes (not on transform changes)
   useEffect(() => {
@@ -205,13 +197,11 @@ export function VideoPreview({ project, containerSize }: VideoPreviewProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- Use mediaFingerprint for stability
   }, [mediaFingerprint]);
 
-  // Cleanup blob URLs and clear state on unmount
-  useEffect(() => {
-    return () => {
-      cleanupBlobUrls();
-      setResolvedUrls(new Map());
-    };
-  }, []);
+  // Note: We do NOT cleanup blob URLs on unmount.
+  // Blob URLs persist in the module-level cache for the page lifetime.
+  // This prevents ERR_FILE_NOT_FOUND errors when components remount
+  // (e.g., during HMR or navigation) and try to use cached URLs.
+  // Memory is reclaimed when the page is unloaded or media is deleted.
 
   // Memoize inputProps to prevent Player from re-rendering
   // Note: previewTransform is no longer passed here - TransformWrapper reads directly from store

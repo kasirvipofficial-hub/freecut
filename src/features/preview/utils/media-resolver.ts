@@ -3,7 +3,11 @@ import { useMediaLibraryStore } from '@/features/media-library/stores/media-libr
 import type { TimelineTrack } from '@/types/timeline';
 
 /**
- * Cache to prevent creating duplicate blob URLs for the same media
+ * Cache to prevent creating duplicate blob URLs for the same media.
+ *
+ * IMPORTANT: This cache persists for the lifetime of the page. Blob URLs are
+ * only revoked when explicitly requested (e.g., media deleted) or on page unload.
+ * This prevents race conditions where components try to use revoked URLs.
  */
 const blobUrlCache = new Map<string, string>();
 
@@ -20,7 +24,7 @@ const pendingRequests = new Map<string, Promise<string>>();
  * @returns Blob URL for the media, or empty string if not found
  */
 export async function resolveMediaUrl(mediaId: string): Promise<string> {
-  // Check cache first
+  // Check cache first - URLs persist until page unload or explicit revocation
   if (blobUrlCache.has(mediaId)) {
     return blobUrlCache.get(mediaId)!;
   }

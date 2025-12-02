@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { AbsoluteFill, OffthreadVideo, useVideoConfig, useCurrentFrame, interpolate, useRemotionEnvironment } from 'remotion';
 import { Video } from '@remotion/media';
 import { Rect, Circle, Triangle, Ellipse, Star, Polygon, Heart } from '@remotion/shapes';
@@ -136,6 +136,31 @@ const VideoContent: React.FC<{
 }> = ({ item, muted, safeTrimBefore, playbackRate }) => {
   const audioVolume = useVideoAudioVolume(item, muted);
   const env = useRemotionEnvironment();
+  const [hasError, setHasError] = useState(false);
+
+  // Handle media errors (e.g., invalid blob URL after HMR or cache cleanup)
+  const handleError = useCallback((error: Error) => {
+    console.warn(`[VideoContent] Media error for item ${item.id}:`, error.message);
+    setHasError(true);
+  }, [item.id]);
+
+  // Show error state if media failed to load
+  if (hasError) {
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          backgroundColor: '#1a1a1a',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <p style={{ color: '#666', fontSize: 14 }}>Media unavailable</p>
+      </div>
+    );
+  }
 
   // Use OffthreadVideo for preview (Player/Studio) - runs in separate thread, resilient to UI activity
   // Use @remotion/media Video for rendering - better frame extraction with mediabunny
@@ -149,11 +174,14 @@ const VideoContent: React.FC<{
         volume={audioVolume}
         playbackRate={playbackRate}
         pauseWhenBuffering={false}
+        onError={handleError}
         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
       />
     );
   }
 
+  // Note: @remotion/media Video doesn't have onError prop, but it's only used
+  // for server-side rendering where blob URLs are not used (mediabunny handles files)
   return (
     <Video
       src={item.src!}
