@@ -314,10 +314,11 @@ export function useRateStretch(item: TimelineItem, timelineDuration: number, tra
 
       // For looping media (GIFs): use the natural animation duration as reference
       // This is calculated back from current state: naturalDuration = timelineDuration * speed
-      // For videos/audio: use the visible source frames being displayed
+      // For videos/audio: use the FULL source duration (entire video file), not just visible frames
+      // This prevents the "Clip duration exceeds source duration" error after rate stretching
       const sourceDuration = isLoopingMedia
         ? Math.round(item.durationInFrames * currentSpeed) // GIF natural duration (for speed reference)
-        : Math.round(item.durationInFrames * currentSpeed); // Video visible source frames
+        : (item.sourceDuration || Math.round(item.durationInFrames * currentSpeed)); // Full source duration
 
       setStretchState({
         isStretching: true,

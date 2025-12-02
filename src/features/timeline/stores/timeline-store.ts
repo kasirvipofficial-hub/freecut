@@ -509,6 +509,25 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
       // This is needed for validation in Remotion to prevent seeking past the source
       const fullSourceDuration = item.sourceDuration || currentSourceFramesShown;
 
+      // Calculate what Remotion will need: sourceFramesNeeded = durationInFrames * speed
+      // This must not exceed fullSourceDuration (accounting for sourceStart offset)
+      const availableSourceFrames = fullSourceDuration - currentSourceStart;
+      let finalDuration = Math.round(newDuration);
+
+      // Ensure duration * speed doesn't exceed available source frames
+      // This prevents "Clip duration exceeds source duration" errors from rounding drift
+      const sourceFramesNeeded = Math.round(finalDuration * clampedSpeed);
+      if (sourceFramesNeeded > availableSourceFrames) {
+        // Reduce duration to fit within source bounds
+        finalDuration = Math.floor(availableSourceFrames / clampedSpeed);
+        console.log('[rateStretchItem] Clamped duration to prevent source overflow:', {
+          requested: Math.round(newDuration),
+          clamped: finalDuration,
+          availableSourceFrames,
+          clampedSpeed,
+        });
+      }
+
       // sourceStart stays the same - we're still starting from point B
       // sourceEnd is recalculated based on the visible region
       const sourceEnd = currentSourceStart + currentSourceFramesShown;
@@ -517,7 +536,7 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
       return {
         ...item,
         from: Math.round(newFrom),
-        durationInFrames: Math.round(newDuration),
+        durationInFrames: finalDuration,
         speed: clampedSpeed,
         // Preserve source position - still starts at B
         sourceStart: currentSourceStart,
