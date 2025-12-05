@@ -413,8 +413,32 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
     )
   );
 
+  // Track neighbor speeds so join indicators update when neighbor's speed changes
+  // This is needed because canJoinItems checks if speeds match
+  const neighborSpeeds = useTimelineStore(
+    useCallback(
+      (s) => {
+        const left = s.items.find(
+          (other) =>
+            other.id !== item.id &&
+            other.trackId === item.trackId &&
+            other.from + other.durationInFrames === item.from
+        );
+        const right = s.items.find(
+          (other) =>
+            other.id !== item.id &&
+            other.trackId === item.trackId &&
+            other.from === item.from + item.durationInFrames
+        );
+        // Return a stable string key that changes when neighbor speeds change
+        return `${left?.speed ?? 1}|${right?.speed ?? 1}`;
+      },
+      [item.id, item.trackId, item.from, item.durationInFrames]
+    )
+  );
+
   // Neighbor calculation for join indicators
-  // Re-computes when this item changes OR when track items change
+  // Re-computes when this item changes OR when track items change OR when neighbor speeds change
   const { leftNeighbor, rightNeighbor, hasJoinableLeft, hasJoinableRight } = useMemo(() => {
     const items = useTimelineStore.getState().items;
 
@@ -438,7 +462,7 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
       hasJoinableLeft: left ? canJoinItems(left, item) : false,
       hasJoinableRight: right ? canJoinItems(item, right) : false,
     };
-  }, [item, trackItemCount]);
+  }, [item, trackItemCount, neighborSpeeds]);
 
   // For context menu: can join if this clip has any joinable neighbor
   const canJoinFromContextMenu = hasJoinableLeft || hasJoinableRight;
