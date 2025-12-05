@@ -24,7 +24,7 @@ import { useGizmoStore } from '@/features/preview/stores/gizmo-store';
 import {
   PropertySection,
   PropertyRow,
-  SliderInput,
+  NumberInput,
 } from '@/features/editor/components/properties-sidebar/components';
 
 /**
@@ -281,6 +281,40 @@ export function EffectsSection({ items }: EffectsSectionProps) {
     [effects, itemIds, visualItems, setEffectsPreview]
   );
 
+  // Glitch intensity handlers (convert from percentage 0-100 to internal 0-1)
+  const handleGlitchIntensityChange = useCallback(
+    (effectId: string, percentValue: number) => {
+      const normalizedValue = percentValue / 100;
+      handleEffectChange(effectId, normalizedValue);
+    },
+    [handleEffectChange]
+  );
+
+  const handleGlitchIntensityLiveChange = useCallback(
+    (effectId: string, percentValue: number) => {
+      const normalizedValue = percentValue / 100;
+      handleEffectLiveChange(effectId, normalizedValue);
+    },
+    [handleEffectLiveChange]
+  );
+
+  // Halftone intensity handlers (convert from percentage 0-100 to internal 0-1)
+  const handleHalftoneIntensityChange = useCallback(
+    (effectId: string, percentValue: number) => {
+      const normalizedValue = percentValue / 100;
+      handleHalftoneChange(effectId, 'intensity', normalizedValue);
+    },
+    [handleHalftoneChange]
+  );
+
+  const handleHalftoneIntensityLiveChange = useCallback(
+    (effectId: string, percentValue: number) => {
+      const normalizedValue = percentValue / 100;
+      handleHalftoneLiveChange(effectId, 'intensity', normalizedValue);
+    },
+    [handleHalftoneLiveChange]
+  );
+
   // Toggle effect visibility
   const handleToggle = useCallback(
     (effectId: string) => {
@@ -421,7 +455,7 @@ export function EffectsSection({ items }: EffectsSectionProps) {
                     <EyeOff className="w-3 h-3 text-muted-foreground" />
                   )}
                 </Button>
-                <SliderInput
+                <NumberInput
                   value={effect.effect.value}
                   onChange={(v) => handleEffectChange(effect.id, v)}
                   onLiveChange={(v) => handleEffectLiveChange(effect.id, v)}
@@ -463,14 +497,14 @@ export function EffectsSection({ items }: EffectsSectionProps) {
                     <EyeOff className="w-3 h-3 text-muted-foreground" />
                   )}
                 </Button>
-                <SliderInput
-                  value={effect.effect.intensity}
-                  onChange={(v) => handleEffectChange(effect.id, v)}
-                  onLiveChange={(v) => handleEffectLiveChange(effect.id, v)}
+                <NumberInput
+                  value={Math.round(effect.effect.intensity * 100)}
+                  onChange={(v) => handleGlitchIntensityChange(effect.id, v)}
+                  onLiveChange={(v) => handleGlitchIntensityLiveChange(effect.id, v)}
                   min={0}
-                  max={1}
-                  step={0.01}
-                  formatValue={(v) => `${Math.round(v * 100)}%`}
+                  max={100}
+                  step={1}
+                  unit="%"
                   disabled={!effect.enabled}
                 />
                 <Button
@@ -521,7 +555,7 @@ export function EffectsSection({ items }: EffectsSectionProps) {
 
               {/* Dot Size */}
               <PropertyRow label={HALFTONE_CONFIG.dotSize.label}>
-                <SliderInput
+                <NumberInput
                   value={halftone.dotSize}
                   onChange={(v) => handleHalftoneChange(effect.id, 'dotSize', v)}
                   onLiveChange={(v) => handleHalftoneLiveChange(effect.id, 'dotSize', v)}
@@ -535,7 +569,7 @@ export function EffectsSection({ items }: EffectsSectionProps) {
 
               {/* Spacing */}
               <PropertyRow label={HALFTONE_CONFIG.spacing.label}>
-                <SliderInput
+                <NumberInput
                   value={halftone.spacing}
                   onChange={(v) => handleHalftoneChange(effect.id, 'spacing', v)}
                   onLiveChange={(v) => handleHalftoneLiveChange(effect.id, 'spacing', v)}
@@ -549,7 +583,7 @@ export function EffectsSection({ items }: EffectsSectionProps) {
 
               {/* Angle */}
               <PropertyRow label={HALFTONE_CONFIG.angle.label}>
-                <SliderInput
+                <NumberInput
                   value={halftone.angle}
                   onChange={(v) => handleHalftoneChange(effect.id, 'angle', v)}
                   onLiveChange={(v) => handleHalftoneLiveChange(effect.id, 'angle', v)}
@@ -563,14 +597,14 @@ export function EffectsSection({ items }: EffectsSectionProps) {
 
               {/* Intensity */}
               <PropertyRow label={HALFTONE_CONFIG.intensity.label}>
-                <SliderInput
-                  value={halftone.intensity}
-                  onChange={(v) => handleHalftoneChange(effect.id, 'intensity', v)}
-                  onLiveChange={(v) => handleHalftoneLiveChange(effect.id, 'intensity', v)}
-                  min={HALFTONE_CONFIG.intensity.min}
-                  max={HALFTONE_CONFIG.intensity.max}
-                  step={HALFTONE_CONFIG.intensity.step}
-                  formatValue={(v) => `${Math.round(v * 100)}%`}
+                <NumberInput
+                  value={Math.round(halftone.intensity * 100)}
+                  onChange={(v) => handleHalftoneIntensityChange(effect.id, v)}
+                  onLiveChange={(v) => handleHalftoneIntensityLiveChange(effect.id, v)}
+                  min={0}
+                  max={100}
+                  step={1}
+                  unit="%"
                   disabled={!effect.enabled}
                 />
               </PropertyRow>

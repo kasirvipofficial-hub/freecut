@@ -11,7 +11,7 @@ import {
 import {
   PropertySection,
   PropertyRow,
-  SliderInput,
+  NumberInput,
 } from '../components';
 
 interface FillSectionProps {
@@ -134,7 +134,7 @@ export function FillSection({
       {/* Opacity */}
       <PropertyRow label="Opacity">
         <div className="flex items-center gap-1 flex-1">
-          <SliderInput
+          <NumberInput
             value={opacity}
             onChange={handleOpacityChange}
             onLiveChange={handleOpacityLiveChange}
@@ -158,7 +158,7 @@ export function FillSection({
       {/* Corner Radius */}
       <PropertyRow label="Radius">
         <div className="flex items-center gap-1 flex-1">
-          <SliderInput
+          <NumberInput
             value={cornerRadius}
             onChange={handleCornerRadiusChange}
             onLiveChange={handleCornerRadiusLiveChange}

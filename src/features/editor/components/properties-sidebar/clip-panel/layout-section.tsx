@@ -14,7 +14,6 @@ import {
   PropertySection,
   PropertyRow,
   NumberInput,
-  SliderInput,
   LinkedDimensions,
   AlignmentButtons,
   type AlignmentType,
@@ -441,7 +440,7 @@ export function LayoutSection({
       {/* Rotation */}
       <PropertyRow label="Rotation">
         <div className="flex items-center gap-1 flex-1">
-          <SliderInput
+          <NumberInput
             value={rotation}
             onChange={handleRotationChange}
             onLiveChange={handleRotationLiveChange}

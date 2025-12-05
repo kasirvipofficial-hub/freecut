@@ -7,7 +7,7 @@ import { useGizmoStore } from '@/features/preview/stores/gizmo-store';
 import {
   PropertySection,
   PropertyRow,
-  SliderInput,
+  NumberInput,
 } from '../components';
 
 interface AudioSectionProps {
@@ -168,26 +168,19 @@ export function AudioSection({ items }: AudioSectionProps) {
 
   if (audioItems.length === 0) return null;
 
-  // Format volume in dB
-  const formatVolume = (v: number) => {
-    if (v > 0) return `+${v.toFixed(1)} dB`;
-    if (v < 0) return `${v.toFixed(1)} dB`;
-    return '0.0 dB';
-  };
-
   return (
     <PropertySection title="Audio" icon={Volume2} defaultOpen={true}>
       {/* Volume in dB (-60 to +20, 0 dB = unity gain) */}
       <PropertyRow label="Volume">
         <div className="flex items-center gap-1 flex-1">
-          <SliderInput
+          <NumberInput
             value={volume}
             onChange={handleVolumeChange}
             onLiveChange={handleVolumeLiveChange}
             min={-60}
             max={20}
             step={0.1}
-            formatValue={formatVolume}
+            unit="dB"
           />
           <Button
             variant="ghost"
@@ -204,7 +197,7 @@ export function AudioSection({ items }: AudioSectionProps) {
       {/* Audio Fades */}
       <PropertyRow label="Fade In">
         <div className="flex items-center gap-1 flex-1">
-          <SliderInput
+          <NumberInput
             value={fadeIn}
             onChange={handleFadeInChange}
             onLiveChange={handleFadeInLiveChange}
@@ -227,7 +220,7 @@ export function AudioSection({ items }: AudioSectionProps) {
 
       <PropertyRow label="Fade Out">
         <div className="flex items-center gap-1 flex-1">
-          <SliderInput
+          <NumberInput
             value={fadeOut}
             onChange={handleFadeOutChange}
             onLiveChange={handleFadeOutLiveChange}

@@ -7,47 +7,12 @@ import { useGizmoStore } from '@/features/preview/stores/gizmo-store';
 import {
   PropertySection,
   PropertyRow,
-  SliderInput,
+  NumberInput,
 } from '../components';
 
 // Speed limits (matching rate-stretch)
 const MIN_SPEED = 0.1;
 const MAX_SPEED = 10.0;
-
-/**
- * Convert speed to slider value using log scale.
- * This puts 1x at the center of the slider.
- * - Slider -1 = 0.1x speed
- * - Slider 0 = 1x speed (center)
- * - Slider +1 = 10x speed
- */
-function speedToSlider(speed: number): number {
-  return Math.log10(Math.max(MIN_SPEED, Math.min(MAX_SPEED, speed)));
-}
-
-// Common speed values to snap to (in log scale: log10(speed))
-const SNAP_POINTS = [
-  { log: Math.log10(0.25), speed: 0.25 },  // 0.25x
-  { log: Math.log10(0.5), speed: 0.5 },    // 0.5x
-  { log: 0, speed: 1.0 },                   // 1x (center)
-  { log: Math.log10(2), speed: 2.0 },      // 2x
-  { log: Math.log10(4), speed: 4.0 },      // 4x
-];
-const SNAP_THRESHOLD = 0.03; // Snap when within this distance in log scale
-
-/**
- * Convert slider value back to speed.
- * Snaps to common values (0.25x, 0.5x, 1x, 2x, 4x) for better UX.
- */
-function sliderToSpeed(sliderValue: number): number {
-  // Check for snap points
-  for (const snap of SNAP_POINTS) {
-    if (Math.abs(sliderValue - snap.log) < SNAP_THRESHOLD) {
-      return snap.speed;
-    }
-  }
-  return Math.pow(10, sliderValue);
-}
 
 interface VideoSectionProps {
   items: TimelineItem[];
@@ -100,14 +65,10 @@ export function VideoSection({ items }: VideoSectionProps) {
   const fadeIn = getMixedVideoValue(videoItems, (item) => item.fadeIn, 0);
   const fadeOut = getMixedVideoValue(videoItems, (item) => item.fadeOut, 0);
 
-  // Convert speed to slider value (log scale, 1x at center)
-  const sliderValue = speed === 'mixed' ? 'mixed' : speedToSlider(speed);
-
-  // Handle speed change from slider - uses rate stretch to adjust duration
+  // Handle speed change - uses rate stretch to adjust duration
   // Read current values from store to avoid depending on videoItems
-  const handleSliderChange = useCallback(
-    (newSliderValue: number) => {
-      const newSpeed = sliderToSpeed(newSliderValue);
+  const handleSpeedChange = useCallback(
+    (newSpeed: number) => {
       // Round to 2 decimal places to match clip label precision and avoid floating point drift
       const roundedSpeed = Math.round(newSpeed * 100) / 100;
       // Clamp speed to valid range
@@ -131,14 +92,6 @@ export function VideoSection({ items }: VideoSectionProps) {
     },
     [itemIds, rateStretchItem]
   );
-
-  // Format slider value to display actual speed (2 decimal places to match clip label)
-  const formatSpeed = useCallback((sliderVal: number) => {
-    const actualSpeed = sliderToSpeed(sliderVal);
-    // Round to 2 decimal places to match clip label
-    const rounded = Math.round(actualSpeed * 100) / 100;
-    return `${rounded.toFixed(2)}x`;
-  }, []);
 
   // Live preview for fade in (during drag)
   const handleFadeInLiveChange = useCallback(
@@ -229,16 +182,16 @@ export function VideoSection({ items }: VideoSectionProps) {
 
   return (
     <PropertySection title="Video" icon={Video} defaultOpen={true}>
-      {/* Playback Rate - affects clip duration (log scale, 1x at center) */}
+      {/* Playback Rate - affects clip duration */}
       <PropertyRow label="Speed">
         <div className="flex items-center gap-1 flex-1">
-          <SliderInput
-            value={sliderValue}
-            onChange={handleSliderChange}
-            min={-1}
-            max={1}
-            step={0.02}
-            formatValue={formatSpeed}
+          <NumberInput
+            value={speed}
+            onChange={handleSpeedChange}
+            min={MIN_SPEED}
+            max={MAX_SPEED}
+            step={0.1}
+            unit="x"
           />
           <Button
             variant="ghost"
@@ -255,7 +208,7 @@ export function VideoSection({ items }: VideoSectionProps) {
       {/* Video Fades */}
       <PropertyRow label="Fade In">
         <div className="flex items-center gap-1 flex-1">
-          <SliderInput
+          <NumberInput
             value={fadeIn}
             onChange={handleFadeInChange}
             onLiveChange={handleFadeInLiveChange}
@@ -278,7 +231,7 @@ export function VideoSection({ items }: VideoSectionProps) {
 
       <PropertyRow label="Fade Out">
         <div className="flex items-center gap-1 flex-1">
-          <SliderInput
+          <NumberInput
             value={fadeOut}
             onChange={handleFadeOutChange}
             onLiveChange={handleFadeOutLiveChange}
