@@ -66,10 +66,11 @@ export function VideoPreview({ project, containerSize }: VideoPreviewProps) {
   // Remotion Player integration (hook handles bidirectional sync)
   const { isBuffering } = useRemotionPlayer(playerRef);
 
-  // Register frame capture function for project thumbnail generation
+  // Register frame capture function for project thumbnail generation and split transitions
   const setCaptureFrame = usePlaybackStore((s) => s.setCaptureFrame);
   useEffect(() => {
-    const captureFunction = () => capturePlayerFrame(playerRef);
+    const captureFunction = (options?: Parameters<typeof capturePlayerFrame>[1]) =>
+      capturePlayerFrame(playerRef, options);
     setCaptureFrame(captureFunction);
 
     return () => {
@@ -306,6 +307,7 @@ export function VideoPreview({ project, containerSize }: VideoPreviewProps) {
           {/* Player container with overflow-hidden for video content */}
           <div
             ref={setPlayerContainerRefCallback}
+            data-player-container
             className="relative overflow-hidden shadow-2xl"
             style={{
               width: `${playerSize.width}px`,

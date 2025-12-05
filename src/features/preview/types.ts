@@ -1,3 +1,5 @@
+import type { CaptureOptions } from './utils/player-capture';
+
 export interface PlaybackState {
   currentFrame: number;
   isPlaying: boolean;
@@ -7,7 +9,7 @@ export interface PlaybackState {
   muted: boolean;
   zoom: number;
   /** Function to capture the current Player frame as a data URL (set by VideoPreview) */
-  captureFrame: (() => Promise<string | null>) | null;
+  captureFrame: ((options?: CaptureOptions) => Promise<string | null>) | null;
 }
 
 export interface PlaybackActions {
@@ -21,5 +23,5 @@ export interface PlaybackActions {
   toggleMute: () => void;
   setZoom: (zoom: number) => void;
   /** Register a frame capture function (called by VideoPreview on mount) */
-  setCaptureFrame: (fn: (() => Promise<string | null>) | null) => void;
+  setCaptureFrame: (fn: ((options?: CaptureOptions) => Promise<string | null>) | null) => void;
 }

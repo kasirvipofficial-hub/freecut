@@ -440,10 +440,15 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
     const leftSourceFrames = Math.round(leftDuration * speed);
     const rightSourceFrames = totalSourceFrames - leftSourceFrames;
 
+    // Ensure originId is set for both items (needed for stable video grouping)
+    // If original item has originId, use it; otherwise use original item's id
+    const sharedOriginId = item.originId || item.id;
+
     // Left item: keeps original from, new duration, updated end trim
     const leftItem: typeof item = {
       ...item,
       id: crypto.randomUUID(),
+      originId: sharedOriginId,
       durationInFrames: leftDuration,
       // Update sourceEnd and trimEnd for left item (in source frames)
       sourceEnd: currentSourceStart + leftSourceFrames,
@@ -456,6 +461,7 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
     const rightItem: typeof item = {
       ...item,
       id: crypto.randomUUID(),
+      originId: sharedOriginId,
       from: splitFrame,
       durationInFrames: rightDuration,
       // Move source start forward by left clip's source frames

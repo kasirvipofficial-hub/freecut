@@ -16,6 +16,8 @@ export interface CaptureOptions {
   height?: number;
   quality?: number;
   format?: 'image/jpeg' | 'image/png' | 'image/webp';
+  /** If true, capture at container size without scaling (for split transition overlays) */
+  fullResolution?: boolean;
 }
 
 const DEFAULT_OPTIONS: Required<CaptureOptions> = {
@@ -23,6 +25,7 @@ const DEFAULT_OPTIONS: Required<CaptureOptions> = {
   height: 180,
   quality: 0.85,
   format: 'image/jpeg',
+  fullResolution: false,
 };
 
 /**
@@ -92,6 +95,12 @@ export async function capturePlayerFrame(
 
     // Note: We skip html2canvas for overlays because hiding videos causes a flash.
     // For now, thumbnails show video content only. Text/shapes won't appear in thumbnails.
+
+    // If fullResolution is requested, return capture canvas directly without scaling
+    if (opts.fullResolution) {
+      const dataUrl = captureCanvas.toDataURL(opts.format, opts.quality);
+      return dataUrl;
+    }
 
     // Resize to thumbnail dimensions
     const outputCanvas = document.createElement('canvas');

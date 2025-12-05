@@ -3,7 +3,7 @@ import { AbsoluteFill, Sequence, useVideoConfig, useCurrentFrame } from 'remotio
 import type { RemotionInputProps } from '@/types/export';
 import type { TextItem, ShapeItem, AdjustmentItem } from '@/types/timeline';
 import { Item } from '../components/item';
-import { generateStableKey } from '../utils/generate-stable-key';
+import { StableVideoSequence } from '../components/stable-video-sequence';
 import { loadFonts } from '../utils/fonts';
 import { resolveTransform } from '../utils/transform-resolver';
 import { getShapePath, rotatePath } from '../utils/shape-path';
@@ -442,24 +442,18 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, backgrou
 
       {/* ADJUSTMENT WRAPPER - applies effects from adjustment layers to visual content */}
       <AdjustmentWrapper adjustmentLayers={hasAdjustmentLayers ? allAdjustmentLayers : []}>
-        {/* VIDEO LAYER - single consistent DOM structure, mask applied uniformly */}
+        {/* VIDEO LAYER - uses stable keys based on originId to prevent remounting on split */}
         {/* StableMaskedGroup always renders same div; mask effect controlled via SVG opacity */}
         <StableMaskedGroup hasMasks={hasActiveMasks}>
-          {videoItems.map((item) => {
-            const premountFrames = Math.round(fps * 2);
-            return (
-              <Sequence
-                key={generateStableKey(item)}
-                from={item.from}
-                durationInFrames={item.durationInFrames}
-                premountFor={premountFrames}
-              >
-                <AbsoluteFill style={{ zIndex: item.zIndex }}>
-                  <Item item={item} muted={item.muted} masks={[]} />
-                </AbsoluteFill>
-              </Sequence>
-            );
-          })}
+          <StableVideoSequence
+            items={videoItems}
+            premountFor={Math.round(fps * 2)}
+            renderItem={(item) => (
+              <AbsoluteFill style={{ zIndex: item.zIndex }}>
+                <Item item={item} muted={item.muted} masks={[]} />
+              </AbsoluteFill>
+            )}
+          />
         </StableMaskedGroup>
 
         {/* CLEARING LAYER - uses its own useCurrentFrame() to isolate per-frame re-renders */}

@@ -516,7 +516,7 @@ const ShapeContent: React.FC<{ item: ShapeItem }> = ({ item }) => {
 };
 
 // Set to true to show debug overlay on video items during rendering
-const DEBUG_VIDEO_OVERLAY = false;
+const DEBUG_VIDEO_OVERLAY = true;
 
 /**
  * MaskWrapper applies clipping to content using CSS clip-path.
