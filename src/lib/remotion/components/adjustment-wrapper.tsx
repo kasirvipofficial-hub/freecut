@@ -3,7 +3,7 @@ import { useCurrentFrame } from 'remotion';
 import type { AdjustmentItem } from '@/types/timeline';
 import type { ItemEffect, GlitchEffect } from '@/types/effects';
 import { effectsToCSSFilter, getGlitchEffects, getHalftoneEffect } from '@/features/effects/utils/effect-to-css';
-import { getRGBSplitStyles, getScanlinesStyle, getGlitchFilterString } from '@/features/effects/utils/glitch-algorithms';
+import { getScanlinesStyle, getGlitchFilterString } from '@/features/effects/utils/glitch-algorithms';
 import { useGizmoStore } from '@/features/preview/stores/gizmo-store';
 import { AdjustmentPostProcessor } from '@/features/effects/components/adjustment-post-processor';
 import type { PostProcessingEffect } from '@/features/effects/utils/post-processing-pipeline';
@@ -109,111 +109,15 @@ const AdjustmentWrapperInternal = React.memo<AdjustmentWrapperInternalProps>(({
     return getGlitchFilterString(glitchEffects, frame);
   }, [glitchEffects, frame]);
 
-  // Combine all CSS filters
+  // Combine all CSS filters (RGB split is now handled via SVG filter in glitchFilterString)
   // NOTE: No early return for empty effects - we always render the same div structure
   // to prevent DOM changes when adjustment layers activate/deactivate (prevents re-render)
   const combinedFilter = [cssFilterString, glitchFilterString].filter(Boolean).join(' ');
 
-  // Check for RGB split effect
-  const rgbSplitEffect = glitchEffects.find((e) => e.variant === 'rgb-split');
-
-  // Check for scanlines effect
+  // Check for scanlines effect (needs overlay div, not just CSS filter)
   const scanlinesEffect = glitchEffects.find((e) => e.variant === 'scanlines');
 
-  // RGB split requires special multi-layer rendering
-  if (rgbSplitEffect) {
-    const { redOffset, blueOffset, active } = getRGBSplitStyles(
-      rgbSplitEffect.intensity,
-      frame,
-      rgbSplitEffect.speed,
-      rgbSplitEffect.seed
-    );
-
-    if (active) {
-      const rgbSplitContent = (
-        <div
-          style={{
-            position: 'relative',
-            width: '100%',
-            height: '100%',
-            filter: combinedFilter || undefined,
-          }}
-        >
-          {/* Red channel - offset right */}
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              transform: `translateX(${redOffset}px)`,
-              mixBlendMode: 'screen',
-              opacity: 0.8,
-            }}
-          >
-            <div
-              style={{
-                width: '100%',
-                height: '100%',
-                filter: 'saturate(0) brightness(1.2)',
-                mixBlendMode: 'multiply',
-              }}
-            >
-              <div style={{ width: '100%', height: '100%', backgroundColor: 'red', mixBlendMode: 'multiply' }}>
-                {children}
-              </div>
-            </div>
-          </div>
-          {/* Blue channel - offset left */}
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              transform: `translateX(${blueOffset}px)`,
-              mixBlendMode: 'screen',
-              opacity: 0.8,
-            }}
-          >
-            <div
-              style={{
-                width: '100%',
-                height: '100%',
-                filter: 'saturate(0) brightness(1.2)',
-                mixBlendMode: 'multiply',
-              }}
-            >
-              <div style={{ width: '100%', height: '100%', backgroundColor: 'cyan', mixBlendMode: 'multiply' }}>
-                {children}
-              </div>
-            </div>
-          </div>
-          {/* Base layer (green channel stays centered) */}
-          <div style={{ position: 'relative', width: '100%', height: '100%' }}>{children}</div>
-          {/* Scanlines overlay if present */}
-          {scanlinesEffect && (
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                ...getScanlinesStyle(scanlinesEffect.intensity),
-              }}
-            />
-          )}
-        </div>
-      );
-
-      // Always wrap with post-processor to maintain consistent DOM structure
-      // (prevents stutter when entering/exiting halftone adjustment layer regions)
-      return (
-        <AdjustmentPostProcessor
-          effect={postProcessingEffect}
-          enabled={!!postProcessingEffect}
-        >
-          {rgbSplitContent}
-        </AdjustmentPostProcessor>
-      );
-    }
-  }
-
-  // Standard rendering with CSS filters + optional scanlines + optional halftone
+  // Standard rendering with CSS filters (including RGB split via SVG) + optional scanlines + optional halftone
   const standardContent = (
     <div
       style={{

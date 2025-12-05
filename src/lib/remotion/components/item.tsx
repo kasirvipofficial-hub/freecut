@@ -18,7 +18,7 @@ import {
 import { loadFont, FONT_WEIGHT_MAP } from '../utils/fonts';
 import { getShapePath, rotatePath } from '../utils/shape-path';
 import { effectsToCSSFilter, getGlitchEffects, getHalftoneEffect } from '@/features/effects/utils/effect-to-css';
-import { getRGBSplitStyles, getScanlinesStyle, getGlitchFilterString } from '@/features/effects/utils/glitch-algorithms';
+import { getScanlinesStyle, getGlitchFilterString } from '@/features/effects/utils/glitch-algorithms';
 import { HalftoneWrapper } from '@/features/effects/components/halftone-wrapper';
 
 /** Mask information passed from composition to items */
@@ -907,10 +907,7 @@ const EffectWrapper: React.FC<{
   // to prevent DOM changes when effects are added/removed (prevents re-render)
   const combinedFilter = [cssFilterString, glitchFilterString].filter(Boolean).join(' ');
 
-  // Check for RGB split effect
-  const rgbSplitEffect = glitchEffects.find((e) => e.variant === 'rgb-split');
-
-  // Check for scanlines effect
+  // Check for scanlines effect (RGB split is now handled via CSS filter in glitchFilterString)
   const scanlinesEffect = glitchEffects.find((e) => e.variant === 'scanlines');
 
   // Helper to wrap content with halftone effect
@@ -940,90 +937,7 @@ const EffectWrapper: React.FC<{
     );
   };
 
-  // RGB split requires special multi-layer rendering
-  if (rgbSplitEffect) {
-    const { redOffset, blueOffset, active } = getRGBSplitStyles(
-      rgbSplitEffect.intensity,
-      frame,
-      rgbSplitEffect.speed,
-      rgbSplitEffect.seed
-    );
-
-    if (active) {
-      const rgbContent = (
-        <div
-          style={{
-            position: 'relative',
-            width: '100%',
-            height: '100%',
-            filter: combinedFilter || undefined,
-          }}
-        >
-          {/* Red channel - offset right */}
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              transform: `translateX(${redOffset}px)`,
-              mixBlendMode: 'screen',
-              opacity: 0.8,
-            }}
-          >
-            <div
-              style={{
-                width: '100%',
-                height: '100%',
-                filter: 'saturate(0) brightness(1.2)',
-                mixBlendMode: 'multiply',
-              }}
-            >
-              <div style={{ width: '100%', height: '100%', backgroundColor: 'red', mixBlendMode: 'multiply' }}>
-                {children}
-              </div>
-            </div>
-          </div>
-          {/* Blue channel - offset left */}
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              transform: `translateX(${blueOffset}px)`,
-              mixBlendMode: 'screen',
-              opacity: 0.8,
-            }}
-          >
-            <div
-              style={{
-                width: '100%',
-                height: '100%',
-                filter: 'saturate(0) brightness(1.2)',
-                mixBlendMode: 'multiply',
-              }}
-            >
-              <div style={{ width: '100%', height: '100%', backgroundColor: 'cyan', mixBlendMode: 'multiply' }}>
-                {children}
-              </div>
-            </div>
-          </div>
-          {/* Base layer (green channel stays centered) */}
-          <div style={{ position: 'relative', width: '100%', height: '100%' }}>{children}</div>
-          {/* Scanlines overlay if present */}
-          {scanlinesEffect && (
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                ...getScanlinesStyle(scanlinesEffect.intensity),
-              }}
-            />
-          )}
-        </div>
-      );
-      return <>{wrapWithHalftone(rgbContent)}</>;
-    }
-  }
-
-  // Standard rendering with CSS filters + optional scanlines
+  // Standard rendering with CSS filters (including RGB split via SVG filter) + optional scanlines
   const standardContent = (
     <div
       style={{
