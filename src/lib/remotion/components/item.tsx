@@ -516,7 +516,7 @@ const ShapeContent: React.FC<{ item: ShapeItem }> = ({ item }) => {
 };
 
 // Set to true to show debug overlay on video items during rendering
-const DEBUG_VIDEO_OVERLAY = false;
+const DEBUG_VIDEO_OVERLAY = true;
 
 /**
  * MaskWrapper applies clipping to content using CSS clip-path.
@@ -908,10 +908,9 @@ const EffectWrapper: React.FC<{
   // Check for scanlines effect
   const scanlinesEffect = glitchEffects.find((e) => e.variant === 'scanlines');
 
-  // Helper to wrap content with halftone effect if present
+  // Helper to wrap content with halftone effect
+  // ALWAYS wraps to maintain consistent DOM structure at clip boundaries (prevents stutter)
   const wrapWithHalftone = (content: React.ReactNode): React.ReactNode => {
-    if (!halftoneEffect || !halftoneOptions) return content;
-
     // Get trim and speed info for video items (needed for in/out point export)
     const videoItem = item.type === 'video' ? (item as { sourceStart?: number; trimStart?: number; offset?: number; speed?: number; volume?: number; audioFadeIn?: number; audioFadeOut?: number }) : null;
     const trimBefore = videoItem?.sourceStart ?? videoItem?.trimStart ?? videoItem?.offset ?? 0;
@@ -920,7 +919,7 @@ const EffectWrapper: React.FC<{
     return (
       <HalftoneWrapper
         options={halftoneOptions}
-        enabled={true}
+        enabled={!!halftoneEffect}
         itemType={item.type}
         mediaSrc={item.type === 'video' || item.type === 'image' ? (item as { src?: string }).src : undefined}
         trimBefore={trimBefore}

@@ -2,10 +2,29 @@ import React, { useRef, useLayoutEffect, useState, useEffect, useCallback } from
 import { useCurrentFrame, useVideoConfig, useRemotionEnvironment, OffthreadVideo, Img, interpolate } from 'remotion';
 import { HalftoneRenderer, type HalftoneGLOptions } from '../utils/halftone-shader';
 import { renderHalftone } from '../utils/halftone-algorithm';
+import { effectsWorkerManager } from '../utils/effects-worker-manager';
+
+// Type augmentation for requestVideoFrameCallback (not in all TS versions)
+declare global {
+  interface HTMLVideoElement {
+    requestVideoFrameCallback(callback: (now: DOMHighResTimeStamp, metadata: object) => void): number;
+    cancelVideoFrameCallback(handle: number): void;
+  }
+}
+
+// Default options for when halftone is disabled (these won't be used but prevent null checks)
+const DEFAULT_HALFTONE_OPTIONS: HalftoneGLOptions = {
+  dotSize: 8,
+  spacing: 10,
+  angle: 45,
+  intensity: 1,
+  backgroundColor: '#ffffff',
+  dotColor: '#000000',
+};
 
 interface HalftoneWrapperProps {
   children: React.ReactNode;
-  options: HalftoneGLOptions;
+  options: HalftoneGLOptions | null;
   enabled: boolean;
   mediaSrc?: string;
   itemType: string;
@@ -25,16 +44,19 @@ interface HalftoneWrapperProps {
   durationInFrames?: number;
 }
 
+// Check if OffscreenCanvas is supported (for worker-based rendering)
+const supportsOffscreenCanvas = typeof OffscreenCanvas !== 'undefined';
+
 /**
  * HalftoneWrapper applies a halftone dot pattern effect to video/image content.
  *
- * Uses a hybrid rendering approach for best performance and compatibility:
- * - Preview mode: WebGL shaders for real-time GPU-accelerated rendering
- * - Render mode: Canvas 2D for reliable server-side rendering
+ * Uses ImageBitmap passthrough pattern for off-main-thread rendering:
+ * - Worker creates its own internal OffscreenCanvas (no transfer needed)
+ * - Main thread sends video frames as ImageBitmap
+ * - Worker renders with WebGL, returns processed ImageBitmap
+ * - Main thread draws result to regular canvas with 2D context
  *
- * For video, uses Remotion's OffthreadVideo with onVideoFrame callback:
- * - During preview: receives HTMLVideoElement, rendered with WebGL
- * - During render: receives HTMLImageElement (exact frame), rendered with Canvas 2D
+ * This avoids React lifecycle issues with canvas transfer.
  */
 export const HalftoneWrapper: React.FC<HalftoneWrapperProps> = ({
   children,
@@ -50,13 +72,21 @@ export const HalftoneWrapper: React.FC<HalftoneWrapperProps> = ({
   audioFadeOut = 0,
   durationInFrames = 0,
 }) => {
+  // Resolve options with fallback to defaults (options may be null when disabled)
+  const resolvedOptions = options ?? DEFAULT_HALFTONE_OPTIONS;
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvas2dCtxRef = useRef<CanvasRenderingContext2D | null>(null);
   const rendererRef = useRef<HalftoneRenderer | null>(null);
   const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
-  // Cache the video element to avoid DOM query issues during React reconciliation
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
+
+  // Worker-related refs (using singleton manager now)
+  const videoFrameCallbackId = useRef<number | null>(null);
+  const lastOptionsRef = useRef(resolvedOptions); // Track options without causing re-renders
+
   const frame = useCurrentFrame();
   const { width, height, fps } = useVideoConfig();
   const env = useRemotionEnvironment();
@@ -64,11 +94,13 @@ export const HalftoneWrapper: React.FC<HalftoneWrapperProps> = ({
   // Determine if we're in preview mode (Player/Studio) or rendering
   const isPreview = env.isPlayer || env.isStudio;
 
-  // Calculate audio volume with fades (same logic as VideoContent in item.tsx)
+  // Use worker for video in preview mode if supported
+  const useWorker = isPreview && itemType === 'video' && supportsOffscreenCanvas;
+
+  // Calculate audio volume with fades
   const audioVolume = React.useMemo(() => {
     if (muted) return 0;
 
-    // Calculate fade multiplier
     const fadeInFrames = Math.min(audioFadeIn * fps, durationInFrames);
     const fadeOutFrames = Math.min(audioFadeOut * fps, durationInFrames);
 
@@ -81,7 +113,6 @@ export const HalftoneWrapper: React.FC<HalftoneWrapperProps> = ({
 
       if (hasFadeIn && hasFadeOut) {
         if (fadeInFrames >= fadeOutStart) {
-          // Overlapping fades
           const midPoint = durationInFrames / 2;
           const peakVolume = Math.min(1, midPoint / Math.max(fadeInFrames, 1));
           fadeMultiplier = interpolate(
@@ -115,7 +146,6 @@ export const HalftoneWrapper: React.FC<HalftoneWrapperProps> = ({
       }
     }
 
-    // Convert dB to linear (0 dB = unity gain = 1.0)
     const linearVolume = Math.pow(10, volume / 20);
     return Math.max(0, Math.min(1, linearVolume * fadeMultiplier));
   }, [muted, volume, audioFadeIn, audioFadeOut, durationInFrames, frame, fps]);
@@ -123,9 +153,42 @@ export const HalftoneWrapper: React.FC<HalftoneWrapperProps> = ({
   // State for media loading
   const [rendererReady, setRendererReady] = useState(false);
   const [imageReady, setImageReady] = useState(false);
+  const [workerReady, setWorkerReady] = useState(false);
+  const [workerRendering, setWorkerRendering] = useState(false);
 
-  // Initialize WebGL renderer (preview mode only)
+  // Initialize 2D context for receiving worker bitmaps
   useLayoutEffect(() => {
+    if (!enabled || !useWorker || !canvasRef.current) return;
+
+    const canvas = canvasRef.current;
+    canvas.width = width;
+    canvas.height = height;
+    canvas2dCtxRef.current = canvas.getContext('2d');
+
+    return () => {
+      canvas2dCtxRef.current = null;
+    };
+  }, [enabled, useWorker, width, height]);
+
+  // Initialize singleton worker (lazy, persists across clip transitions)
+  useEffect(() => {
+    if (!enabled || !useWorker) return;
+
+    // Initialize singleton worker - it persists even when this component unmounts
+    effectsWorkerManager.halftone.init(width, height).then((ready) => {
+      if (ready) {
+        setWorkerReady(true);
+      }
+    });
+
+    // NO CLEANUP - worker persists for the session!
+    // This is the key to eliminating stutter at clip boundaries
+  }, [enabled, useWorker, width, height]);
+
+  // Initialize WebGL renderer for fallback/images (preview mode only)
+  useLayoutEffect(() => {
+    // Skip if using worker for video
+    if (useWorker) return;
     if (!enabled || !canvasRef.current || !isPreview) return;
 
     const canvas = canvasRef.current;
@@ -146,13 +209,12 @@ export const HalftoneWrapper: React.FC<HalftoneWrapperProps> = ({
       rendererRef.current = null;
       setRendererReady(false);
     };
-  }, [enabled, width, height, isPreview]);
+  }, [enabled, width, height, isPreview, useWorker]);
 
   // Initialize source canvas for render mode
   useLayoutEffect(() => {
     if (!enabled || isPreview) return;
 
-    // Create offscreen canvas for source frame capture
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -164,9 +226,7 @@ export const HalftoneWrapper: React.FC<HalftoneWrapperProps> = ({
   }, [enabled, width, height, isPreview]);
 
   // Load image for processing (images only) - preview mode only
-  // In render mode, we use Remotion's Img component with onLoad callback
   useEffect(() => {
-    // Only use new Image() in preview mode - blob URLs work in the browser
     if (!enabled || !mediaSrc || itemType !== 'image' || !isPreview) {
       return;
     }
@@ -192,42 +252,138 @@ export const HalftoneWrapper: React.FC<HalftoneWrapperProps> = ({
     };
   }, [mediaSrc, itemType, enabled, isPreview]);
 
-  // Handle image load callback for render mode (used by Remotion's Img component)
+  // Handle image load callback for render mode
   const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
     const img = event.currentTarget;
     imageRef.current = img;
     setImageReady(true);
   }, []);
 
-  // Handle video frame callback from OffthreadVideo
+  // Handle video frame callback from OffthreadVideo (render mode)
   const handleVideoFrame = useCallback((frameSource: CanvasImageSource) => {
     const outputCanvas = canvasRef.current;
     if (!outputCanvas) return;
 
-    if (isPreview) {
-      // Preview mode: use WebGL for fast rendering
-      if (rendererRef.current && rendererReady) {
-        rendererRef.current.render(frameSource as HTMLVideoElement | HTMLImageElement, options);
-      }
-    } else {
-      // Render mode: use Canvas 2D for reliable rendering
-      const sourceCanvas = sourceCanvasRef.current;
-      if (!sourceCanvas) return;
+    // Render mode: use Canvas 2D for reliable rendering
+    const sourceCanvas = sourceCanvasRef.current;
+    if (!sourceCanvas) return;
 
-      const ctx = sourceCanvas.getContext('2d');
-      if (!ctx) return;
+    const ctx = sourceCanvas.getContext('2d');
+    if (!ctx) return;
 
-      // Draw the frame to source canvas
-      ctx.drawImage(frameSource, 0, 0, width, height);
+    ctx.drawImage(frameSource, 0, 0, width, height);
+    renderHalftone(sourceCanvas, outputCanvas, resolvedOptions);
+  }, [resolvedOptions, width, height]);
 
-      // Apply halftone effect
-      renderHalftone(sourceCanvas, outputCanvas, options);
+  // Keep options ref updated without triggering re-renders
+  useEffect(() => {
+    lastOptionsRef.current = resolvedOptions;
+  }, [resolvedOptions]);
+
+  // Send video frames to singleton worker using requestVideoFrameCallback
+  // This decouples frame capture from React's render cycle completely
+  useEffect(() => {
+    if (!enabled || !useWorker || !workerReady) return;
+    if (!contentRef.current) return;
+
+    const halftoneWorker = effectsWorkerManager.halftone;
+    const ctx = canvas2dCtxRef.current;
+
+    // Get video element
+    let videoElement = videoElementRef.current;
+    if (!videoElement || !videoElement.isConnected || !contentRef.current.contains(videoElement)) {
+      videoElement = contentRef.current.querySelector('video');
+      videoElementRef.current = videoElement;
     }
-  }, [options, width, height, isPreview, rendererReady]);
 
-  // Render halftone effect for images and preview video from DOM
+    if (!videoElement) return;
+
+    // Frame processing callback
+    const processVideoFrame = (bitmap: ImageBitmap) => {
+      if (ctx) {
+        ctx.drawImage(bitmap, 0, 0);
+        setWorkerRendering(true);
+      }
+      bitmap.close();
+    };
+
+    // Check if requestVideoFrameCallback is supported
+    if (!('requestVideoFrameCallback' in videoElement)) {
+      // Fallback: use requestAnimationFrame
+      let rafId: number;
+      const rafLoop = () => {
+        if (!halftoneWorker.getIsReady() || !videoElementRef.current) return;
+        if (videoElementRef.current.readyState < 2 || halftoneWorker.isProcessing()) {
+          rafId = requestAnimationFrame(rafLoop);
+          return;
+        }
+
+        createImageBitmap(videoElementRef.current)
+          .then((bitmap) => {
+            const opts = lastOptionsRef.current;
+            halftoneWorker.processFrame(bitmap, {
+              dotSize: opts.dotSize,
+              spacing: opts.spacing,
+              angle: opts.angle,
+              intensity: opts.intensity,
+              backgroundColor: opts.backgroundColor,
+              dotColor: opts.dotColor,
+            }, processVideoFrame);
+          })
+          .catch(() => {});
+
+        rafId = requestAnimationFrame(rafLoop);
+      };
+
+      rafId = requestAnimationFrame(rafLoop);
+      return () => cancelAnimationFrame(rafId);
+    }
+
+    // Use requestVideoFrameCallback for optimal frame timing
+    const captureFrame = () => {
+      const video = videoElementRef.current;
+      if (!video || !halftoneWorker.getIsReady()) return;
+      if (video.readyState < 2 || halftoneWorker.isProcessing()) {
+        videoFrameCallbackId.current = video.requestVideoFrameCallback(captureFrame);
+        return;
+      }
+
+      createImageBitmap(video)
+        .then((bitmap) => {
+          const opts = lastOptionsRef.current;
+          halftoneWorker.processFrame(bitmap, {
+            dotSize: opts.dotSize,
+            spacing: opts.spacing,
+            angle: opts.angle,
+            intensity: opts.intensity,
+            backgroundColor: opts.backgroundColor,
+            dotColor: opts.dotColor,
+          }, processVideoFrame);
+        })
+        .catch(() => {});
+
+      videoFrameCallbackId.current = video.requestVideoFrameCallback(captureFrame);
+    };
+
+    videoFrameCallbackId.current = videoElement.requestVideoFrameCallback(captureFrame);
+
+    return () => {
+      if (videoFrameCallbackId.current !== null && videoElementRef.current) {
+        try {
+          videoElementRef.current.cancelVideoFrameCallback(videoFrameCallbackId.current);
+        } catch {
+          // Video element may be gone
+        }
+        videoFrameCallbackId.current = null;
+      }
+    };
+  }, [enabled, useWorker, workerReady]);
+
+  // Render halftone for images and fallback video (main thread)
   useLayoutEffect(() => {
     if (!enabled) return;
+    // Skip if using worker for video
+    if (useWorker && workerReady) return;
 
     const outputCanvas = canvasRef.current;
     if (!outputCanvas) return;
@@ -235,10 +391,8 @@ export const HalftoneWrapper: React.FC<HalftoneWrapperProps> = ({
     // Handle images
     if (itemType === 'image' && imageRef.current && imageReady) {
       if (isPreview && rendererRef.current && rendererReady) {
-        // Preview: WebGL
-        rendererRef.current.render(imageRef.current, options);
+        rendererRef.current.render(imageRef.current, resolvedOptions);
       } else if (!isPreview) {
-        // Render: Canvas 2D
         const sourceCanvas = sourceCanvasRef.current;
         if (!sourceCanvas) return;
 
@@ -246,44 +400,38 @@ export const HalftoneWrapper: React.FC<HalftoneWrapperProps> = ({
         if (!ctx) return;
 
         ctx.drawImage(imageRef.current, 0, 0, width, height);
-        renderHalftone(sourceCanvas, outputCanvas, options);
+        renderHalftone(sourceCanvas, outputCanvas, resolvedOptions);
       }
     }
 
-    // Handle video in preview mode - capture from DOM video element
-    if (itemType === 'video' && isPreview && contentRef.current && rendererRef.current && rendererReady) {
-      // Try to get video element from cache first, fall back to DOM query
+    // Handle video fallback (when worker not available)
+    if (itemType === 'video' && isPreview && !useWorker && contentRef.current && rendererRef.current && rendererReady) {
       let videoElement = videoElementRef.current;
-
-      // Verify cached element is still valid (connected to DOM and has same parent)
       if (!videoElement || !videoElement.isConnected || !contentRef.current.contains(videoElement)) {
         videoElement = contentRef.current.querySelector('video');
         videoElementRef.current = videoElement;
       }
 
       if (videoElement && videoElement.readyState >= 2) {
-        rendererRef.current.render(videoElement, options);
+        rendererRef.current.render(videoElement, resolvedOptions);
       }
-      // If video not ready, canvas retains previous frame (no clear() call in WebGL renderer)
     }
-  }, [frame, enabled, options, itemType, imageReady, rendererReady, isPreview, width, height]);
-
-  // If not enabled, just render children
-  if (!enabled) {
-    return <>{children}</>;
-  }
+  }, [frame, enabled, resolvedOptions, itemType, imageReady, rendererReady, isPreview, width, height, useWorker, workerReady]);
 
   // If no media source, fall back to children
   if (!mediaSrc) {
     return <>{children}</>;
   }
 
-  // For video
+  // For video - ALWAYS render same structure to avoid DOM changes at boundaries
   if (itemType === 'video') {
+    // Determine what should be visible
+    const showCanvas = enabled && (useWorker ? workerRendering : rendererReady);
+    const showChildren = !enabled || (useWorker && !workerRendering);
+
     return (
       <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-        {/* Original children for audio playback - only in preview mode */}
-        {/* In render mode, children may contain blob URLs that don't work on server */}
+        {/* Original children - always rendered, visibility controlled by CSS */}
         {isPreview && (
           <div
             ref={contentRef}
@@ -292,7 +440,7 @@ export const HalftoneWrapper: React.FC<HalftoneWrapperProps> = ({
               inset: 0,
               width: '100%',
               height: '100%',
-              opacity: 0,
+              opacity: showChildren ? 1 : 0,
               pointerEvents: 'none',
             }}
           >
@@ -300,7 +448,7 @@ export const HalftoneWrapper: React.FC<HalftoneWrapperProps> = ({
           </div>
         )}
 
-        {/* OffthreadVideo for frame extraction and audio during render - only needed in render mode */}
+        {/* OffthreadVideo for frame extraction and audio during render */}
         {!isPreview && mediaSrc && (
           <OffthreadVideo
             src={mediaSrc}
@@ -316,13 +464,12 @@ export const HalftoneWrapper: React.FC<HalftoneWrapperProps> = ({
             playbackRate={playbackRate}
             onVideoFrame={handleVideoFrame}
             onError={(err) => {
-              // Log but don't crash - Remotion will retry failed frames
               console.warn('[HalftoneWrapper] Frame extraction warning:', err.message);
             }}
           />
         )}
 
-        {/* Output canvas for halftone rendering */}
+        {/* Output canvas - always rendered when enabled was ever true, visibility controlled by CSS */}
         <canvas
           ref={canvasRef}
           width={width}
@@ -332,6 +479,7 @@ export const HalftoneWrapper: React.FC<HalftoneWrapperProps> = ({
             inset: 0,
             width: '100%',
             height: '100%',
+            opacity: showCanvas ? 1 : 0,
           }}
         />
       </div>
@@ -339,14 +487,8 @@ export const HalftoneWrapper: React.FC<HalftoneWrapperProps> = ({
   }
 
   // For images
-  // Debug: this should only be reached for image items
-  if (!isPreview) {
-    console.log('[HalftoneWrapper] IMAGE RENDER MODE - itemType:', itemType, 'mediaSrc:', mediaSrc?.substring(0, 60));
-  }
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      {/* Original children - only render in preview mode for fallback display */}
-      {/* In render mode, we use our own Img component to avoid blob URL issues */}
       {isPreview && (
         <div
           style={{
@@ -362,7 +504,6 @@ export const HalftoneWrapper: React.FC<HalftoneWrapperProps> = ({
         </div>
       )}
 
-      {/* Remotion Img for render mode - loads image from server URL and triggers onLoad */}
       {!isPreview && mediaSrc && (
         <Img
           src={mediaSrc}
@@ -377,7 +518,6 @@ export const HalftoneWrapper: React.FC<HalftoneWrapperProps> = ({
         />
       )}
 
-      {/* Output canvas for halftone rendering */}
       <canvas
         ref={canvasRef}
         width={width}
