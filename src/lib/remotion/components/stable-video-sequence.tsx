@@ -93,15 +93,23 @@ const GroupRenderer: React.FC<{
 
     // Adjust sourceStart to account for the shared Sequence.
     // In a shared Sequence, localFrame is relative to group.minFrom, not item.from.
-    // OffthreadVideo calculates: trimBefore + localFrame
-    // We need: sourceStart + (globalFrame - item.from) = sourceStart + localFrame - (item.from - minFrom)
-    // So: adjustedTrimBefore = sourceStart - (item.from - minFrom)
+    // OffthreadVideo uses: startFrom + localFrame * playbackRate for source position
+    // We need: sourceStart + (globalFrame - item.from) * speed
+    //        = sourceStart + (localFrame - itemOffset) * speed
+    //        = sourceStart - itemOffset * speed + localFrame * speed
+    // So: adjustedSourceStart = sourceStart - itemOffset * speed
     const itemOffset = activeItem.from - group.minFrom;
+    const speed = activeItem.speed || 1;
+    // For source position adjustments, multiply by speed since sourceStart is in source frames
+    // but itemOffset is in timeline frames
+    // IMPORTANT: Round to match how splitItem calculates sourceStart (uses Math.round)
+    // Without rounding, floating point errors cause fractional sourceStart values
+    const sourceFrameOffset = Math.round(itemOffset * speed);
     return {
       ...activeItem,
-      sourceStart: (activeItem.sourceStart ?? 0) - itemOffset,
-      trimStart: activeItem.trimStart != null ? activeItem.trimStart - itemOffset : undefined,
-      offset: activeItem.offset != null ? activeItem.offset - itemOffset : undefined,
+      sourceStart: (activeItem.sourceStart ?? 0) - sourceFrameOffset,
+      trimStart: activeItem.trimStart != null ? activeItem.trimStart - sourceFrameOffset : undefined,
+      offset: activeItem.offset != null ? activeItem.offset - sourceFrameOffset : undefined,
       // Pass the frame offset so fades can be calculated correctly within shared Sequences
       // Without this, useCurrentFrame() returns the frame relative to the shared Sequence,
       // not relative to this specific item, causing fades to misbehave on split clips
