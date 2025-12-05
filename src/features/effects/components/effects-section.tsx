@@ -110,6 +110,7 @@ interface EffectsSectionProps {
  */
 export function EffectsSection({ items }: EffectsSectionProps) {
   const addEffect = useTimelineStore((s) => s.addEffect);
+  const addEffects = useTimelineStore((s) => s.addEffects);
   const updateEffect = useTimelineStore((s) => s.updateEffect);
   const removeEffect = useTimelineStore((s) => s.removeEffect);
   const toggleEffect = useTimelineStore((s) => s.toggleEffect);
@@ -178,19 +179,20 @@ export function EffectsSection({ items }: EffectsSectionProps) {
     });
   }, [itemIds, addEffect]);
 
-  // Apply a preset (adds multiple effects)
+  // Apply a preset (adds multiple effects as single undo/redo action)
   const handleApplyPreset = useCallback(
     (presetId: string) => {
       const preset = EFFECT_PRESETS.find((p) => p.id === presetId);
       if (!preset) return;
 
-      itemIds.forEach((id) => {
-        preset.effects.forEach((effect) => {
-          addEffect(id, effect);
-        });
-      });
+      // Batch all effects for all items into a single store update
+      const updates = itemIds.map((id) => ({
+        itemId: id,
+        effects: preset.effects,
+      }));
+      addEffects(updates);
     },
-    [itemIds, addEffect]
+    [itemIds, addEffects]
   );
 
   // Update effect value with live preview

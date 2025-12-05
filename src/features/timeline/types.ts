@@ -45,6 +45,7 @@ export interface TimelineActions {
   updateItemsTransformMap: (transformsMap: Map<string, Partial<TransformProperties>>) => void;
   // Effect actions
   addEffect: (itemId: string, effect: VisualEffect) => void;
+  addEffects: (updates: Array<{ itemId: string; effects: VisualEffect[] }>) => void;
   updateEffect: (itemId: string, effectId: string, updates: Partial<{ effect: VisualEffect; enabled: boolean }>) => void;
   removeEffect: (itemId: string, effectId: string) => void;
   toggleEffect: (itemId: string, effectId: string) => void;

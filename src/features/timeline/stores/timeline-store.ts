@@ -715,6 +715,27 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
     isDirty: true,
   })),
 
+  // Batch add effects - single undo/redo action for presets or multi-item operations
+  addEffects: (updates) => set((state) => {
+    const updateMap = new Map(updates.map((u) => [u.itemId, u.effects]));
+    return {
+      items: state.items.map((item) => {
+        const effectsToAdd = updateMap.get(item.id);
+        if (!effectsToAdd) return item;
+        const newEffects: ItemEffect[] = effectsToAdd.map((effect) => ({
+          id: crypto.randomUUID(),
+          effect,
+          enabled: true,
+        }));
+        return {
+          ...item,
+          effects: [...(item.effects ?? []), ...newEffects],
+        };
+      }),
+      isDirty: true,
+    };
+  }),
+
   updateEffect: (itemId, effectId, updates) => set((state) => ({
     items: state.items.map((item) => {
       if (item.id !== itemId) return item;
