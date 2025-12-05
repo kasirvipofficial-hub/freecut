@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { useCurrentFrame } from 'remotion';
 import type { AdjustmentItem } from '@/types/timeline';
 import type { ItemEffect, GlitchEffect } from '@/types/effects';
-import { effectsToCSSFilter, getGlitchEffects } from '@/features/effects/utils/effect-to-css';
+import { effectsToCSSFilter, getGlitchEffects, getVignetteEffect, getVignetteStyle } from '@/features/effects/utils/effect-to-css';
 import { getScanlinesStyle, getGlitchFilterString } from '@/features/effects/utils/glitch-algorithms';
 import { useGizmoStore } from '@/features/preview/stores/gizmo-store';
 
@@ -109,6 +109,12 @@ const ItemEffectWrapperInternal = React.memo<ItemEffectWrapperInternalProps>(({
   // Check for scanlines effect (needs overlay div, not just CSS filter)
   const scanlinesEffect = glitchEffects.find((e) => e.variant === 'scanlines');
 
+  // Get vignette effect for overlay rendering
+  const vignetteEffect = useMemo(() => {
+    if (activeEffects.length === 0) return null;
+    return getVignetteEffect(activeEffects);
+  }, [activeEffects]);
+
   // No effects - render children directly (no wrapper div to minimize DOM)
   // IMPORTANT: Always render the same div structure to prevent DOM changes
   // when effects activate/deactivate. Use empty filter instead of conditional wrapper.
@@ -132,6 +138,10 @@ const ItemEffectWrapperInternal = React.memo<ItemEffectWrapperInternalProps>(({
             ...getScanlinesStyle(scanlinesEffect.intensity),
           }}
         />
+      )}
+      {/* Vignette overlay - renders on top of all other effects */}
+      {vignetteEffect && (
+        <div style={getVignetteStyle(vignetteEffect)} />
       )}
     </div>
   );
