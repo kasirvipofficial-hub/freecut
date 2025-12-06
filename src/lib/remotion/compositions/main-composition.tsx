@@ -9,9 +9,8 @@ import { resolveTransform } from '../utils/transform-resolver';
 import { getShapePath, rotatePath } from '../utils/shape-path';
 import { useGizmoStore } from '@/features/preview/stores/gizmo-store';
 import { ItemEffectWrapper, type AdjustmentLayerWithTrackOrder } from '../components/item-effect-wrapper';
-import { AdjustmentPostProcessor } from '@/features/effects/components/adjustment-post-processor';
-import type { PostProcessingEffect } from '@/features/effects/utils/post-processing-pipeline';
-import { getHalftoneEffect } from '@/features/effects/utils/effect-to-css';
+// Note: Halftone is now applied per-item via ItemEffectWrapper, not globally.
+// This ensures adjustment layer effects only affect items BELOW them (higher track order).
 
 /** Mask shape with its track order for scope calculation */
 interface MaskWithTrackOrder {
@@ -309,63 +308,6 @@ const StableMaskedGroup: React.FC<{
   );
 };
 
-/**
- * Global Halftone Wrapper - applies halftone post-processing to all visual content.
- *
- * Halftone requires canvas-based capture of the entire rendered frame, so it can't
- * be applied per-item like CSS filters. This wrapper applies halftone globally
- * when any active adjustment layer has a halftone effect.
- *
- * Always renders the same DOM structure (AdjustmentPostProcessor handles enabled/disabled).
- * Uses its own useCurrentFrame() to isolate per-frame re-renders.
- */
-const GlobalHalftoneWrapper: React.FC<{
-  children: React.ReactNode;
-  adjustmentLayers: AdjustmentLayerWithTrackOrder[];
-}> = ({ children, adjustmentLayers }) => {
-  const frame = useCurrentFrame();
-
-  // Read effects preview from gizmo store for real-time slider updates
-  const effectsPreview = useGizmoStore((s) => s.effectsPreview);
-
-  // Find active halftone effect from any adjustment layer at current frame
-  const halftoneEffect = useMemo((): PostProcessingEffect | null => {
-    if (adjustmentLayers.length === 0) return null;
-
-    for (const { layer } of adjustmentLayers) {
-      // Check if layer is active at current frame
-      if (frame < layer.from || frame >= layer.from + layer.durationInFrames) continue;
-
-      // Check for halftone effect - use preview if available for live slider updates
-      const effects = effectsPreview?.[layer.id] ?? layer.effects ?? [];
-      const halftone = getHalftoneEffect(effects);
-      if (halftone) {
-        return {
-          type: 'halftone',
-          options: {
-            dotSize: halftone.dotSize,
-            spacing: halftone.spacing,
-            angle: halftone.angle,
-            intensity: halftone.intensity,
-            backgroundColor: halftone.backgroundColor,
-            dotColor: halftone.dotColor,
-          },
-        };
-      }
-    }
-    return null;
-  }, [adjustmentLayers, frame, effectsPreview]);
-
-  // Always render AdjustmentPostProcessor to maintain stable DOM structure
-  return (
-    <AdjustmentPostProcessor
-      effect={halftoneEffect}
-      enabled={!!halftoneEffect}
-    >
-      {children}
-    </AdjustmentPostProcessor>
-  );
-};
 
 /**
  * Main Remotion Composition
@@ -379,10 +321,10 @@ const GlobalHalftoneWrapper: React.FC<{
  * 4. Deleting/adding masks doesn't move items between DOM parents → no remount
  *
  * ADJUSTMENT LAYER EFFECTS:
- * 1. CSS filter/glitch effects applied PER-ITEM via ItemEffectWrapper
+ * 1. ALL effects (CSS filter, glitch, halftone) applied PER-ITEM via ItemEffectWrapper
  * 2. Each item checks if it should have effects based on track order
- * 3. Adding/removing adjustment layers doesn't change DOM structure
- * 4. Halftone (canvas-based) applied globally via GlobalHalftoneWrapper
+ * 3. Only items BELOW adjustment layer (higher track order) receive effects
+ * 4. Adding/removing adjustment layers doesn't change DOM structure
  */
 export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, backgroundColor = '#000000' }) => {
   const { fps, width: canvasWidth, height: canvasHeight } = useVideoConfig();
@@ -554,55 +496,50 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, backgrou
         </Sequence>
       ))}
 
-      {/* GLOBAL HALFTONE WRAPPER - applies halftone canvas post-processing globally */}
-      {/* Halftone requires full-frame capture so can't be per-item like CSS filters */}
-      {/* Always renders same DOM structure - enabled/disabled handled internally */}
-      <GlobalHalftoneWrapper adjustmentLayers={visibleAdjustmentLayers}>
-        {/* VIDEO LAYER - all videos in single StableVideoSequence for DOM stability */}
-        {/* Per-item CSS/glitch effects applied via ItemEffectWrapper in renderVideoItem */}
-        {/* No more above/below split - items never move between DOM parents */}
-        <StableMaskedGroup hasMasks={hasActiveMasks}>
-          <StableVideoSequence
-            items={videoItems}
-            premountFor={Math.round(fps * 2)}
-            renderItem={renderVideoItem}
-          />
-        </StableMaskedGroup>
+      {/* VIDEO LAYER - all videos in single StableVideoSequence for DOM stability */}
+      {/* ALL effects (CSS, glitch, halftone) applied per-item via ItemEffectWrapper */}
+      {/* Only items BELOW adjustment layer (higher track order) receive effects */}
+      <StableMaskedGroup hasMasks={hasActiveMasks}>
+        <StableVideoSequence
+          items={videoItems}
+          premountFor={Math.round(fps * 2)}
+          renderItem={renderVideoItem}
+        />
+      </StableMaskedGroup>
 
-        {/* CLEARING LAYER - uses its own useCurrentFrame() to isolate per-frame re-renders */}
-        <ClearingLayer videoItems={videoItems} backgroundColor={backgroundColor} />
+      {/* CLEARING LAYER - uses its own useCurrentFrame() to isolate per-frame re-renders */}
+      <ClearingLayer videoItems={videoItems} backgroundColor={backgroundColor} />
 
-        {/* NON-MEDIA LAYERS - all in single structure, per-item effects via ItemEffectWrapper */}
-        {/* No more above/below split - items never move between DOM parents */}
-        <StableMaskedGroup hasMasks={hasActiveMasks}>
-          {nonMediaByTrack
-            .filter((track) => track.items.length > 0)
-            .map((track) => {
-              const trackOrder = track.order ?? 0;
-              return (
-                <AbsoluteFill
-                  key={track.id}
-                  style={{
-                    zIndex: 1001 + (maxOrder - trackOrder),
-                    visibility: track.trackVisible ? 'visible' : 'hidden',
-                  }}
-                >
-                  {track.items.map((item) => (
-                    <Sequence key={item.id} from={item.from} durationInFrames={item.durationInFrames}>
-                      <ItemEffectWrapper
-                        itemTrackOrder={trackOrder}
-                        adjustmentLayers={visibleAdjustmentLayers}
-                        sequenceFrom={item.from}
-                      >
-                        <Item item={item} muted={false} masks={[]} />
-                      </ItemEffectWrapper>
-                    </Sequence>
-                  ))}
-                </AbsoluteFill>
-              );
-            })}
-        </StableMaskedGroup>
-      </GlobalHalftoneWrapper>
+      {/* NON-MEDIA LAYERS - all in single structure, per-item effects via ItemEffectWrapper */}
+      {/* No more above/below split - items never move between DOM parents */}
+      <StableMaskedGroup hasMasks={hasActiveMasks}>
+        {nonMediaByTrack
+          .filter((track) => track.items.length > 0)
+          .map((track) => {
+            const trackOrder = track.order ?? 0;
+            return (
+              <AbsoluteFill
+                key={track.id}
+                style={{
+                  zIndex: 1001 + (maxOrder - trackOrder),
+                  visibility: track.trackVisible ? 'visible' : 'hidden',
+                }}
+              >
+                {track.items.map((item) => (
+                  <Sequence key={item.id} from={item.from} durationInFrames={item.durationInFrames}>
+                    <ItemEffectWrapper
+                      itemTrackOrder={trackOrder}
+                      adjustmentLayers={visibleAdjustmentLayers}
+                      sequenceFrom={item.from}
+                    >
+                      <Item item={item} muted={false} masks={[]} />
+                    </ItemEffectWrapper>
+                  </Sequence>
+                ))}
+              </AbsoluteFill>
+            );
+          })}
+      </StableMaskedGroup>
     </AbsoluteFill>
   );
 };

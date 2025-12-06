@@ -2,9 +2,11 @@ import React, { useMemo } from 'react';
 import { useCurrentFrame } from 'remotion';
 import type { AdjustmentItem } from '@/types/timeline';
 import type { ItemEffect, GlitchEffect } from '@/types/effects';
-import { effectsToCSSFilter, getGlitchEffects, getVignetteEffect, getVignetteStyle } from '@/features/effects/utils/effect-to-css';
+import { effectsToCSSFilter, getGlitchEffects, getVignetteEffect, getVignetteStyle, getHalftoneEffect } from '@/features/effects/utils/effect-to-css';
 import { getScanlinesStyle, getGlitchFilterString } from '@/features/effects/utils/glitch-algorithms';
 import { useGizmoStore } from '@/features/preview/stores/gizmo-store';
+import { AdjustmentPostProcessor } from '@/features/effects/components/adjustment-post-processor';
+import type { PostProcessingEffect } from '@/features/effects/utils/post-processing-pipeline';
 
 /** Adjustment layer with its track order for scope calculation */
 export interface AdjustmentLayerWithTrackOrder {
@@ -115,10 +117,32 @@ const ItemEffectWrapperInternal = React.memo<ItemEffectWrapperInternalProps>(({
     return getVignetteEffect(activeEffects);
   }, [activeEffects]);
 
-  // No effects - render children directly (no wrapper div to minimize DOM)
+  // Get halftone effect for canvas-based post-processing (per-item, respects track order)
+  const halftoneEffect = useMemo(() => {
+    if (activeEffects.length === 0) return null;
+    return getHalftoneEffect(activeEffects);
+  }, [activeEffects]);
+
+  // Build post-processing effect config for halftone
+  const postProcessingEffect = useMemo((): PostProcessingEffect | null => {
+    if (!halftoneEffect) return null;
+    return {
+      type: 'halftone',
+      options: {
+        dotSize: halftoneEffect.dotSize,
+        spacing: halftoneEffect.spacing,
+        angle: halftoneEffect.angle,
+        intensity: halftoneEffect.intensity,
+        backgroundColor: halftoneEffect.backgroundColor,
+        dotColor: halftoneEffect.dotColor,
+      },
+    };
+  }, [halftoneEffect]);
+
   // IMPORTANT: Always render the same div structure to prevent DOM changes
   // when effects activate/deactivate. Use empty filter instead of conditional wrapper.
-  return (
+  // Halftone (canvas-based) is applied per-item via AdjustmentPostProcessor, respecting track order.
+  const content = (
     <div
       style={{
         width: '100%',
@@ -144,6 +168,16 @@ const ItemEffectWrapperInternal = React.memo<ItemEffectWrapperInternalProps>(({
         <div style={getVignetteStyle(vignetteEffect)} />
       )}
     </div>
+  );
+
+  // Wrap with halftone post-processor if active (always renders same DOM structure)
+  return (
+    <AdjustmentPostProcessor
+      effect={postProcessingEffect}
+      enabled={!!postProcessingEffect}
+    >
+      {content}
+    </AdjustmentPostProcessor>
   );
 });
 

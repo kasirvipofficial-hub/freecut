@@ -15,166 +15,187 @@ export function useTimelineTracks() {
   /**
    * Add a new track to the timeline (at the top/beginning)
    * Automatically sets order to be lowest (appears at top after sorting)
+   * Reads latest state to avoid stale closure bugs
    */
   const addTrack = useCallback(
     (track: TimelineTrack) => {
+      const currentTracks = useTimelineStore.getState().tracks;
       // Give it an order lower than all existing tracks
-      const minOrder = tracks.length > 0
-        ? Math.min(...tracks.map(t => t.order ?? 0))
+      const minOrder = currentTracks.length > 0
+        ? Math.min(...currentTracks.map(t => t.order ?? 0))
         : 0;
       const trackWithOrder = { ...track, order: minOrder - 1 };
-      setTracks([trackWithOrder, ...tracks]);
+      setTracks([trackWithOrder, ...currentTracks]);
     },
-    [tracks, setTracks]
+    [setTracks]
   );
 
   /**
    * Remove a track by ID
+   * Reads latest state to avoid stale closure bugs
    */
   const removeTrack = useCallback(
     (id: string) => {
-      setTracks(tracks.filter((track) => track.id !== id));
+      const currentTracks = useTimelineStore.getState().tracks;
+      setTracks(currentTracks.filter((track) => track.id !== id));
     },
-    [tracks, setTracks]
+    [setTracks]
   );
 
   /**
    * Remove multiple tracks by IDs
+   * Reads latest state to avoid stale closure bugs
    */
   const removeTracks = useCallback(
     (ids: string[]) => {
-      setTracks(tracks.filter((track) => !ids.includes(track.id)));
+      const currentTracks = useTimelineStore.getState().tracks;
+      setTracks(currentTracks.filter((track) => !ids.includes(track.id)));
     },
-    [tracks, setTracks]
+    [setTracks]
   );
 
   /**
    * Insert a new track before a specific track ID (so it appears above it)
    * If beforeTrackId is not found or null, inserts at the top
    * Sets the order property so the track sorts correctly
+   * Reads latest state to avoid stale closure bugs
    */
   const insertTrack = useCallback(
     (track: TimelineTrack, beforeTrackId: string | null = null) => {
+      const currentTracks = useTimelineStore.getState().tracks;
+
       if (!beforeTrackId) {
         // Insert at the top - give it an order lower than all existing tracks
-        const minOrder = tracks.length > 0
-          ? Math.min(...tracks.map(t => t.order ?? 0))
+        const minOrder = currentTracks.length > 0
+          ? Math.min(...currentTracks.map(t => t.order ?? 0))
           : 0;
         const trackWithOrder = { ...track, order: minOrder - 1 };
-        setTracks([trackWithOrder, ...tracks]);
+        setTracks([trackWithOrder, ...currentTracks]);
         return;
       }
 
-      const targetIndex = tracks.findIndex((t) => t.id === beforeTrackId);
+      const targetIndex = currentTracks.findIndex((t) => t.id === beforeTrackId);
       if (targetIndex === -1) {
         // Track not found, insert at the top
-        const minOrder = tracks.length > 0
-          ? Math.min(...tracks.map(t => t.order ?? 0))
+        const minOrder = currentTracks.length > 0
+          ? Math.min(...currentTracks.map(t => t.order ?? 0))
           : 0;
         const trackWithOrder = { ...track, order: minOrder - 1 };
-        setTracks([trackWithOrder, ...tracks]);
+        setTracks([trackWithOrder, ...currentTracks]);
         return;
       }
 
       // Get the target track's order and the track above it (if any)
-      const targetOrder = tracks[targetIndex].order ?? targetIndex;
+      const targetOrder = currentTracks[targetIndex]!.order ?? targetIndex;
       const prevOrder = targetIndex > 0
-        ? (tracks[targetIndex - 1].order ?? (targetIndex - 1))
+        ? (currentTracks[targetIndex - 1]!.order ?? (targetIndex - 1))
         : targetOrder - 2; // Default to 2 less than target if no previous track
 
       // Set order between previous track and target track
       const newOrder = (prevOrder + targetOrder) / 2;
       const trackWithOrder = { ...track, order: newOrder };
 
-      const newTracks = [...tracks];
+      const newTracks = [...currentTracks];
       newTracks.splice(targetIndex, 0, trackWithOrder);
       setTracks(newTracks);
     },
-    [tracks, setTracks]
+    [setTracks]
   );
 
   /**
    * Update a track's properties
+   * Uses getState() to always read latest tracks (avoids stale closure bugs)
    */
   const updateTrack = useCallback(
     (id: string, updates: Partial<TimelineTrack>) => {
+      const currentTracks = useTimelineStore.getState().tracks;
       setTracks(
-        tracks.map((track) =>
+        currentTracks.map((track) =>
           track.id === id ? { ...track, ...updates } : track
         )
       );
     },
-    [tracks, setTracks]
+    [setTracks]
   );
 
   /**
    * Reorder tracks based on array of track IDs
+   * Reads latest state to avoid stale closure bugs
    */
   const reorderTracks = useCallback(
     (trackIds: string[]) => {
+      const currentTracks = useTimelineStore.getState().tracks;
       const reordered = trackIds
-        .map((id) => tracks.find((t) => t.id === id))
+        .map((id) => currentTracks.find((t) => t.id === id))
         .filter((t): t is TimelineTrack => t !== undefined);
       setTracks(reordered);
     },
-    [tracks, setTracks]
+    [setTracks]
   );
 
   /**
    * Toggle track locked state
+   * Reads latest state to avoid stale closure bugs
    */
   const toggleTrackLock = useCallback(
     (id: string) => {
-      updateTrack(id, {
-        locked: !tracks.find((t) => t.id === id)?.locked,
-      });
+      const currentTrack = useTimelineStore.getState().tracks.find((t) => t.id === id);
+      if (currentTrack) {
+        updateTrack(id, { locked: !currentTrack.locked });
+      }
     },
-    [tracks, updateTrack]
+    [updateTrack]
   );
 
   /**
    * Toggle track visibility
+   * Reads latest state via updateTrack to avoid stale closure bugs
    */
   const toggleTrackVisibility = useCallback(
     (id: string) => {
-      updateTrack(id, {
-        visible: !tracks.find((t) => t.id === id)?.visible,
-      });
+      const currentTrack = useTimelineStore.getState().tracks.find((t) => t.id === id);
+      if (currentTrack) {
+        updateTrack(id, { visible: !currentTrack.visible });
+      }
     },
-    [tracks, updateTrack]
+    [updateTrack]
   );
 
   /**
    * Toggle track audio muted state
+   * Reads latest state to avoid stale closure bugs
    */
   const toggleTrackMute = useCallback(
     (id: string) => {
-      updateTrack(id, {
-        muted: !tracks.find((t) => t.id === id)?.muted,
-      });
+      const currentTrack = useTimelineStore.getState().tracks.find((t) => t.id === id);
+      if (currentTrack) {
+        updateTrack(id, { muted: !currentTrack.muted });
+      }
     },
-    [tracks, updateTrack]
+    [updateTrack]
   );
 
   /**
    * Toggle track solo state
-   * Only one track can be soloed at a time - soloíng a track will unsolo all others
+   * Only one track can be soloed at a time - soloing a track will unsolo all others
+   * Reads latest state to avoid stale closure bugs
    */
   const toggleTrackSolo = useCallback(
     (id: string) => {
-      const targetTrack = tracks.find((t) => t.id === id);
+      const currentTracks = useTimelineStore.getState().tracks;
+      const targetTrack = currentTracks.find((t) => t.id === id);
       const isCurrentlySolo = targetTrack?.solo;
 
       // If track is currently solo, just unsolo it
       // If track is not solo, solo it and unsolo all others
       setTracks(
-        tracks.map((track) => ({
+        currentTracks.map((track) => ({
           ...track,
           solo: track.id === id ? !isCurrentlySolo : false,
         }))
       );
     },
-    [tracks, setTracks]
+    [setTracks]
   );
 
   return {
