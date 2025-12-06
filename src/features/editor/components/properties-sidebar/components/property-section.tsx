@@ -40,7 +40,7 @@ export function PropertySection({
           {title}
         </span>
       </CollapsibleTrigger>
-      <CollapsibleContent className="pt-2 pb-3 space-y-3">
+      <CollapsibleContent className="pt-1 pb-2 space-y-0">
         {children}
       </CollapsibleContent>
     </Collapsible>

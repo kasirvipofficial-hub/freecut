@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, useRef, useEffect, memo } from 'react';
-import { Sparkles, Plus, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { Sparkles, Plus, Eye, EyeOff, Trash2, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { HexColorPicker } from 'react-colorful';
 import {
@@ -389,6 +389,106 @@ export const EffectsSection = memo(function EffectsSection({ items }: EffectsSec
     [handleVignetteLiveChange]
   );
 
+  // Reset CSS filter effect to default value
+  const handleResetCSSFilter = useCallback(
+    (effectId: string, filterType: CSSFilterType) => {
+      const config = CSS_FILTER_CONFIGS[filterType];
+      itemIds.forEach((id) => {
+        updateEffect(id, effectId, {
+          effect: { type: 'css-filter', filter: filterType, value: config.default } as CSSFilterEffect,
+        });
+      });
+    },
+    [itemIds, updateEffect]
+  );
+
+  // Reset glitch effect to default intensity
+  const handleResetGlitch = useCallback(
+    (effectId: string) => {
+      const effect = effects.find((e) => e.id === effectId);
+      if (!effect || effect.effect.type !== 'glitch') return;
+
+      itemIds.forEach((id) => {
+        updateEffect(id, effectId, {
+          effect: { ...effect.effect, intensity: 0.5 } as GlitchEffect,
+        });
+      });
+    },
+    [effects, itemIds, updateEffect]
+  );
+
+  // Reset halftone property to default
+  const handleResetHalftone = useCallback(
+    (effectId: string, property: keyof HalftoneEffect) => {
+      const effect = effects.find((e) => e.id === effectId);
+      if (!effect || effect.effect.type !== 'canvas-effect') return;
+
+      let defaultValue: number | string;
+      switch (property) {
+        case 'dotSize':
+          defaultValue = HALFTONE_CONFIG.dotSize.default;
+          break;
+        case 'spacing':
+          defaultValue = HALFTONE_CONFIG.spacing.default;
+          break;
+        case 'angle':
+          defaultValue = HALFTONE_CONFIG.angle.default;
+          break;
+        case 'intensity':
+          defaultValue = HALFTONE_CONFIG.intensity.default;
+          break;
+        case 'dotColor':
+          defaultValue = '#000000';
+          break;
+        case 'backgroundColor':
+          defaultValue = '#ffffff';
+          break;
+        default:
+          return;
+      }
+
+      itemIds.forEach((id) => {
+        updateEffect(id, effectId, {
+          effect: { ...effect.effect, [property]: defaultValue } as HalftoneEffect,
+        });
+      });
+    },
+    [effects, itemIds, updateEffect]
+  );
+
+  // Reset vignette property to default
+  const handleResetVignette = useCallback(
+    (effectId: string, property: keyof VignetteEffect) => {
+      const effect = effects.find((e) => e.id === effectId);
+      if (!effect || effect.effect.type !== 'overlay-effect') return;
+
+      let defaultValue: number | string;
+      switch (property) {
+        case 'intensity':
+          defaultValue = VIGNETTE_CONFIG.intensity.default;
+          break;
+        case 'size':
+          defaultValue = VIGNETTE_CONFIG.size.default;
+          break;
+        case 'softness':
+          defaultValue = VIGNETTE_CONFIG.softness.default;
+          break;
+        case 'color':
+          defaultValue = '#000000';
+          break;
+        default:
+          return;
+      }
+
+      itemIds.forEach((id) => {
+        updateEffect(id, effectId, {
+          effect: { ...effect.effect, [property]: defaultValue } as VignetteEffect,
+        });
+      });
+    },
+    [effects, itemIds, updateEffect]
+  );
+
   // Toggle effect visibility
   const handleToggle = useCallback(
     (effectId: string) => {
@@ -512,13 +612,16 @@ export const EffectsSection = memo(function EffectsSection({ items }: EffectsSec
         )}
       </div>
 
-      {/* Active Effects List */}
+      {/* Active Effects List - wrapped to prevent space-y-3 from PropertySection */}
+      <div className="space-y-0">
       {effects.map((effect) => {
         if (effect.effect.type === 'css-filter') {
-          const config = CSS_FILTER_CONFIGS[effect.effect.filter];
+          const cssEffect = effect.effect as CSSFilterEffect;
+          const config = CSS_FILTER_CONFIGS[cssEffect.filter];
+          const isDefault = cssEffect.value === config.default;
           return (
             <PropertyRow key={effect.id} label={config.label}>
-              <div className="flex items-center gap-1 flex-1">
+              <div className="flex items-center gap-1 min-w-0">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -533,7 +636,7 @@ export const EffectsSection = memo(function EffectsSection({ items }: EffectsSec
                   )}
                 </Button>
                 <NumberInput
-                  value={effect.effect.value}
+                  value={cssEffect.value}
                   onChange={(v) => handleEffectChange(effect.id, v)}
                   onLiveChange={(v) => handleEffectLiveChange(effect.id, v)}
                   min={config.min}
@@ -541,7 +644,18 @@ export const EffectsSection = memo(function EffectsSection({ items }: EffectsSec
                   step={config.step}
                   unit={config.unit}
                   disabled={!effect.enabled}
+                  className="flex-1 min-w-0"
                 />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`h-6 w-6 flex-shrink-0 ${isDefault ? 'opacity-30' : ''}`}
+                  onClick={() => handleResetCSSFilter(effect.id, cssEffect.filter)}
+                  title="Reset to default"
+                  disabled={isDefault}
+                >
+                  <RotateCcw className="w-3 h-3" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -557,10 +671,12 @@ export const EffectsSection = memo(function EffectsSection({ items }: EffectsSec
         }
 
         if (effect.effect.type === 'glitch') {
-          const config = GLITCH_CONFIGS[effect.effect.variant];
+          const glitchEffect = effect.effect as GlitchEffect;
+          const config = GLITCH_CONFIGS[glitchEffect.variant];
+          const isDefault = glitchEffect.intensity === 0.5;
           return (
             <PropertyRow key={effect.id} label={config.label}>
-              <div className="flex items-center gap-1 flex-1">
+              <div className="flex items-center gap-1 min-w-0">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -575,7 +691,7 @@ export const EffectsSection = memo(function EffectsSection({ items }: EffectsSec
                   )}
                 </Button>
                 <NumberInput
-                  value={Math.round(effect.effect.intensity * 100)}
+                  value={Math.round(glitchEffect.intensity * 100)}
                   onChange={(v) => handleGlitchIntensityChange(effect.id, v)}
                   onLiveChange={(v) => handleGlitchIntensityLiveChange(effect.id, v)}
                   min={0}
@@ -583,7 +699,18 @@ export const EffectsSection = memo(function EffectsSection({ items }: EffectsSec
                   step={1}
                   unit="%"
                   disabled={!effect.enabled}
+                  className="flex-1 min-w-0"
                 />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`h-6 w-6 flex-shrink-0 ${isDefault ? 'opacity-30' : ''}`}
+                  onClick={() => handleResetGlitch(effect.id)}
+                  title="Reset to default"
+                  disabled={isDefault}
+                >
+                  <RotateCcw className="w-3 h-3" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -632,63 +759,115 @@ export const EffectsSection = memo(function EffectsSection({ items }: EffectsSec
 
               {/* Dot Size */}
               <PropertyRow label={HALFTONE_CONFIG.dotSize.label}>
-                <NumberInput
-                  value={halftone.dotSize}
-                  onChange={(v) => handleHalftoneChange(effect.id, 'dotSize', v)}
-                  onLiveChange={(v) => handleHalftoneLiveChange(effect.id, 'dotSize', v)}
-                  min={HALFTONE_CONFIG.dotSize.min}
-                  max={HALFTONE_CONFIG.dotSize.max}
-                  step={HALFTONE_CONFIG.dotSize.step}
-                  unit={HALFTONE_CONFIG.dotSize.unit}
-                  disabled={!effect.enabled}
-                />
+                <div className="flex items-center gap-1 min-w-0">
+                  <NumberInput
+                    value={halftone.dotSize}
+                    onChange={(v) => handleHalftoneChange(effect.id, 'dotSize', v)}
+                    onLiveChange={(v) => handleHalftoneLiveChange(effect.id, 'dotSize', v)}
+                    min={HALFTONE_CONFIG.dotSize.min}
+                    max={HALFTONE_CONFIG.dotSize.max}
+                    step={HALFTONE_CONFIG.dotSize.step}
+                    unit={HALFTONE_CONFIG.dotSize.unit}
+                    disabled={!effect.enabled}
+                    className="flex-1 min-w-0"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`h-6 w-6 flex-shrink-0 ${halftone.dotSize === HALFTONE_CONFIG.dotSize.default ? 'opacity-30' : ''}`}
+                    onClick={() => handleResetHalftone(effect.id, 'dotSize')}
+                    title="Reset to default"
+                    disabled={halftone.dotSize === HALFTONE_CONFIG.dotSize.default}
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                  </Button>
+                </div>
               </PropertyRow>
 
               {/* Spacing */}
               <PropertyRow label={HALFTONE_CONFIG.spacing.label}>
-                <NumberInput
-                  value={halftone.spacing}
-                  onChange={(v) => handleHalftoneChange(effect.id, 'spacing', v)}
-                  onLiveChange={(v) => handleHalftoneLiveChange(effect.id, 'spacing', v)}
-                  min={HALFTONE_CONFIG.spacing.min}
-                  max={HALFTONE_CONFIG.spacing.max}
-                  step={HALFTONE_CONFIG.spacing.step}
-                  unit={HALFTONE_CONFIG.spacing.unit}
-                  disabled={!effect.enabled}
-                />
+                <div className="flex items-center gap-1 min-w-0">
+                  <NumberInput
+                    value={halftone.spacing}
+                    onChange={(v) => handleHalftoneChange(effect.id, 'spacing', v)}
+                    onLiveChange={(v) => handleHalftoneLiveChange(effect.id, 'spacing', v)}
+                    min={HALFTONE_CONFIG.spacing.min}
+                    max={HALFTONE_CONFIG.spacing.max}
+                    step={HALFTONE_CONFIG.spacing.step}
+                    unit={HALFTONE_CONFIG.spacing.unit}
+                    disabled={!effect.enabled}
+                    className="flex-1 min-w-0"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`h-6 w-6 flex-shrink-0 ${halftone.spacing === HALFTONE_CONFIG.spacing.default ? 'opacity-30' : ''}`}
+                    onClick={() => handleResetHalftone(effect.id, 'spacing')}
+                    title="Reset to default"
+                    disabled={halftone.spacing === HALFTONE_CONFIG.spacing.default}
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                  </Button>
+                </div>
               </PropertyRow>
 
               {/* Angle */}
               <PropertyRow label={HALFTONE_CONFIG.angle.label}>
-                <NumberInput
-                  value={halftone.angle}
-                  onChange={(v) => handleHalftoneChange(effect.id, 'angle', v)}
-                  onLiveChange={(v) => handleHalftoneLiveChange(effect.id, 'angle', v)}
-                  min={HALFTONE_CONFIG.angle.min}
-                  max={HALFTONE_CONFIG.angle.max}
-                  step={HALFTONE_CONFIG.angle.step}
-                  unit={HALFTONE_CONFIG.angle.unit}
-                  disabled={!effect.enabled}
-                />
+                <div className="flex items-center gap-1 min-w-0">
+                  <NumberInput
+                    value={halftone.angle}
+                    onChange={(v) => handleHalftoneChange(effect.id, 'angle', v)}
+                    onLiveChange={(v) => handleHalftoneLiveChange(effect.id, 'angle', v)}
+                    min={HALFTONE_CONFIG.angle.min}
+                    max={HALFTONE_CONFIG.angle.max}
+                    step={HALFTONE_CONFIG.angle.step}
+                    unit={HALFTONE_CONFIG.angle.unit}
+                    disabled={!effect.enabled}
+                    className="flex-1 min-w-0"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`h-6 w-6 flex-shrink-0 ${halftone.angle === HALFTONE_CONFIG.angle.default ? 'opacity-30' : ''}`}
+                    onClick={() => handleResetHalftone(effect.id, 'angle')}
+                    title="Reset to default"
+                    disabled={halftone.angle === HALFTONE_CONFIG.angle.default}
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                  </Button>
+                </div>
               </PropertyRow>
 
               {/* Intensity */}
               <PropertyRow label={HALFTONE_CONFIG.intensity.label}>
-                <NumberInput
-                  value={Math.round(halftone.intensity * 100)}
-                  onChange={(v) => handleHalftoneIntensityChange(effect.id, v)}
-                  onLiveChange={(v) => handleHalftoneIntensityLiveChange(effect.id, v)}
-                  min={0}
-                  max={100}
-                  step={1}
-                  unit="%"
-                  disabled={!effect.enabled}
-                />
+                <div className="flex items-center gap-1 min-w-0">
+                  <NumberInput
+                    value={Math.round(halftone.intensity * 100)}
+                    onChange={(v) => handleHalftoneIntensityChange(effect.id, v)}
+                    onLiveChange={(v) => handleHalftoneIntensityLiveChange(effect.id, v)}
+                    min={0}
+                    max={100}
+                    step={1}
+                    unit="%"
+                    disabled={!effect.enabled}
+                    className="flex-1 min-w-0"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`h-6 w-6 flex-shrink-0 ${halftone.intensity === HALFTONE_CONFIG.intensity.default ? 'opacity-30' : ''}`}
+                    onClick={() => handleResetHalftone(effect.id, 'intensity')}
+                    title="Reset to default"
+                    disabled={halftone.intensity === HALFTONE_CONFIG.intensity.default}
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                  </Button>
+                </div>
               </PropertyRow>
 
               {/* Colors */}
               <PropertyRow label="Colors">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <EffectColorPicker
                     label="Dot"
                     color={halftone.dotColor}
@@ -696,6 +875,16 @@ export const EffectsSection = memo(function EffectsSection({ items }: EffectsSec
                     onLiveChange={(c) => handleHalftoneLiveChange(effect.id, 'dotColor', c)}
                     disabled={!effect.enabled}
                   />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`h-6 w-6 flex-shrink-0 ${halftone.dotColor === '#000000' ? 'opacity-30' : ''}`}
+                    onClick={() => handleResetHalftone(effect.id, 'dotColor')}
+                    title="Reset dot color"
+                    disabled={halftone.dotColor === '#000000'}
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                  </Button>
                   <EffectColorPicker
                     label="Bg"
                     color={halftone.backgroundColor}
@@ -703,6 +892,16 @@ export const EffectsSection = memo(function EffectsSection({ items }: EffectsSec
                     onLiveChange={(c) => handleHalftoneLiveChange(effect.id, 'backgroundColor', c)}
                     disabled={!effect.enabled}
                   />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`h-6 w-6 flex-shrink-0 ${halftone.backgroundColor === '#ffffff' ? 'opacity-30' : ''}`}
+                    onClick={() => handleResetHalftone(effect.id, 'backgroundColor')}
+                    title="Reset background color"
+                    disabled={halftone.backgroundColor === '#ffffff'}
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                  </Button>
                 </div>
               </PropertyRow>
             </div>
@@ -743,55 +942,106 @@ export const EffectsSection = memo(function EffectsSection({ items }: EffectsSec
 
               {/* Intensity */}
               <PropertyRow label={VIGNETTE_CONFIG.intensity.label}>
-                <NumberInput
-                  value={Math.round(vignette.intensity * 100)}
-                  onChange={(v) => handleVignettePercentChange(effect.id, 'intensity', v)}
-                  onLiveChange={(v) => handleVignettePercentLiveChange(effect.id, 'intensity', v)}
-                  min={0}
-                  max={100}
-                  step={1}
-                  unit="%"
-                  disabled={!effect.enabled}
-                />
+                <div className="flex items-center gap-1 min-w-0">
+                  <NumberInput
+                    value={Math.round(vignette.intensity * 100)}
+                    onChange={(v) => handleVignettePercentChange(effect.id, 'intensity', v)}
+                    onLiveChange={(v) => handleVignettePercentLiveChange(effect.id, 'intensity', v)}
+                    min={0}
+                    max={100}
+                    step={1}
+                    unit="%"
+                    disabled={!effect.enabled}
+                    className="flex-1 min-w-0"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`h-6 w-6 flex-shrink-0 ${vignette.intensity === VIGNETTE_CONFIG.intensity.default ? 'opacity-30' : ''}`}
+                    onClick={() => handleResetVignette(effect.id, 'intensity')}
+                    title="Reset to default"
+                    disabled={vignette.intensity === VIGNETTE_CONFIG.intensity.default}
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                  </Button>
+                </div>
               </PropertyRow>
 
               {/* Size */}
               <PropertyRow label={VIGNETTE_CONFIG.size.label}>
-                <NumberInput
-                  value={Math.round(vignette.size * 100)}
-                  onChange={(v) => handleVignettePercentChange(effect.id, 'size', v)}
-                  onLiveChange={(v) => handleVignettePercentLiveChange(effect.id, 'size', v)}
-                  min={0}
-                  max={100}
-                  step={1}
-                  unit="%"
-                  disabled={!effect.enabled}
-                />
+                <div className="flex items-center gap-1 min-w-0">
+                  <NumberInput
+                    value={Math.round(vignette.size * 100)}
+                    onChange={(v) => handleVignettePercentChange(effect.id, 'size', v)}
+                    onLiveChange={(v) => handleVignettePercentLiveChange(effect.id, 'size', v)}
+                    min={0}
+                    max={100}
+                    step={1}
+                    unit="%"
+                    disabled={!effect.enabled}
+                    className="flex-1 min-w-0"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`h-6 w-6 flex-shrink-0 ${vignette.size === VIGNETTE_CONFIG.size.default ? 'opacity-30' : ''}`}
+                    onClick={() => handleResetVignette(effect.id, 'size')}
+                    title="Reset to default"
+                    disabled={vignette.size === VIGNETTE_CONFIG.size.default}
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                  </Button>
+                </div>
               </PropertyRow>
 
               {/* Softness */}
               <PropertyRow label={VIGNETTE_CONFIG.softness.label}>
-                <NumberInput
-                  value={Math.round(vignette.softness * 100)}
-                  onChange={(v) => handleVignettePercentChange(effect.id, 'softness', v)}
-                  onLiveChange={(v) => handleVignettePercentLiveChange(effect.id, 'softness', v)}
-                  min={0}
-                  max={100}
-                  step={1}
-                  unit="%"
-                  disabled={!effect.enabled}
-                />
+                <div className="flex items-center gap-1 min-w-0">
+                  <NumberInput
+                    value={Math.round(vignette.softness * 100)}
+                    onChange={(v) => handleVignettePercentChange(effect.id, 'softness', v)}
+                    onLiveChange={(v) => handleVignettePercentLiveChange(effect.id, 'softness', v)}
+                    min={0}
+                    max={100}
+                    step={1}
+                    unit="%"
+                    disabled={!effect.enabled}
+                    className="flex-1 min-w-0"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`h-6 w-6 flex-shrink-0 ${vignette.softness === VIGNETTE_CONFIG.softness.default ? 'opacity-30' : ''}`}
+                    onClick={() => handleResetVignette(effect.id, 'softness')}
+                    title="Reset to default"
+                    disabled={vignette.softness === VIGNETTE_CONFIG.softness.default}
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                  </Button>
+                </div>
               </PropertyRow>
 
               {/* Color */}
               <PropertyRow label="Color">
-                <EffectColorPicker
-                  label=""
-                  color={vignette.color}
-                  onChange={(c) => handleVignetteChange(effect.id, 'color', c)}
-                  onLiveChange={(c) => handleVignetteLiveChange(effect.id, 'color', c)}
-                  disabled={!effect.enabled}
-                />
+                <div className="flex items-center gap-1 min-w-0">
+                  <EffectColorPicker
+                    label=""
+                    color={vignette.color}
+                    onChange={(c) => handleVignetteChange(effect.id, 'color', c)}
+                    onLiveChange={(c) => handleVignetteLiveChange(effect.id, 'color', c)}
+                    disabled={!effect.enabled}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`h-6 w-6 flex-shrink-0 ${vignette.color === '#000000' ? 'opacity-30' : ''}`}
+                    onClick={() => handleResetVignette(effect.id, 'color')}
+                    title="Reset to default"
+                    disabled={vignette.color === '#000000'}
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                  </Button>
+                </div>
               </PropertyRow>
             </div>
           );
@@ -799,6 +1049,7 @@ export const EffectsSection = memo(function EffectsSection({ items }: EffectsSec
 
         return null;
       })}
+      </div>
 
       {/* Empty state */}
       {effects.length === 0 && (
