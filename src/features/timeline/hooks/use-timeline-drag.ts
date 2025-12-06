@@ -47,11 +47,11 @@ export function useTimelineDrag(
   const tracks = useTimelineStore((s) => s.tracks);
   const items = useTimelineStore((s) => s.items);
 
-  // Selection store
+  // Selection store - use granular selectors to prevent re-renders
+  // NOTE: dragState subscription removed - activeSnapTarget is read directly in timeline-content.tsx
   const selectedItemIds = useSelectionStore((s) => s.selectedItemIds);
   const selectItems = useSelectionStore((s) => s.selectItems);
   const setDragState = useSelectionStore((s) => s.setDragState);
-  const dragState = useSelectionStore((s) => s.dragState);
 
   // Get zoom utilities
   const { pixelsToFrame } = useTimelineZoom();
@@ -621,6 +621,5 @@ export function useTimelineDrag(
     isDragging,
     dragOffset,
     handleDragStart,
-    activeSnapTarget: dragState?.activeSnapTarget ?? null,
   };
 }

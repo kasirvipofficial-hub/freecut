@@ -92,21 +92,22 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
   // Rate stretch functionality - disabled if track is locked
   const { isStretching, stretchHandle, handleStretchStart, getVisualFeedback } = useRateStretch(item, timelineDuration, trackLocked);
 
-  // Granular selector: only re-render when THIS item's drag participation changes
-  const isPartOfMultiDrag = useSelectionStore(
+  // Combined drag state selector - single subscription for both values to prevent
+  // cascading re-renders on drag end. Returns stable primitive values.
+  const dragParticipation = useSelectionStore(
     useCallback(
-      (s) => s.dragState?.isDragging && s.dragState.draggedItemIds.includes(item.id),
+      (s) => {
+        const isParticipating = s.dragState?.isDragging && s.dragState.draggedItemIds.includes(item.id);
+        const isAlt = isParticipating && s.dragState?.isAltDrag;
+        // Return encoded value: 0 = not participating, 1 = participating (not alt), 2 = participating + alt
+        // This ensures stable primitive comparison instead of object reference
+        return isParticipating ? (isAlt ? 2 : 1) : 0;
+      },
       [item.id]
     )
   );
-
-  // Granular selector: check if Alt key is held during drag (for duplication indicator)
-  const isAltDrag = useSelectionStore(
-    useCallback(
-      (s) => s.dragState?.isDragging && s.dragState.draggedItemIds.includes(item.id) && s.dragState.isAltDrag,
-      [item.id]
-    )
-  );
+  const isPartOfMultiDrag = dragParticipation > 0;
+  const isAltDrag = dragParticipation === 2;
 
   // Track global drag state via ref subscription to avoid re-renders on ALL clips
   // when ANY drag starts/stops - this is a major performance optimization
@@ -802,40 +803,39 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
       </ContextMenuContent>
     </ContextMenu>
 
-      {/* Alt-drag ghost for anchor item: rendered outside clipped container */}
-      {isAltDrag && isDragging && (
-        <div
-          className="absolute inset-y-0 rounded border-2 border-dashed border-primary bg-primary/20 pointer-events-none z-50"
-          style={{
-            left: `${left + dragOffset.x}px`,
-            width: `${width}px`,
-            transform: `translateY(${dragOffset.y}px)`,
-          }}
-        >
-          {/* Duplication indicator on ghost */}
-          <div className="absolute -top-1 -right-1 w-5 h-5 bg-primary rounded-full flex items-center justify-center text-xs font-bold text-primary-foreground shadow-md">
-            +
-          </div>
+      {/* Alt-drag ghost for anchor item: always rendered, visibility controlled by CSS */}
+      <div
+        className={cn(
+          "absolute inset-y-0 rounded border-2 border-dashed border-primary bg-primary/20 pointer-events-none z-50",
+          !(isAltDrag && isDragging) && "hidden"
+        )}
+        style={{
+          left: `${left + dragOffset.x}px`,
+          width: `${width}px`,
+          transform: `translateY(${dragOffset.y}px)`,
+        }}
+      >
+        {/* Duplication indicator on ghost */}
+        <div className="absolute -top-1 -right-1 w-5 h-5 bg-primary rounded-full flex items-center justify-center text-xs font-bold text-primary-foreground shadow-md">
+          +
         </div>
-      )}
+      </div>
 
-      {/* Alt-drag ghost for follower items: updated via RAF, rendered outside clipped container */}
-      {isPartOfDrag && (
-        <div
-          ref={ghostRef}
-          className="absolute inset-y-0 rounded border-2 border-dashed border-primary bg-primary/20 pointer-events-none z-50"
-          style={{
-            left: `${left}px`,
-            width: `${width}px`,
-            display: 'none',
-          }}
-        >
-          {/* Duplication indicator on ghost */}
-          <div className="absolute -top-1 -right-1 w-5 h-5 bg-primary rounded-full flex items-center justify-center text-xs font-bold text-primary-foreground shadow-md">
-            +
-          </div>
+      {/* Alt-drag ghost for follower items: always rendered, visibility controlled by RAF */}
+      <div
+        ref={ghostRef}
+        className="absolute inset-y-0 rounded border-2 border-dashed border-primary bg-primary/20 pointer-events-none z-50"
+        style={{
+          left: `${left}px`,
+          width: `${width}px`,
+          display: 'none',
+        }}
+      >
+        {/* Duplication indicator on ghost */}
+        <div className="absolute -top-1 -right-1 w-5 h-5 bg-primary rounded-full flex items-center justify-center text-xs font-bold text-primary-foreground shadow-md">
+          +
         </div>
-      )}
+      </div>
     </>
   );
 }, (prevProps, nextProps) => {
