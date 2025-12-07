@@ -131,8 +131,8 @@ export const EffectsSection = memo(function EffectsSection({ items }: EffectsSec
   const toggleEffect = useTimelineStore((s) => s.toggleEffect);
 
   // Gizmo store for live effect preview
-  const setEffectsPreview = useGizmoStore((s) => s.setEffectsPreview);
-  const clearEffectsPreview = useGizmoStore((s) => s.clearEffectsPreview);
+  const setEffectsPreviewNew = useGizmoStore((s) => s.setEffectsPreviewNew);
+  const clearPreview = useGizmoStore((s) => s.clearPreview);
 
   // Items are already filtered by parent - use directly
   const visualItems = items;
@@ -244,9 +244,9 @@ export const EffectsSection = memo(function EffectsSection({ items }: EffectsSec
           });
         }
       });
-      queueMicrotask(() => clearEffectsPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [effects, itemIds, updateEffect, clearEffectsPreview]
+    [effects, itemIds, updateEffect, clearPreview]
   );
 
   // Update halftone effect property
@@ -260,9 +260,9 @@ export const EffectsSection = memo(function EffectsSection({ items }: EffectsSec
           effect: { ...effect.effect, [property]: newValue } as HalftoneEffect,
         });
       });
-      queueMicrotask(() => clearEffectsPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [effects, itemIds, updateEffect, clearEffectsPreview]
+    [effects, itemIds, updateEffect, clearPreview]
   );
 
   // Live preview during drag
@@ -286,9 +286,9 @@ export const EffectsSection = memo(function EffectsSection({ items }: EffectsSec
           });
         }
       });
-      setEffectsPreview(previews);
+      setEffectsPreviewNew(previews);
     },
-    [effects, itemIds, visualItems, setEffectsPreview]
+    [effects, itemIds, visualItems, setEffectsPreviewNew]
   );
 
   // Live preview for halftone properties
@@ -310,9 +310,9 @@ export const EffectsSection = memo(function EffectsSection({ items }: EffectsSec
           });
         }
       });
-      setEffectsPreview(previews);
+      setEffectsPreviewNew(previews);
     },
-    [effects, itemIds, visualItems, setEffectsPreview]
+    [effects, itemIds, visualItems, setEffectsPreviewNew]
   );
 
   // Glitch intensity handlers (convert from percentage 0-100 to internal 0-1)
@@ -360,9 +360,9 @@ export const EffectsSection = memo(function EffectsSection({ items }: EffectsSec
           effect: { ...effect.effect, [property]: newValue } as VignetteEffect,
         });
       });
-      queueMicrotask(() => clearEffectsPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [effects, itemIds, updateEffect, clearEffectsPreview]
+    [effects, itemIds, updateEffect, clearPreview]
   );
 
   // Live preview for vignette properties
@@ -384,9 +384,9 @@ export const EffectsSection = memo(function EffectsSection({ items }: EffectsSec
           });
         }
       });
-      setEffectsPreview(previews);
+      setEffectsPreviewNew(previews);
     },
-    [effects, itemIds, visualItems, setEffectsPreview]
+    [effects, itemIds, visualItems, setEffectsPreviewNew]
   );
 
   // Vignette property handlers (convert from percentage 0-100 to internal 0-1)

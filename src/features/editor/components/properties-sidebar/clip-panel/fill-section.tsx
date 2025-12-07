@@ -45,8 +45,8 @@ export const FillSection = memo(function FillSection({
   const allKeyframes = useTimelineStore((s) => s.keyframes);
 
   // Gizmo store for live preview
-  const setPropertiesPreview = useGizmoStore((s) => s.setPropertiesPreview);
-  const clearPropertiesPreview = useGizmoStore((s) => s.clearPropertiesPreview);
+  const setTransformPreview = useGizmoStore((s) => s.setTransformPreview);
+  const clearPreview = useGizmoStore((s) => s.clearPreview);
 
   // Get current values with keyframe animation applied
   // Opacity is 0-1, display as 0-100%
@@ -106,9 +106,9 @@ export const FillSection = memo(function FillSection({
       items.forEach((item) => {
         previews[item.id] = { opacity: value / 100 };
       });
-      setPropertiesPreview(previews);
+      setTransformPreview(previews);
     },
-    [items, setPropertiesPreview]
+    [items, setTransformPreview]
   );
 
   // Commit opacity (on mouse up, with auto-keyframe support)
@@ -125,9 +125,9 @@ export const FillSection = memo(function FillSection({
       if (!allHandled) {
         onTransformChange(itemIds, { opacity: opacityValue });
       }
-      queueMicrotask(() => clearPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [itemIds, onTransformChange, clearPropertiesPreview, autoKeyframeOpacity]
+    [itemIds, onTransformChange, clearPreview, autoKeyframeOpacity]
   );
 
   // Live preview for corner radius (during drag)
@@ -137,18 +137,18 @@ export const FillSection = memo(function FillSection({
       items.forEach((item) => {
         previews[item.id] = { cornerRadius: value };
       });
-      setPropertiesPreview(previews);
+      setTransformPreview(previews);
     },
-    [items, setPropertiesPreview]
+    [items, setTransformPreview]
   );
 
   // Commit corner radius (on mouse up)
   const handleCornerRadiusChange = useCallback(
     (value: number) => {
       onTransformChange(itemIds, { cornerRadius: value });
-      queueMicrotask(() => clearPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [itemIds, onTransformChange, clearPropertiesPreview]
+    [itemIds, onTransformChange, clearPreview]
   );
 
   // Reset opacity to 100%

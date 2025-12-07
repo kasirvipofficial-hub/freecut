@@ -45,8 +45,8 @@ export function AudioSection({ items }: AudioSectionProps) {
   const updateItem = useTimelineStore((s) => s.updateItem);
 
   // Gizmo store for live audio preview
-  const setItemPropertiesPreview = useGizmoStore((s) => s.setItemPropertiesPreview);
-  const clearItemPropertiesPreview = useGizmoStore((s) => s.clearItemPropertiesPreview);
+  const setPropertiesPreviewNew = useGizmoStore((s) => s.setPropertiesPreviewNew);
+  const clearPreview = useGizmoStore((s) => s.clearPreview);
 
   const audioItems = useMemo(
     () =>
@@ -71,9 +71,9 @@ export function AudioSection({ items }: AudioSectionProps) {
       itemIds.forEach((id) => {
         previews[id] = { volume: value };
       });
-      setItemPropertiesPreview(previews);
+      setPropertiesPreviewNew(previews);
     },
-    [itemIds, setItemPropertiesPreview]
+    [itemIds, setPropertiesPreviewNew]
   );
 
   // Commit volume (on mouse up)
@@ -82,9 +82,9 @@ export function AudioSection({ items }: AudioSectionProps) {
     (value: number) => {
       itemIds.forEach((id) => updateItem(id, { volume: value }));
       // Defer preview clear to next microtask so store update propagates first
-      queueMicrotask(() => clearItemPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [itemIds, updateItem, clearItemPropertiesPreview]
+    [itemIds, updateItem, clearPreview]
   );
 
   // Live preview for audio fade in (during drag)
@@ -94,18 +94,18 @@ export function AudioSection({ items }: AudioSectionProps) {
       itemIds.forEach((id) => {
         previews[id] = { audioFadeIn: value };
       });
-      setItemPropertiesPreview(previews);
+      setPropertiesPreviewNew(previews);
     },
-    [itemIds, setItemPropertiesPreview]
+    [itemIds, setPropertiesPreviewNew]
   );
 
   // Commit audio fade in (on mouse up)
   const handleFadeInChange = useCallback(
     (value: number) => {
       itemIds.forEach((id) => updateItem(id, { audioFadeIn: value }));
-      queueMicrotask(() => clearItemPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [itemIds, updateItem, clearItemPropertiesPreview]
+    [itemIds, updateItem, clearPreview]
   );
 
   // Live preview for audio fade out (during drag)
@@ -115,18 +115,18 @@ export function AudioSection({ items }: AudioSectionProps) {
       itemIds.forEach((id) => {
         previews[id] = { audioFadeOut: value };
       });
-      setItemPropertiesPreview(previews);
+      setPropertiesPreviewNew(previews);
     },
-    [itemIds, setItemPropertiesPreview]
+    [itemIds, setPropertiesPreviewNew]
   );
 
   // Commit audio fade out (on mouse up)
   const handleFadeOutChange = useCallback(
     (value: number) => {
       itemIds.forEach((id) => updateItem(id, { audioFadeOut: value }));
-      queueMicrotask(() => clearItemPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [itemIds, updateItem, clearItemPropertiesPreview]
+    [itemIds, updateItem, clearPreview]
   );
 
   // Reset volume to 0 dB

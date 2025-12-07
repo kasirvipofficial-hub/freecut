@@ -63,8 +63,8 @@ export const LayoutSection = memo(function LayoutSection({
   const allKeyframes = useTimelineStore((s) => s.keyframes);
 
   // Gizmo store for live preview (both for properties panel and gizmo drag sync)
-  const setPropertiesPreview = useGizmoStore((s) => s.setPropertiesPreview);
-  const clearPropertiesPreview = useGizmoStore((s) => s.clearPropertiesPreview);
+  const setTransformPreview = useGizmoStore((s) => s.setTransformPreview);
+  const clearPreview = useGizmoStore((s) => s.clearPreview);
   const activeGizmo = useGizmoStore((s) => s.activeGizmo);
   const previewTransform = useGizmoStore((s) => s.previewTransform);
 
@@ -153,9 +153,9 @@ export const LayoutSection = memo(function LayoutSection({
       items.forEach((item) => {
         previews[item.id] = { x: value };
       });
-      setPropertiesPreview(previews);
+      setTransformPreview(previews);
     },
-    [items, setPropertiesPreview]
+    [items, setTransformPreview]
   );
 
   // Commit X position (with auto-keyframe support)
@@ -172,9 +172,9 @@ export const LayoutSection = memo(function LayoutSection({
       if (!allHandled) {
         onTransformChange(itemIds, { x: value });
       }
-      queueMicrotask(() => clearPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [itemIds, onTransformChange, clearPropertiesPreview, autoKeyframeProperty]
+    [itemIds, onTransformChange, clearPreview, autoKeyframeProperty]
   );
 
   // Live preview for Y position (during scrub)
@@ -184,9 +184,9 @@ export const LayoutSection = memo(function LayoutSection({
       items.forEach((item) => {
         previews[item.id] = { y: value };
       });
-      setPropertiesPreview(previews);
+      setTransformPreview(previews);
     },
-    [items, setPropertiesPreview]
+    [items, setTransformPreview]
   );
 
   // Commit Y position (with auto-keyframe support)
@@ -201,9 +201,9 @@ export const LayoutSection = memo(function LayoutSection({
       if (!allHandled) {
         onTransformChange(itemIds, { y: value });
       }
-      queueMicrotask(() => clearPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [itemIds, onTransformChange, clearPropertiesPreview, autoKeyframeProperty]
+    [itemIds, onTransformChange, clearPreview, autoKeyframeProperty]
   );
 
   // Live preview for width (during scrub)
@@ -218,9 +218,9 @@ export const LayoutSection = memo(function LayoutSection({
           previews[item.id] = { width: value };
         }
       });
-      setPropertiesPreview(previews);
+      setTransformPreview(previews);
     },
-    [items, setPropertiesPreview, aspectLocked, height, currentAspectRatio]
+    [items, setTransformPreview, aspectLocked, height, currentAspectRatio]
   );
 
   // Commit width (with auto-keyframe support)
@@ -243,9 +243,9 @@ export const LayoutSection = memo(function LayoutSection({
           onTransformChange(itemIds, { width: value });
         }
       }
-      queueMicrotask(() => clearPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [itemIds, onTransformChange, clearPropertiesPreview, aspectLocked, height, currentAspectRatio, autoKeyframeProperty]
+    [itemIds, onTransformChange, clearPreview, aspectLocked, height, currentAspectRatio, autoKeyframeProperty]
   );
 
   // Live preview for height (during scrub)
@@ -260,9 +260,9 @@ export const LayoutSection = memo(function LayoutSection({
           previews[item.id] = { height: value };
         }
       });
-      setPropertiesPreview(previews);
+      setTransformPreview(previews);
     },
-    [items, setPropertiesPreview, aspectLocked, width, currentAspectRatio]
+    [items, setTransformPreview, aspectLocked, width, currentAspectRatio]
   );
 
   // Commit height (with auto-keyframe support)
@@ -285,9 +285,9 @@ export const LayoutSection = memo(function LayoutSection({
           onTransformChange(itemIds, { height: value });
         }
       }
-      queueMicrotask(() => clearPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [itemIds, onTransformChange, clearPropertiesPreview, aspectLocked, width, currentAspectRatio, autoKeyframeProperty]
+    [itemIds, onTransformChange, clearPreview, aspectLocked, width, currentAspectRatio, autoKeyframeProperty]
   );
 
   // Live preview for rotation (during drag)
@@ -297,9 +297,9 @@ export const LayoutSection = memo(function LayoutSection({
       items.forEach((item) => {
         previews[item.id] = { rotation: value };
       });
-      setPropertiesPreview(previews);
+      setTransformPreview(previews);
     },
-    [items, setPropertiesPreview]
+    [items, setTransformPreview]
   );
 
   // Commit rotation (on mouse up, with auto-keyframe support)
@@ -314,9 +314,9 @@ export const LayoutSection = memo(function LayoutSection({
       if (!allHandled) {
         onTransformChange(itemIds, { rotation: value });
       }
-      queueMicrotask(() => clearPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [itemIds, onTransformChange, clearPropertiesPreview, autoKeyframeProperty]
+    [itemIds, onTransformChange, clearPreview, autoKeyframeProperty]
   );
 
   // Get media items for fallback source dimensions lookup

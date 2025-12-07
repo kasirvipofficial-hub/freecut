@@ -144,8 +144,8 @@ export function ShapeSection({ items }: ShapeSectionProps) {
   const updateItem = useTimelineStore((s) => s.updateItem);
 
   // Gizmo store for live property preview
-  const setItemPropertiesPreview = useGizmoStore((s) => s.setItemPropertiesPreview);
-  const clearItemPropertiesPreview = useGizmoStore((s) => s.clearItemPropertiesPreview);
+  const setPropertiesPreviewNew = useGizmoStore((s) => s.setPropertiesPreviewNew);
+  const clearPreview = useGizmoStore((s) => s.clearPreview);
 
   // Filter to only shape items
   const shapeItems = useMemo(
@@ -211,17 +211,17 @@ export function ShapeSection({ items }: ShapeSectionProps) {
       itemIds.forEach((id) => {
         previews[id] = { fillColor: value };
       });
-      setItemPropertiesPreview(previews);
+      setPropertiesPreviewNew(previews);
     },
-    [itemIds, setItemPropertiesPreview]
+    [itemIds, setPropertiesPreviewNew]
   );
 
   const handleFillColorChange = useCallback(
     (value: string) => {
       updateShapeItems({ fillColor: value });
-      queueMicrotask(() => clearItemPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [updateShapeItems, clearItemPropertiesPreview]
+    [updateShapeItems, clearPreview]
   );
 
   // Stroke color handlers with live preview
@@ -231,17 +231,17 @@ export function ShapeSection({ items }: ShapeSectionProps) {
       itemIds.forEach((id) => {
         previews[id] = { strokeColor: value };
       });
-      setItemPropertiesPreview(previews);
+      setPropertiesPreviewNew(previews);
     },
-    [itemIds, setItemPropertiesPreview]
+    [itemIds, setPropertiesPreviewNew]
   );
 
   const handleStrokeColorChange = useCallback(
     (value: string) => {
       updateShapeItems({ strokeColor: value || undefined });
-      queueMicrotask(() => clearItemPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [updateShapeItems, clearItemPropertiesPreview]
+    [updateShapeItems, clearPreview]
   );
 
   // Stroke width handlers with live preview
@@ -256,9 +256,9 @@ export function ShapeSection({ items }: ShapeSectionProps) {
           previews[id] = { strokeWidth: value };
         }
       });
-      setItemPropertiesPreview(previews);
+      setPropertiesPreviewNew(previews);
     },
-    [itemIds, setItemPropertiesPreview, sharedValues?.strokeColor]
+    [itemIds, setPropertiesPreviewNew, sharedValues?.strokeColor]
   );
 
   const handleStrokeWidthChange = useCallback(
@@ -269,9 +269,9 @@ export function ShapeSection({ items }: ShapeSectionProps) {
       } else {
         updateShapeItems({ strokeWidth: value });
       }
-      queueMicrotask(() => clearItemPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [updateShapeItems, clearItemPropertiesPreview, sharedValues?.strokeWidth, sharedValues?.strokeColor]
+    [updateShapeItems, clearPreview, sharedValues?.strokeWidth, sharedValues?.strokeColor]
   );
 
   // Corner radius handlers with live preview
@@ -281,17 +281,17 @@ export function ShapeSection({ items }: ShapeSectionProps) {
       itemIds.forEach((id) => {
         previews[id] = { cornerRadius: value };
       });
-      setItemPropertiesPreview(previews);
+      setPropertiesPreviewNew(previews);
     },
-    [itemIds, setItemPropertiesPreview]
+    [itemIds, setPropertiesPreviewNew]
   );
 
   const handleCornerRadiusChange = useCallback(
     (value: number) => {
       updateShapeItems({ cornerRadius: value });
-      queueMicrotask(() => clearItemPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [updateShapeItems, clearItemPropertiesPreview]
+    [updateShapeItems, clearPreview]
   );
 
   // Direction handler
@@ -309,17 +309,17 @@ export function ShapeSection({ items }: ShapeSectionProps) {
       itemIds.forEach((id) => {
         previews[id] = { points: value };
       });
-      setItemPropertiesPreview(previews);
+      setPropertiesPreviewNew(previews);
     },
-    [itemIds, setItemPropertiesPreview]
+    [itemIds, setPropertiesPreviewNew]
   );
 
   const handlePointsChange = useCallback(
     (value: number) => {
       updateShapeItems({ points: value });
-      queueMicrotask(() => clearItemPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [updateShapeItems, clearItemPropertiesPreview]
+    [updateShapeItems, clearPreview]
   );
 
   // Inner radius handlers with live preview
@@ -329,17 +329,17 @@ export function ShapeSection({ items }: ShapeSectionProps) {
       itemIds.forEach((id) => {
         previews[id] = { innerRadius: value };
       });
-      setItemPropertiesPreview(previews);
+      setPropertiesPreviewNew(previews);
     },
-    [itemIds, setItemPropertiesPreview]
+    [itemIds, setPropertiesPreviewNew]
   );
 
   const handleInnerRadiusChange = useCallback(
     (value: number) => {
       updateShapeItems({ innerRadius: value });
-      queueMicrotask(() => clearItemPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [updateShapeItems, clearItemPropertiesPreview]
+    [updateShapeItems, clearPreview]
   );
 
   // Mask toggle handler
@@ -371,17 +371,17 @@ export function ShapeSection({ items }: ShapeSectionProps) {
       itemIds.forEach((id) => {
         previews[id] = { maskFeather: value };
       });
-      setItemPropertiesPreview(previews);
+      setPropertiesPreviewNew(previews);
     },
-    [itemIds, setItemPropertiesPreview]
+    [itemIds, setPropertiesPreviewNew]
   );
 
   const handleMaskFeatherChange = useCallback(
     (value: number) => {
       updateShapeItems({ maskFeather: value });
-      queueMicrotask(() => clearItemPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [updateShapeItems, clearItemPropertiesPreview]
+    [updateShapeItems, clearPreview]
   );
 
   const handleResetMaskFeather = useCallback(() => {

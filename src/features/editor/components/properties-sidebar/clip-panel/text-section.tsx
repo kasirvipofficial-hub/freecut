@@ -146,8 +146,8 @@ export function TextSection({ items }: TextSectionProps) {
   const updateItem = useTimelineStore((s) => s.updateItem);
 
   // Gizmo store for live fontSize preview
-  const setItemPropertiesPreview = useGizmoStore((s) => s.setItemPropertiesPreview);
-  const clearItemPropertiesPreview = useGizmoStore((s) => s.clearItemPropertiesPreview);
+  const setPropertiesPreviewNew = useGizmoStore((s) => s.setPropertiesPreviewNew);
+  const clearPreview = useGizmoStore((s) => s.clearPreview);
 
   // Filter to only text items
   const textItems = useMemo(
@@ -204,18 +204,18 @@ export function TextSection({ items }: TextSectionProps) {
       itemIds.forEach((id) => {
         previews[id] = { fontSize: value };
       });
-      setItemPropertiesPreview(previews);
+      setPropertiesPreviewNew(previews);
     },
-    [itemIds, setItemPropertiesPreview]
+    [itemIds, setPropertiesPreviewNew]
   );
 
   // Commit fontSize (on mouse up)
   const handleFontSizeChange = useCallback(
     (value: number) => {
       updateTextItems({ fontSize: value });
-      queueMicrotask(() => clearItemPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [updateTextItems, clearItemPropertiesPreview]
+    [updateTextItems, clearPreview]
   );
 
   const handleFontFamilyChange = useCallback(
@@ -239,18 +239,18 @@ export function TextSection({ items }: TextSectionProps) {
       itemIds.forEach((id) => {
         previews[id] = { color: value };
       });
-      setItemPropertiesPreview(previews);
+      setPropertiesPreviewNew(previews);
     },
-    [itemIds, setItemPropertiesPreview]
+    [itemIds, setPropertiesPreviewNew]
   );
 
   // Commit color (on picker close)
   const handleColorChange = useCallback(
     (value: string) => {
       updateTextItems({ color: value });
-      queueMicrotask(() => clearItemPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [updateTextItems, clearItemPropertiesPreview]
+    [updateTextItems, clearPreview]
   );
 
   const handleTextAlignChange = useCallback(
@@ -274,18 +274,18 @@ export function TextSection({ items }: TextSectionProps) {
       itemIds.forEach((id) => {
         previews[id] = { letterSpacing: value };
       });
-      setItemPropertiesPreview(previews);
+      setPropertiesPreviewNew(previews);
     },
-    [itemIds, setItemPropertiesPreview]
+    [itemIds, setPropertiesPreviewNew]
   );
 
   // Commit letterSpacing (on mouse up)
   const handleLetterSpacingChange = useCallback(
     (value: number) => {
       updateTextItems({ letterSpacing: value });
-      queueMicrotask(() => clearItemPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [updateTextItems, clearItemPropertiesPreview]
+    [updateTextItems, clearPreview]
   );
 
   // Live preview for lineHeight (during drag)
@@ -295,18 +295,18 @@ export function TextSection({ items }: TextSectionProps) {
       itemIds.forEach((id) => {
         previews[id] = { lineHeight: value };
       });
-      setItemPropertiesPreview(previews);
+      setPropertiesPreviewNew(previews);
     },
-    [itemIds, setItemPropertiesPreview]
+    [itemIds, setPropertiesPreviewNew]
   );
 
   // Commit lineHeight (on mouse up)
   const handleLineHeightChange = useCallback(
     (value: number) => {
       updateTextItems({ lineHeight: value });
-      queueMicrotask(() => clearItemPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [updateTextItems, clearItemPropertiesPreview]
+    [updateTextItems, clearPreview]
   );
 
   if (textItems.length === 0 || !sharedValues) {

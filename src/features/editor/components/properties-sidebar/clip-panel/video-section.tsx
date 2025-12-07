@@ -49,8 +49,8 @@ export function VideoSection({ items }: VideoSectionProps) {
   const updateItem = useTimelineStore((s) => s.updateItem);
 
   // Gizmo store for live fade preview
-  const setItemPropertiesPreview = useGizmoStore((s) => s.setItemPropertiesPreview);
-  const clearItemPropertiesPreview = useGizmoStore((s) => s.clearItemPropertiesPreview);
+  const setPropertiesPreviewNew = useGizmoStore((s) => s.setPropertiesPreviewNew);
+  const clearPreview = useGizmoStore((s) => s.clearPreview);
 
   const videoItems = useMemo(
     () => items.filter((item): item is VideoItem => item.type === 'video'),
@@ -100,18 +100,18 @@ export function VideoSection({ items }: VideoSectionProps) {
       itemIds.forEach((id) => {
         previews[id] = { fadeIn: value };
       });
-      setItemPropertiesPreview(previews);
+      setPropertiesPreviewNew(previews);
     },
-    [itemIds, setItemPropertiesPreview]
+    [itemIds, setPropertiesPreviewNew]
   );
 
   // Commit fade in (on mouse up)
   const handleFadeInChange = useCallback(
     (value: number) => {
       itemIds.forEach((id) => updateItem(id, { fadeIn: value }));
-      queueMicrotask(() => clearItemPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [itemIds, updateItem, clearItemPropertiesPreview]
+    [itemIds, updateItem, clearPreview]
   );
 
   // Live preview for fade out (during drag)
@@ -121,18 +121,18 @@ export function VideoSection({ items }: VideoSectionProps) {
       itemIds.forEach((id) => {
         previews[id] = { fadeOut: value };
       });
-      setItemPropertiesPreview(previews);
+      setPropertiesPreviewNew(previews);
     },
-    [itemIds, setItemPropertiesPreview]
+    [itemIds, setPropertiesPreviewNew]
   );
 
   // Commit fade out (on mouse up)
   const handleFadeOutChange = useCallback(
     (value: number) => {
       itemIds.forEach((id) => updateItem(id, { fadeOut: value }));
-      queueMicrotask(() => clearItemPropertiesPreview());
+      queueMicrotask(() => clearPreview());
     },
-    [itemIds, updateItem, clearItemPropertiesPreview]
+    [itemIds, updateItem, clearPreview]
   );
 
   // Reset speed to 1x
