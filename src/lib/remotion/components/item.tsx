@@ -32,9 +32,11 @@ function useVideoAudioVolume(item: VideoItem & { _sequenceFrameOffset?: number }
   // not relative to this specific item. _sequenceFrameOffset corrects this.
   const frame = sequenceFrame - (item._sequenceFrameOffset ?? 0);
 
-  // Read preview values from gizmo store
-  const itemPropertiesPreview = useGizmoStore((s) => s.itemPropertiesPreview);
-  const preview = itemPropertiesPreview?.[item.id];
+  // Read preview values from unified preview system
+  const itemPreview = useGizmoStore(
+    useCallback((s) => s.preview?.[item.id], [item.id])
+  );
+  const preview = itemPreview?.properties;
 
   // Read master preview volume from playback store (only used during preview, not render)
   const previewMasterVolume = usePlaybackStore((s) => s.volume);
@@ -199,9 +201,11 @@ const VideoContent: React.FC<{
  * Reads preview values from gizmo store for real-time updates during slider/picker drag.
  */
 const TextContent: React.FC<{ item: TextItem }> = ({ item }) => {
-  // Read preview values from gizmo store
-  const itemPropertiesPreview = useGizmoStore((s) => s.itemPropertiesPreview);
-  const preview = itemPropertiesPreview?.[item.id];
+  // Read preview values from unified preview system
+  const itemPreview = useGizmoStore(
+    useCallback((s) => s.preview?.[item.id], [item.id])
+  );
+  const preview = itemPreview?.properties;
 
   // Use preview values if available, otherwise use item's stored values
   const fontSize = preview?.fontSize ?? item.fontSize ?? 60;
@@ -296,19 +300,16 @@ const TextContent: React.FC<{ item: TextItem }> = ({ item }) => {
  * Reads preview values from gizmo store for real-time updates during editing.
  */
 const ShapeContent: React.FC<{ item: ShapeItem }> = ({ item }) => {
-  // Read preview values from gizmo store for shape properties
-  const itemPropertiesPreview = useGizmoStore((s) => s.itemPropertiesPreview);
-  const shapePropsPreview = itemPropertiesPreview?.[item.id];
-
   // Read transform preview from gizmo store for real-time scaling
   const activeGizmo = useGizmoStore((s) => s.activeGizmo);
   const previewTransform = useGizmoStore((s) => s.previewTransform);
-  // Read from unified preview system (includes group transforms and properties preview)
-  const unifiedPreview = useGizmoStore(
+  // Read from unified preview system (includes transforms, properties, and effects)
+  const itemPreview = useGizmoStore(
     useCallback((s) => s.preview?.[item.id], [item.id])
   );
 
   // Use preview values if available, otherwise use item's stored values
+  const shapePropsPreview = itemPreview?.properties;
   const fillColor = shapePropsPreview?.fillColor ?? item.fillColor ?? '#3b82f6';
   const strokeColor = shapePropsPreview?.strokeColor ?? item.strokeColor;
   const strokeWidth = shapePropsPreview?.strokeWidth ?? item.strokeWidth ?? 0;
@@ -323,12 +324,12 @@ const ShapeContent: React.FC<{ item: ShapeItem }> = ({ item }) => {
   let width = item.transform?.width ?? 200;
   let height = item.transform?.height ?? 200;
 
-  const unifiedPreviewTransform = unifiedPreview?.transform;
+  const itemPreviewTransform = itemPreview?.transform;
   const isGizmoPreviewActive = activeGizmo?.itemId === item.id && previewTransform !== null;
 
-  if (unifiedPreviewTransform) {
-    width = unifiedPreviewTransform.width ?? width;
-    height = unifiedPreviewTransform.height ?? height;
+  if (itemPreviewTransform) {
+    width = itemPreviewTransform.width ?? width;
+    height = itemPreviewTransform.height ?? height;
   } else if (isGizmoPreviewActive && previewTransform) {
     width = previewTransform.width;
     height = previewTransform.height;
@@ -343,8 +344,8 @@ const ShapeContent: React.FC<{ item: ShapeItem }> = ({ item }) => {
   // Check if aspect ratio is locked (for squish/squash behavior)
   // Read from preview transforms if available, otherwise from item
   let aspectLocked = item.transform?.aspectRatioLocked ?? true;
-  if (unifiedPreviewTransform?.aspectRatioLocked !== undefined) {
-    aspectLocked = unifiedPreviewTransform.aspectRatioLocked;
+  if (itemPreviewTransform?.aspectRatioLocked !== undefined) {
+    aspectLocked = itemPreviewTransform.aspectRatioLocked;
   } else if (isGizmoPreviewActive && previewTransform?.aspectRatioLocked !== undefined) {
     aspectLocked = previewTransform.aspectRatioLocked;
   }

@@ -39,12 +39,12 @@ const AdjustmentWrapperInternal = React.memo<AdjustmentWrapperInternalProps>(({
   frame,
 }) => {
 
-  // Read effects preview from gizmo store for real-time slider updates
-  const effectsPreview = useGizmoStore((s) => s.effectsPreview);
+  // Read unified preview from gizmo store for real-time slider updates
+  const preview = useGizmoStore((s) => s.preview);
 
   // Get effects from ACTIVE adjustment layers at current frame
   // Layers are processed in track order (lowest first) for predictable stacking
-  // Uses effectsPreview for real-time updates during slider drag
+  // Uses unified preview for real-time updates during slider drag
   const activeEffects = useMemo((): ItemEffect[] => {
     if (adjustmentLayers.length === 0) return [];
 
@@ -58,14 +58,14 @@ const AdjustmentWrapperInternal = React.memo<AdjustmentWrapperInternalProps>(({
       )
       .flatMap(({ layer }) => {
         // Use preview effects if available, otherwise use actual effects
-        const effects = effectsPreview?.[layer.id] ?? layer.effects ?? [];
+        const effects = preview?.[layer.id]?.effects ?? layer.effects ?? [];
         // Note: layer.effectOpacity is available for future effect intensity scaling
 
         // For simplicity, we just filter enabled effects for now
         // Future: implement effectOpacity scaling per effect type
         return effects.filter(e => e.enabled);
       });
-  }, [adjustmentLayers, frame, effectsPreview]);
+  }, [adjustmentLayers, frame, preview]);
 
   // Build CSS filter string from CSS filter effects
   const cssFilterString = useMemo(() => {

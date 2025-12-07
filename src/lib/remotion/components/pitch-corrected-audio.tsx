@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { useCurrentFrame, useVideoConfig, Internals, getRemotionEnvironment, Audio, interpolate } from 'remotion';
 import { useGizmoStore } from '@/features/preview/stores/gizmo-store';
 import { usePlaybackStore } from '@/features/preview/stores/playback-store';
@@ -62,9 +62,11 @@ export const PitchCorrectedAudio: React.FC<PitchCorrectedAudioProps> = React.mem
   // Track last frame for scrub detection (only seek on pause if frame changed)
   const lastFrameRef = useRef<number>(-1);
 
-  // Read preview values from gizmo store
-  const itemPropertiesPreview = useGizmoStore((s) => s.itemPropertiesPreview);
-  const preview = itemPropertiesPreview?.[itemId];
+  // Read preview values from unified preview system
+  const itemPreview = useGizmoStore(
+    useCallback((s) => s.preview?.[itemId], [itemId])
+  );
+  const preview = itemPreview?.properties;
 
   // Read master preview volume from playback store (only used during preview, not render)
   // These are granular selectors to avoid unnecessary re-renders

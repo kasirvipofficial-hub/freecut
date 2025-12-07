@@ -90,16 +90,6 @@ interface GizmoStoreState {
   preview: Record<string, ItemPreview> | null;
   /** Canvas background color preview (during color picker drag) */
   canvasBackgroundPreview: string | null;
-
-  // === DEPRECATED - Remove after migration ===
-  /** @deprecated Use preview[itemId].transform instead */
-  propertiesPreview: Record<string, Partial<Transform>> | null;
-  /** @deprecated Use preview[itemId].properties instead */
-  itemPropertiesPreview: Record<string, ItemPropertiesPreview> | null;
-  /** @deprecated Use preview[itemId].transform instead (with full transform) */
-  groupPreviewTransforms: Map<string, Transform> | null;
-  /** @deprecated Use preview[itemId].effects instead */
-  effectsPreview: Record<string, ItemEffect[]> | null;
 }
 
 interface GizmoStoreActions {
@@ -185,29 +175,6 @@ interface GizmoStoreActions {
 
   /** Clear canvas background color preview */
   clearCanvasBackgroundPreview: () => void;
-
-  // === DEPRECATED - Keep for backwards compatibility during migration ===
-
-  /** @deprecated Use setTransformPreview instead */
-  setPropertiesPreview: (previews: Record<string, Partial<Transform>>) => void;
-
-  /** @deprecated Use clearPreview instead */
-  clearPropertiesPreview: () => void;
-
-  /** @deprecated Use setPropertiesPreviewNew instead */
-  setItemPropertiesPreview: (previews: Record<string, ItemPropertiesPreview>) => void;
-
-  /** @deprecated Use clearPreview instead */
-  clearItemPropertiesPreview: () => void;
-
-  /** @deprecated Use setPreview with full transforms instead */
-  setGroupPreviewTransforms: (transforms: Map<string, Transform> | null) => void;
-
-  /** @deprecated Use setEffectsPreviewNew instead */
-  setEffectsPreview: (previews: Record<string, ItemEffect[]>) => void;
-
-  /** @deprecated Use clearPreview instead */
-  clearEffectsPreview: () => void;
 }
 
 export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
@@ -220,11 +187,6 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
     snappingEnabled: true,
     preview: null,
     canvasBackgroundPreview: null,
-    // Deprecated state - keep for backwards compatibility
-    propertiesPreview: null,
-    itemPropertiesPreview: null,
-    groupPreviewTransforms: null,
-    effectsPreview: null,
 
     // Actions
     setCanvasSize: (width, height) =>
@@ -428,34 +390,11 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
       set({ preview: Object.keys(updated).length > 0 ? updated : null });
     },
 
-    // === Deprecated actions - keep for backwards compatibility ===
-
-    setPropertiesPreview: (previews) =>
-      set({ propertiesPreview: previews }),
-
-    clearPropertiesPreview: () =>
-      set({ propertiesPreview: null }),
-
-    setItemPropertiesPreview: (previews) =>
-      set({ itemPropertiesPreview: previews }),
-
-    clearItemPropertiesPreview: () =>
-      set({ itemPropertiesPreview: null }),
-
     setCanvasBackgroundPreview: (color) =>
       set({ canvasBackgroundPreview: color }),
 
     clearCanvasBackgroundPreview: () =>
       set({ canvasBackgroundPreview: null }),
-
-    setGroupPreviewTransforms: (transforms) =>
-      set({ groupPreviewTransforms: transforms }),
-
-    setEffectsPreview: (previews) =>
-      set({ effectsPreview: previews }),
-
-    clearEffectsPreview: () =>
-      set({ effectsPreview: null }),
   })
 );
 

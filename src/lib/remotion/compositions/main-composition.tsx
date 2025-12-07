@@ -210,9 +210,8 @@ const MaskDefinitions = React.memo<MaskDefinitionsProps>(({ masks, hasPotentialM
   // Read gizmo store for real-time mask preview during drag operations
   const activeGizmo = useGizmoStore((s) => s.activeGizmo);
   const previewTransform = useGizmoStore((s) => s.previewTransform);
-  const propertiesPreview = useGizmoStore((s) => s.propertiesPreview);
-  const itemPropertiesPreview = useGizmoStore((s) => s.itemPropertiesPreview);
-  const groupPreviewTransforms = useGizmoStore((s) => s.groupPreviewTransforms);
+  // Read unified preview for all masks at once (more efficient than per-mask selectors)
+  const preview = useGizmoStore((s) => s.preview);
 
   // Only render if there are potential masks (shapes that could be masks)
   // This keeps DOM structure stable when isMask is toggled
@@ -267,15 +266,15 @@ const MaskDefinitions = React.memo<MaskDefinitionsProps>(({ masks, hasPotentialM
     const isActive = currentFrame >= maskStart && currentFrame < maskEnd;
     const opacity = isActive ? 1 : 0;
 
-    // Check for active preview transforms
-    const groupPreviewForMask = groupPreviewTransforms?.get(mask.id);
+    // Check for active preview transforms from unified preview system
+    const maskPreview = preview?.[mask.id];
+    const unifiedPreviewTransform = maskPreview?.transform;
     const isGizmoPreviewActive = activeGizmo?.itemId === mask.id && previewTransform !== null;
-    const propertiesPreviewForMask = propertiesPreview?.[mask.id];
 
     // Get base transform
     const baseResolved = resolveTransform(mask, canvas);
 
-    // Priority: Group preview > Single gizmo preview > Properties preview > Base
+    // Priority: Unified preview (group/properties) > Single gizmo preview > Base
     let resolvedTransform = {
       x: baseResolved.x,
       y: baseResolved.y,
@@ -285,12 +284,11 @@ const MaskDefinitions = React.memo<MaskDefinitionsProps>(({ masks, hasPotentialM
       opacity: baseResolved.opacity,
     };
 
-    if (groupPreviewForMask) {
-      resolvedTransform = { ...groupPreviewForMask };
+    if (unifiedPreviewTransform) {
+      // Unified preview includes both group transforms and properties panel transforms
+      resolvedTransform = { ...resolvedTransform, ...unifiedPreviewTransform };
     } else if (isGizmoPreviewActive && previewTransform) {
       resolvedTransform = { ...previewTransform };
-    } else if (propertiesPreviewForMask) {
-      resolvedTransform = { ...resolvedTransform, ...propertiesPreviewForMask };
     }
 
     // Generate mask path
@@ -314,11 +312,11 @@ const MaskDefinitions = React.memo<MaskDefinitionsProps>(({ masks, hasPotentialM
   });
 
   // Compute per-mask feather values (only for alpha type, clip type = hard edges)
-  // Uses itemPropertiesPreview for real-time slider updates
+  // Uses unified preview for real-time slider updates
   const maskFeatherValues = masks.map(({ mask }) => {
-    const preview = itemPropertiesPreview?.[mask.id];
+    const maskPreview = preview?.[mask.id];
     const type = mask.maskType ?? 'clip';
-    const feather = preview?.maskFeather ?? mask.maskFeather ?? 0;
+    const feather = maskPreview?.properties?.maskFeather ?? mask.maskFeather ?? 0;
     return type === 'alpha' ? feather : 0;
   });
 

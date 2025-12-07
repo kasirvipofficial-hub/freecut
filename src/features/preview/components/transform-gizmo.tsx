@@ -27,11 +27,12 @@ export function TransformGizmo({
   onTransformEnd,
   isPlaying = false,
 }: TransformGizmoProps) {
-  // Gizmo store
+  // Gizmo store - using unified preview system
   const activeGizmo = useGizmoStore((s) => s.activeGizmo);
   const previewTransform = useGizmoStore((s) => s.previewTransform);
-  const propertiesPreview = useGizmoStore((s) => s.propertiesPreview);
-  const itemPropertiesPreview = useGizmoStore((s) => s.itemPropertiesPreview);
+  const itemPreview = useGizmoStore(
+    useCallback((s) => s.preview?.[item.id], [item.id])
+  );
   const startTranslate = useGizmoStore((s) => s.startTranslate);
   const startScale = useGizmoStore((s) => s.startScale);
   const startRotate = useGizmoStore((s) => s.startRotate);
@@ -62,14 +63,14 @@ export function TransformGizmo({
       cornerRadius: animatedTransform.cornerRadius,
     };
 
-    // If properties panel is previewing this item, merge its values
-    const itemPropertiesPreview = propertiesPreview?.[item.id];
-    if (itemPropertiesPreview) {
-      return { ...baseTransform, ...itemPropertiesPreview };
+    // If properties panel is previewing this item's transform, merge its values
+    const transformPreview = itemPreview?.transform;
+    if (transformPreview) {
+      return { ...baseTransform, ...transformPreview };
     }
 
     return baseTransform;
-  }, [animatedTransform, isInteracting, previewTransform, propertiesPreview, item.id]);
+  }, [animatedTransform, isInteracting, previewTransform, itemPreview, item.id]);
 
   // Convert to screen bounds, expanding for stroke width on shapes
   const screenBounds = useMemo(() => {
@@ -77,8 +78,8 @@ export function TransformGizmo({
 
     // Expand bounds for stroke width on shape items
     if (item.type === 'shape') {
-      // Get stroke width from item properties preview or item
-      const previewStroke = itemPropertiesPreview?.[item.id]?.strokeWidth;
+      // Get stroke width from unified preview or item
+      const previewStroke = itemPreview?.properties?.strokeWidth;
       const strokeWidth = previewStroke ?? item.strokeWidth ?? 0;
 
       if (strokeWidth > 0) {
@@ -95,7 +96,7 @@ export function TransformGizmo({
     }
 
     return bounds;
-  }, [currentTransform, coordParams, item, itemPropertiesPreview]);
+  }, [currentTransform, coordParams, item, itemPreview]);
 
   // Helper to convert screen position to canvas position
   const toCanvasPoint = useCallback(

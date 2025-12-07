@@ -50,8 +50,8 @@ const ItemEffectWrapperInternal = React.memo<ItemEffectWrapperInternalProps>(({
   children,
   frame,
 }) => {
-  // Read effects preview from gizmo store for real-time slider updates
-  const effectsPreview = useGizmoStore((s) => s.effectsPreview);
+  // Read unified preview from gizmo store for real-time slider updates
+  const preview = useGizmoStore((s) => s.preview);
 
   // Convert local frame (relative to parent Sequence) to global frame
   // This is necessary because useCurrentFrame() returns local frame, but
@@ -80,10 +80,10 @@ const ItemEffectWrapperInternal = React.memo<ItemEffectWrapperInternalProps>(({
       .sort((a, b) => a.trackOrder - b.trackOrder)
       .flatMap(({ layer }) => {
         // Use preview effects if available, otherwise use actual effects
-        const effects = effectsPreview?.[layer.id] ?? layer.effects ?? [];
+        const effects = preview?.[layer.id]?.effects ?? layer.effects ?? [];
         return effects.filter(e => e.enabled);
       });
-  }, [adjustmentLayers, itemTrackOrder, globalFrame, effectsPreview]);
+  }, [adjustmentLayers, itemTrackOrder, globalFrame, preview]);
 
   // Build CSS filter string from CSS filter effects
   const cssFilterString = useMemo(() => {
