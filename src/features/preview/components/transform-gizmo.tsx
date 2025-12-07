@@ -146,8 +146,13 @@ export function TransformGizmo({
         if (finalTransform && transformChanged(startTransformSnapshot, finalTransform)) {
           onTransformEnd(finalTransform);
         }
+        // Wait 2 animation frames before clearing preview to ensure React has
+        // processed the timeline store update and re-rendered with new item values.
+        // Single RAF was causing snap-back because item prop was still stale.
         requestAnimationFrame(() => {
-          clearInteraction();
+          requestAnimationFrame(() => {
+            clearInteraction();
+          });
         });
       };
 
@@ -181,8 +186,12 @@ export function TransformGizmo({
         if (finalTransform && transformChanged(startTransformSnapshot, finalTransform)) {
           onTransformEnd(finalTransform);
         }
+        // Wait 2 animation frames before clearing preview to ensure React has
+        // processed the timeline store update and re-rendered with new item values.
         requestAnimationFrame(() => {
-          clearInteraction();
+          requestAnimationFrame(() => {
+            clearInteraction();
+          });
         });
       };
 
@@ -216,8 +225,12 @@ export function TransformGizmo({
         if (finalTransform && transformChanged(startTransformSnapshot, finalTransform)) {
           onTransformEnd(finalTransform);
         }
+        // Wait 2 animation frames before clearing preview to ensure React has
+        // processed the timeline store update and re-rendered with new item values.
         requestAnimationFrame(() => {
-          clearInteraction();
+          requestAnimationFrame(() => {
+            clearInteraction();
+          });
         });
       };
 

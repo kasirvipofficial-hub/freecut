@@ -1,26 +1,15 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { AbsoluteFill, OffthreadVideo, Img, useVideoConfig, useCurrentFrame, interpolate, useRemotionEnvironment } from 'remotion';
-// import { Video } from '@remotion/media'; // Unused - kept for future rendering improvements
 import { Rect, Circle, Triangle, Ellipse, Star, Polygon, Heart } from '@remotion/shapes';
 import { useGizmoStore } from '@/features/preview/stores/gizmo-store';
 import { usePlaybackStore } from '@/features/preview/stores/playback-store';
-import { useTimelineStore } from '@/features/timeline/stores/timeline-store';
 import type { TimelineItem, VideoItem, TextItem, ShapeItem } from '@/types/timeline';
 import type { TransformProperties } from '@/types/transform';
-import { resolveAnimatedTransform, hasKeyframeAnimation } from '@/features/keyframes/utils/animated-transform-resolver';
-import type { ItemEffect, GlitchEffect } from '@/types/effects';
 import { DebugOverlay } from './debug-overlay';
 import { PitchCorrectedAudio } from './pitch-corrected-audio';
 import { GifPlayer } from './gif-player';
-import {
-  resolveTransform,
-  getSourceDimensions,
-  toTransformStyle,
-} from '../utils/transform-resolver';
 import { loadFont, FONT_WEIGHT_MAP } from '../utils/fonts';
-import { getShapePath, rotatePath } from '../utils/shape-path';
-import { effectsToCSSFilter, getGlitchEffects, getHalftoneEffect, getHalftoneStyles, getVignetteEffect, getVignetteStyle } from '@/features/effects/utils/effect-to-css';
-import { getScanlinesStyle, getGlitchFilterString } from '@/features/effects/utils/glitch-algorithms';
+import { ItemVisualWrapper } from './item-visual-wrapper';
 
 /** Mask information passed from composition to items */
 export interface MaskInfo {
@@ -520,463 +509,12 @@ const ShapeContent: React.FC<{ item: ShapeItem }> = ({ item }) => {
 // Set to true to show debug overlay on video items during rendering
 const DEBUG_VIDEO_OVERLAY = false;
 
-/**
- * MaskWrapper applies clipping to content using CSS clip-path.
- * This approach is more compatible with Remotion's server-side rendering than SVG foreignObject.
- * Supports real-time preview by reading from gizmo store when masks are being transformed.
- */
-const MaskWrapper: React.FC<{
-  masks: MaskInfo[];
-  children: React.ReactNode;
-}> = ({ masks, children }) => {
-  const { width: canvasWidth, height: canvasHeight } = useVideoConfig();
-
-  // Read gizmo store for real-time mask preview during drag operations
-  const activeGizmo = useGizmoStore((s) => s.activeGizmo);
-  const previewTransform = useGizmoStore((s) => s.previewTransform);
-  // Read from unified preview system
-  const preview = useGizmoStore((s) => s.preview);
-
-  if (!masks || masks.length === 0) {
-    return <>{children}</>;
-  }
-
-  // All masks use the first mask's type settings
-  const firstMask = masks[0]!;
-  const maskType = firstMask.shape.maskType ?? 'clip';
-  const maskFeather = firstMask.shape.maskFeather ?? 0;
-  const maskInvert = firstMask.shape.maskInvert ?? false;
-
-  // Generate paths for all masks with rotation baked in
-  // Check gizmo store for real-time preview transforms (same as ShapeContent)
-  const maskPathsWithStroke = masks.map(({ shape, transform }) => {
-    // Check if this mask has an active preview transform
-    const unifiedPreviewForMask = preview?.[shape.id]?.transform;
-    const isGizmoPreviewActive = activeGizmo?.itemId === shape.id && previewTransform !== null;
-
-    // Priority: Unified preview (group/properties) > Single gizmo preview > Base transform
-    let resolvedTransform = {
-      x: transform.x ?? 0,
-      y: transform.y ?? 0,
-      width: transform.width ?? canvasWidth,
-      height: transform.height ?? canvasHeight,
-      rotation: transform.rotation ?? 0,
-      opacity: transform.opacity ?? 1,
-    };
-
-    if (unifiedPreviewForMask) {
-      resolvedTransform = {
-        ...resolvedTransform,
-        x: unifiedPreviewForMask.x ?? resolvedTransform.x,
-        y: unifiedPreviewForMask.y ?? resolvedTransform.y,
-        width: unifiedPreviewForMask.width ?? resolvedTransform.width,
-        height: unifiedPreviewForMask.height ?? resolvedTransform.height,
-        rotation: unifiedPreviewForMask.rotation ?? resolvedTransform.rotation,
-        opacity: unifiedPreviewForMask.opacity ?? resolvedTransform.opacity,
-      };
-    } else if (isGizmoPreviewActive && previewTransform) {
-      resolvedTransform = {
-        x: previewTransform.x,
-        y: previewTransform.y,
-        width: previewTransform.width,
-        height: previewTransform.height,
-        rotation: previewTransform.rotation,
-        opacity: previewTransform.opacity,
-      };
-    }
-
-    let path = getShapePath(shape, resolvedTransform, {
-      canvasWidth,
-      canvasHeight,
-    });
-
-    // Bake rotation into path coordinates for CSS clip-path compatibility
-    if (resolvedTransform.rotation !== 0) {
-      const centerX = canvasWidth / 2 + resolvedTransform.x;
-      const centerY = canvasHeight / 2 + resolvedTransform.y;
-      path = rotatePath(path, resolvedTransform.rotation, centerX, centerY);
-    }
-
-    // Include stroke width for SVG mask rendering
-    const strokeWidth = shape.strokeWidth ?? 0;
-
-    return { path, strokeWidth };
-  });
-
-  // Extract just the paths for combining
-  const maskPaths = maskPathsWithStroke.map(m => m.path);
-
-  // Combine all mask paths into one (for multiple masks)
-  const combinedPath = maskPaths.join(' ');
-
-  // Check if any mask has stroke (need SVG mask instead of clip-path for stroke support)
-  const hasStroke = maskPathsWithStroke.some(m => m.strokeWidth > 0);
-
-  // For clip mode without stroke, use CSS clip-path which works reliably in Remotion
-  // If stroke is present, fall through to SVG mask (clip-path doesn't support stroke)
-  if (maskType === 'clip' && !maskInvert && maskFeather === 0 && !hasStroke) {
-    // Simple clip mode - use CSS clip-path directly
-    return (
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          clipPath: `path('${combinedPath}')`,
-        }}
-      >
-        {children}
-      </div>
-    );
-  }
-
-  // For inverted clip without stroke, use CSS clip-path with evenodd
-  if (maskType === 'clip' && maskInvert && !hasStroke) {
-    // Inverted clip: show everything EXCEPT the mask area
-    // Use evenodd fill rule with a full-canvas rect + the mask paths
-    const invertedPath = `M 0 0 L ${canvasWidth} 0 L ${canvasWidth} ${canvasHeight} L 0 ${canvasHeight} Z ${combinedPath}`;
-    return (
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          clipPath: `path(evenodd, '${invertedPath}')`,
-        }}
-      >
-        {children}
-      </div>
-    );
-  }
-
-  // Alpha mask, feathering, or stroke: use inline SVG mask with CSS reference
-  // SVG masks support stroke which CSS clip-path doesn't
-  // Generate unique ID for this mask instance
-  const maskId = `svg-mask-${masks.map(m => m.shape.id).join('-')}`;
-  const filterId = `blur-${maskId}`;
-
-  return (
-    <>
-      {/* Hidden SVG containing mask definition */}
-      <svg
-        style={{
-          position: 'absolute',
-          width: 0,
-          height: 0,
-          overflow: 'hidden',
-          pointerEvents: 'none',
-        }}
-        aria-hidden="true"
-      >
-        <defs>
-          {maskFeather > 0 && (
-            <filter id={filterId} x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation={maskFeather} />
-            </filter>
-          )}
-          <mask
-            id={maskId}
-            maskUnits="userSpaceOnUse"
-            x="0"
-            y="0"
-            width={canvasWidth}
-            height={canvasHeight}
-          >
-            {/* Background: black=hidden, white=visible */}
-            <rect
-              x="0"
-              y="0"
-              width={canvasWidth}
-              height={canvasHeight}
-              fill={maskInvert ? 'white' : 'black'}
-            />
-            {/* Mask shapes with optional stroke */}
-            {maskPathsWithStroke.map(({ path: pathD, strokeWidth }, i) => (
-              <path
-                key={i}
-                d={pathD}
-                fill={maskInvert ? 'black' : 'white'}
-                stroke={strokeWidth > 0 ? (maskInvert ? 'black' : 'white') : undefined}
-                strokeWidth={strokeWidth > 0 ? strokeWidth : undefined}
-                filter={maskFeather > 0 ? `url(#${filterId})` : undefined}
-              />
-            ))}
-          </mask>
-        </defs>
-      </svg>
-      {/* Content with mask applied */}
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          mask: `url(#${maskId})`,
-          WebkitMask: `url(#${maskId})`,
-        }}
-      >
-        {children}
-      </div>
-    </>
-  );
-};
-
 export interface ItemProps {
   item: TimelineItem;
   muted?: boolean;
   /** Active masks that should clip this item's content */
   masks?: MaskInfo[];
 }
-
-/**
- * Wrapper component that applies transform properties to visual items.
- * Uses canvas-centered positioning from transform resolver.
- * Reads preview transform directly from gizmo store to avoid prop drilling
- * and unnecessary re-renders of the parent composition.
- */
-const TransformWrapper: React.FC<{
-  item: TimelineItem;
-  children: React.ReactNode;
-}> = ({ item, children }) => {
-  const { width: canvasWidth, height: canvasHeight, fps } = useVideoConfig();
-  const frame = useCurrentFrame();
-  const canvas = { width: canvasWidth, height: canvasHeight, fps };
-
-  // Read preview transform directly from store - only re-renders this component
-  const activeGizmo = useGizmoStore((s) => s.activeGizmo);
-  const previewTransform = useGizmoStore((s) => s.previewTransform);
-  const itemPropertiesPreview = useGizmoStore((s) => s.itemPropertiesPreview);
-  // Read from unified preview system (includes group transforms and properties preview)
-  const unifiedPreview = useGizmoStore(
-    useCallback((s) => s.preview?.[item.id], [item.id])
-  );
-
-  // Get keyframes for this item (granular selector)
-  const itemKeyframes = useTimelineStore(
-    useCallback((s: { keyframes: { itemId: string }[] }) => s.keyframes.find((k: { itemId: string }) => k.itemId === item.id), [item.id])
-  );
-
-  // Check if this item has an active single-item gizmo preview transform
-  const isGizmoPreviewActive = activeGizmo?.itemId === item.id && previewTransform !== null;
-
-  // Check if this item has an active unified preview transform (from group drag or properties panel)
-  const unifiedPreviewTransform = unifiedPreview?.transform;
-  const isUnifiedPreviewActive = unifiedPreviewTransform !== undefined;
-
-  // Check if this item has an item properties preview (fades, etc.)
-  const itemPreviewForItem = itemPropertiesPreview?.[item.id];
-
-  // Resolve base transform from item
-  const baseResolved = resolveTransform(item, canvas, getSourceDimensions(item));
-
-  // Apply keyframe animation to base transform
-  // `frame` from useCurrentFrame() is already relative to item start (due to Sequence wrapper)
-  const relativeFrame = frame;
-  const animatedResolved = useMemo(() => {
-    if (!itemKeyframes || !hasKeyframeAnimation(itemKeyframes)) {
-      return baseResolved;
-    }
-    return resolveAnimatedTransform(baseResolved, itemKeyframes, relativeFrame);
-  }, [baseResolved, itemKeyframes, relativeFrame]);
-
-  // Priority: Unified preview (group/properties) > Single gizmo preview > Keyframe animation > Base
-  let resolved = animatedResolved;
-  if (isUnifiedPreviewActive && unifiedPreviewTransform) {
-    // Use unified preview transform (from group drag/scale/rotate or properties panel)
-    resolved = { ...animatedResolved, ...unifiedPreviewTransform, cornerRadius: unifiedPreviewTransform.cornerRadius ?? animatedResolved.cornerRadius };
-  } else if (isGizmoPreviewActive) {
-    resolved = { ...previewTransform, cornerRadius: previewTransform.cornerRadius ?? 0 };
-  }
-
-  // Calculate fade opacity based on fadeIn/fadeOut (in seconds)
-  // Use preview values if available, otherwise use item's stored values
-  // frame is relative to this item's sequence (0 = start of item)
-  const fadeInSeconds = itemPreviewForItem?.fadeIn ?? item.fadeIn ?? 0;
-  const fadeOutSeconds = itemPreviewForItem?.fadeOut ?? item.fadeOut ?? 0;
-  const fadeInFrames = Math.min(fadeInSeconds * fps, item.durationInFrames);
-  const fadeOutFrames = Math.min(fadeOutSeconds * fps, item.durationInFrames);
-
-  let fadeOpacity = 1;
-  const hasFadeIn = fadeInFrames > 0;
-  const hasFadeOut = fadeOutFrames > 0;
-
-  if (hasFadeIn || hasFadeOut) {
-    const fadeOutStart = item.durationInFrames - fadeOutFrames;
-
-    if (hasFadeIn && hasFadeOut) {
-      // Both fades present
-      if (fadeInFrames >= fadeOutStart) {
-        // Fades overlap - crossfade: fade in then immediately fade out
-        const midPoint = item.durationInFrames / 2;
-        const peakOpacity = Math.min(1, midPoint / Math.max(fadeInFrames, 1));
-        fadeOpacity = interpolate(
-          frame,
-          [0, midPoint, item.durationInFrames],
-          [0, peakOpacity, 0],
-          { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
-        );
-      } else {
-        // Normal case - distinct fade in/out regions
-        fadeOpacity = interpolate(
-          frame,
-          [0, fadeInFrames, fadeOutStart, item.durationInFrames],
-          [0, 1, 1, 0],
-          { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
-        );
-      }
-    } else if (hasFadeIn) {
-      // Only fade in
-      fadeOpacity = interpolate(
-        frame,
-        [0, fadeInFrames],
-        [0, 1],
-        { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
-      );
-    } else {
-      // Only fade out
-      fadeOpacity = interpolate(
-        frame,
-        [fadeOutStart, item.durationInFrames],
-        [1, 0],
-        { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
-      );
-    }
-  }
-
-  // Combine transform opacity with fade opacity
-  const finalOpacity = resolved.opacity * fadeOpacity;
-
-  // Get CSS styles for positioning, with combined opacity
-  const style = toTransformStyle({ ...resolved, opacity: finalOpacity }, canvas);
-
-  return <div style={style}>{children}</div>;
-};
-
-/**
- * EffectWrapper applies CSS filter effects, glitch animations, and canvas-based effects to content.
- * Reads effects from item and generates appropriate styles per frame.
- * Works in both browser preview and Remotion server-side export.
- */
-const EffectWrapper: React.FC<{
-  item: TimelineItem;
-  children: React.ReactNode;
-  muted?: boolean;
-}> = ({ item, children, muted: _muted = false }) => {
-  const frame = useCurrentFrame();
-
-  // Read effect preview from gizmo store (for live slider updates)
-  const effectsPreview = useGizmoStore((s) => s.effectsPreview);
-  const previewEffects = effectsPreview?.[item.id];
-
-  // Use preview effects if available, otherwise use item's stored effects
-  const effects: ItemEffect[] = previewEffects ?? item.effects ?? [];
-
-  // Build CSS filter string from CSS filter effects
-  // All hooks must be called unconditionally (before any early returns)
-  const cssFilterString = useMemo(() => {
-    if (effects.length === 0) return '';
-    return effectsToCSSFilter(effects);
-  }, [effects]);
-
-  // Get glitch effects for special rendering
-  const glitchEffects = useMemo(() => {
-    if (effects.length === 0) return [];
-    return getGlitchEffects(effects) as Array<GlitchEffect & { id: string }>;
-  }, [effects]);
-
-  // Get halftone effect for canvas-based rendering
-  const halftoneEffect = useMemo(() => {
-    if (effects.length === 0) return null;
-    return getHalftoneEffect(effects);
-  }, [effects]);
-
-  // Get CSS halftone styles (pure CSS approach - no WebGL flickering)
-  const halftoneStyles = useMemo(() => {
-    if (!halftoneEffect) return null;
-    return getHalftoneStyles(halftoneEffect);
-  }, [halftoneEffect]);
-
-  // Get vignette effect for overlay rendering
-  const vignetteEffect = useMemo(() => {
-    if (effects.length === 0) return null;
-    return getVignetteEffect(effects);
-  }, [effects]);
-
-  // Calculate glitch-based filters (color glitch adds hue-rotate)
-  const glitchFilterString = useMemo(() => {
-    if (glitchEffects.length === 0) return '';
-    return getGlitchFilterString(glitchEffects, frame);
-  }, [glitchEffects, frame]);
-
-  // Combine all CSS filters
-  // NOTE: No early return for empty effects - we always render the same div structure
-  // to prevent DOM changes when effects are added/removed (prevents re-render)
-  const combinedFilter = [cssFilterString, glitchFilterString].filter(Boolean).join(' ');
-
-  // Check for scanlines effect (RGB split is now handled via CSS filter in glitchFilterString)
-  const scanlinesEffect = glitchEffects.find((e) => e.variant === 'scanlines');
-
-  // Merge halftone container filter with other filters
-  const finalFilter = halftoneStyles
-    ? [combinedFilter, halftoneStyles.containerStyle.filter].filter(Boolean).join(' ')
-    : combinedFilter;
-
-  // Standard rendering with CSS filters (including RGB split via SVG filter) + optional scanlines + halftone
-  // NOTE: overflow:hidden is placed on a separate wrapper for the halftone pattern,
-  // not on the main container. This prevents clipping of transformed/moved children.
-  const standardContent = (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        position: 'relative',
-        filter: finalFilter || undefined,
-        // Don't apply overflow:hidden here - it clips transformed children!
-        // No backgroundColor - halftone always uses transparent background
-      }}
-    >
-      {children}
-      {/* Scanlines overlay */}
-      {scanlinesEffect && (
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            pointerEvents: 'none',
-            ...getScanlinesStyle(scanlinesEffect.intensity),
-          }}
-        />
-      )}
-      {/* CSS Halftone dot pattern overlay - wrapped with overflow:hidden to contain the 200% pattern */}
-      {/* mixBlendMode is on the wrapper so it blends with content below (not inside the overflow context) */}
-      {halftoneStyles && (
-        <div style={{
-          position: 'absolute',
-          inset: 0,
-          overflow: 'hidden',
-          pointerEvents: 'none',
-          mixBlendMode: halftoneStyles.patternStyle.mixBlendMode,
-          opacity: halftoneStyles.patternStyle.opacity,
-        }}>
-          {halftoneStyles.fadeWrapperStyle ? (
-            <div style={halftoneStyles.fadeWrapperStyle}>
-              <div style={{ ...halftoneStyles.patternStyle, mixBlendMode: undefined, opacity: undefined }} />
-            </div>
-          ) : (
-            <div style={{ ...halftoneStyles.patternStyle, mixBlendMode: undefined, opacity: undefined }} />
-          )}
-        </div>
-      )}
-    </div>
-  );
-
-  // Vignette renders OUTSIDE other effects so it overlays everything
-  return (
-    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-      {standardContent}
-      {/* Vignette overlay - renders on top of all other effects */}
-      {vignetteEffect && (
-        <div style={getVignetteStyle(vignetteEffect)} />
-      )}
-    </div>
-  );
-};
 
 /**
  * Remotion Item Component
@@ -995,12 +533,6 @@ const EffectWrapper: React.FC<{
 export const Item = React.memo<ItemProps>(({ item, muted = false, masks = [] }) => {
   // Use muted prop directly - MainComposition already passes track.muted
   // Avoiding store subscription here prevents re-render issues with @remotion/media Audio
-
-  // Helper to wrap visual content with mask if masks are present
-  const wrapWithMask = (content: React.ReactNode): React.ReactNode => {
-    if (masks.length === 0) return content;
-    return <MaskWrapper masks={masks}>{content}</MaskWrapper>;
-  };
 
   if (item.type === 'video') {
     // Guard against missing src (media resolution failed)
@@ -1104,12 +636,12 @@ export const Item = React.memo<ItemProps>(({ item, muted = false, masks = [] }) 
       </>
     );
 
-    // Always use TransformWrapper for consistent rendering between preview and export
+    // Use new ItemVisualWrapper for consolidated state and fixed DOM structure
     // resolveTransform handles defaults (fit-to-canvas) when no explicit transform is set
-    return wrapWithMask(
-      <TransformWrapper item={item}>
-        <EffectWrapper item={item} muted={muted}>{videoContent}</EffectWrapper>
-      </TransformWrapper>
+    return (
+      <ItemVisualWrapper item={item} masks={masks}>
+        {videoContent}
+      </ItemVisualWrapper>
     );
   }
 
@@ -1170,11 +702,11 @@ export const Item = React.memo<ItemProps>(({ item, muted = false, masks = [] }) 
         />
       );
 
-      // Always use TransformWrapper for consistent rendering
-      return wrapWithMask(
-        <TransformWrapper item={item}>
-          <EffectWrapper item={item}>{gifContent}</EffectWrapper>
-        </TransformWrapper>
+      // Use new ItemVisualWrapper for consolidated state and fixed DOM structure
+      return (
+        <ItemVisualWrapper item={item} masks={masks}>
+          {gifContent}
+        </ItemVisualWrapper>
       );
     }
 
@@ -1190,34 +722,30 @@ export const Item = React.memo<ItemProps>(({ item, muted = false, masks = [] }) 
       />
     );
 
-    // Always use TransformWrapper for consistent rendering between preview and export
-    return wrapWithMask(
-      <TransformWrapper item={item}>
-        <EffectWrapper item={item}>{imageContent}</EffectWrapper>
-      </TransformWrapper>
+    // Use new ItemVisualWrapper for consolidated state and fixed DOM structure
+    return (
+      <ItemVisualWrapper item={item} masks={masks}>
+        {imageContent}
+      </ItemVisualWrapper>
     );
   }
 
   if (item.type === 'text') {
-    // Always use TransformWrapper for consistent rendering between preview and export
-    return wrapWithMask(
-      <TransformWrapper item={item}>
-        <EffectWrapper item={item}>
-          <TextContent item={item} />
-        </EffectWrapper>
-      </TransformWrapper>
+    // Use new ItemVisualWrapper for consolidated state and fixed DOM structure
+    return (
+      <ItemVisualWrapper item={item} masks={masks}>
+        <TextContent item={item} />
+      </ItemVisualWrapper>
     );
   }
 
   if (item.type === 'shape') {
-    // Always use TransformWrapper for consistent rendering between preview and export
+    // Use new ItemVisualWrapper for consolidated state and fixed DOM structure
     // ShapeContent renders the appropriate Remotion shape based on shapeType
-    return wrapWithMask(
-      <TransformWrapper item={item}>
-        <EffectWrapper item={item}>
-          <ShapeContent item={item} />
-        </EffectWrapper>
-      </TransformWrapper>
+    return (
+      <ItemVisualWrapper item={item} masks={masks}>
+        <ShapeContent item={item} />
+      </ItemVisualWrapper>
     );
   }
 
