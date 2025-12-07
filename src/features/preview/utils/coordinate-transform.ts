@@ -1,4 +1,9 @@
-import type { Point, CoordinateParams, Transform } from '../types/gizmo';
+import type { CSSProperties } from 'react';
+import type { Point, CoordinateParams, Transform, GizmoHandle } from '../types/gizmo';
+
+// Default handle size for gizmo controls
+export const HANDLE_SIZE = 8;
+export const ROTATION_HANDLE_OFFSET = 24;
 
 /**
  * Calculate the effective scale from zoom level.
@@ -166,4 +171,74 @@ export function getScaleCursor(
   const cursors = ['ew-resize', 'nwse-resize', 'ns-resize', 'nesw-resize'];
 
   return cursors[cursorIndex];
+}
+
+/**
+ * Screen bounds for a gizmo overlay.
+ */
+export interface ScreenBounds {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Get handle positions for all scale handles relative to screen bounds.
+ * Returns CSS-compatible positions.
+ */
+export function getHandlePositions(
+  bounds: ScreenBounds,
+  handleSize: number = HANDLE_SIZE
+): Record<GizmoHandle, { left: number; top: number }> {
+  const half = handleSize / 2;
+  const { width, height } = bounds;
+
+  return {
+    nw: { left: -half, top: -half },
+    n: { left: width / 2 - half, top: -half },
+    ne: { left: width - half, top: -half },
+    e: { left: width - half, top: height / 2 - half },
+    se: { left: width - half, top: height - half },
+    s: { left: width / 2 - half, top: height - half },
+    sw: { left: -half, top: height - half },
+    w: { left: -half, top: height / 2 - half },
+    rotate: { left: width / 2 - half, top: -ROTATION_HANDLE_OFFSET - half },
+  };
+}
+
+/**
+ * Get CSS style for a specific scale/rotate handle.
+ */
+export function getHandleStyle(
+  handle: GizmoHandle,
+  bounds: ScreenBounds,
+  rotation: number,
+  handleSize: number = HANDLE_SIZE
+): CSSProperties {
+  const positions = getHandlePositions(bounds, handleSize);
+  const pos = positions[handle];
+
+  return {
+    position: 'absolute',
+    width: handleSize,
+    height: handleSize,
+    left: pos?.left ?? 0,
+    top: pos?.top ?? 0,
+    cursor: handle === 'rotate' ? 'crosshair' : getScaleCursor(handle, rotation),
+  };
+}
+
+/**
+ * Check if two transforms are different within tolerance.
+ * Useful for deciding whether to commit a transform change.
+ */
+export function transformsChanged(a: Transform, b: Transform, tolerance: number = 0.01): boolean {
+  return (
+    Math.abs(a.x - b.x) > tolerance ||
+    Math.abs(a.y - b.y) > tolerance ||
+    Math.abs(a.width - b.width) > tolerance ||
+    Math.abs(a.height - b.height) > tolerance ||
+    Math.abs(a.rotation - b.rotation) > tolerance
+  );
 }

@@ -1,18 +1,11 @@
-import { useMemo, useCallback, useEffect } from 'react';
+import { useMemo, useCallback } from 'react';
 import type { TimelineItem } from '@/types/timeline';
 import type { GizmoHandle, Transform, CoordinateParams } from '../types/gizmo';
 import { useGizmoStore } from '../stores/gizmo-store';
 import { useAnimatedTransform } from '@/features/keyframes/hooks/use-animated-transform';
-import {
-  transformToScreenBounds,
-  screenToCanvas,
-  getScaleCursor,
-} from '../utils/coordinate-transform';
-
-const HANDLE_SIZE = 8;
-const ROTATION_HANDLE_OFFSET = 24;
-
-const SCALE_HANDLES: GizmoHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+import { useEscapeCancel } from '../hooks/use-drag-interaction';
+import { GizmoHandles } from './gizmo-handles';
+import { transformToScreenBounds, screenToCanvas, getScaleCursor } from '../utils/coordinate-transform';
 
 interface TransformGizmoProps {
   item: TimelineItem;
@@ -110,34 +103,6 @@ export function TransformGizmo({
       return screenToCanvas(e.clientX, e.clientY, coordParams);
     },
     [coordParams]
-  );
-
-  // Handle position for each scale handle
-  const getHandleStyle = useCallback(
-    (handle: GizmoHandle): React.CSSProperties => {
-      const half = HANDLE_SIZE / 2;
-      const { width, height } = screenBounds;
-
-      const positions: Record<string, React.CSSProperties> = {
-        nw: { left: -half, top: -half },
-        n: { left: width / 2 - half, top: -half },
-        ne: { left: width - half, top: -half },
-        e: { left: width - half, top: height / 2 - half },
-        se: { left: width - half, top: height - half },
-        s: { left: width / 2 - half, top: height - half },
-        sw: { left: -half, top: height - half },
-        w: { left: -half, top: height / 2 - half },
-      };
-
-      return {
-        position: 'absolute',
-        width: HANDLE_SIZE,
-        height: HANDLE_SIZE,
-        ...positions[handle],
-        cursor: getScaleCursor(handle, currentTransform.rotation),
-      };
-    },
-    [screenBounds, currentTransform.rotation]
   );
 
   // Check if transform actually changed (within tolerance)
@@ -263,19 +228,13 @@ export function TransformGizmo({
   );
 
   // Handle escape key to cancel interaction
-  useEffect(() => {
-    if (!isInteracting) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        cancelInteraction();
-        document.body.style.cursor = '';
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isInteracting, cancelInteraction]);
+  useEscapeCancel(
+    isInteracting,
+    useCallback(() => {
+      cancelInteraction();
+      document.body.style.cursor = '';
+    }, [cancelInteraction])
+  );
 
   return (
     <div
@@ -297,59 +256,14 @@ export function TransformGizmo({
       onMouseDown={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
     >
-      {/* Selection border - high z-index to ensure it's above all SelectableItems */}
-      {/* Mask shapes use cyan color, regular shapes use orange */}
-      <div
-        className="absolute cursor-move"
-        style={{
-          inset: -2,
-          border: `2px dashed ${
-            item.type === 'shape' && item.isMask
-              ? (isInteracting ? '#0891b2' : '#06b6d4') // Cyan for masks
-              : (isInteracting ? '#ea580c' : '#f97316') // Orange for regular
-          }`,
-          boxSizing: 'border-box',
-          zIndex: 101,
-        }}
-        data-gizmo="border"
-        onMouseDown={handleTranslateStart}
-        onDoubleClick={(e) => e.stopPropagation()}
-      />
-
-      {/* Scale handles - high z-index to ensure they're above all SelectableItems */}
-      {SCALE_HANDLES.map((handle) => (
-        <div
-          key={handle}
-          className="bg-white border border-orange-500"
-          style={{ ...getHandleStyle(handle), zIndex: 102 }}
-          data-gizmo={`scale-${handle}`}
-          onMouseDown={(e) => handleScaleStart(handle, e)}
-        />
-      ))}
-
-      {/* Rotation handle - high z-index to ensure it's above all SelectableItems */}
-      <div
-        className="absolute bg-white border border-orange-500 rounded-full cursor-crosshair"
-        style={{
-          width: 10,
-          height: 10,
-          left: '50%',
-          top: -ROTATION_HANDLE_OFFSET,
-          marginLeft: -5,
-          zIndex: 102,
-        }}
-        data-gizmo="rotate"
-        onMouseDown={handleRotateStart}
-      />
-
-      {/* Rotation guide line */}
-      <div
-        className="absolute border-l border-dashed border-orange-500 pointer-events-none"
-        style={{
-          left: '50%',
-          top: -ROTATION_HANDLE_OFFSET + 10,
-          height: ROTATION_HANDLE_OFFSET - 10,
-        }}
+      <GizmoHandles
+        bounds={screenBounds}
+        rotation={currentTransform.rotation}
+        isInteracting={isInteracting}
+        isMask={item.type === 'shape' && item.isMask}
+        onTranslateStart={handleTranslateStart}
+        onScaleStart={handleScaleStart}
+        onRotateStart={handleRotateStart}
       />
     </div>
   );

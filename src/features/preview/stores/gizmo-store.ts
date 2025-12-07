@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useCallback } from 'react';
 import type { GizmoState, GizmoHandle, Transform, Point } from '../types/gizmo';
 import type { ItemEffect } from '@/types/effects';
 import { calculateTransform } from '../utils/transform-calculations';
@@ -39,10 +40,38 @@ export interface ItemPropertiesPreview {
   maskFeather?: number;
 }
 
+/**
+ * Unified preview for a single item.
+ * Consolidates transform, properties, and effects previews.
+ */
+export interface ItemPreview {
+  /** Transform preview (can be partial from panel or full from gizmo) */
+  transform?: Partial<Transform>;
+  /** Non-transform properties (fades, colors, text/shape props) */
+  properties?: ItemPropertiesPreview;
+  /** Effects preview */
+  effects?: ItemEffect[];
+}
+
+/**
+ * Check if a partial transform has all required properties (full transform).
+ * Full transforms replace the base; partial transforms merge with base.
+ */
+export function isFullTransform(t?: Partial<Transform>): t is Transform {
+  if (!t) return false;
+  return (
+    t.x !== undefined &&
+    t.y !== undefined &&
+    t.width !== undefined &&
+    t.height !== undefined &&
+    t.rotation !== undefined
+  );
+}
+
 interface GizmoStoreState {
   /** Current gizmo interaction state (null when not interacting) */
   activeGizmo: GizmoState | null;
-  /** Preview transform during drag (before commit) */
+  /** Preview transform during single-item gizmo drag (before commit) */
   previewTransform: Transform | null;
   /** Canvas dimensions for calculations */
   canvasSize: { width: number; height: number };
@@ -50,15 +79,26 @@ interface GizmoStoreState {
   snapLines: SnapLine[];
   /** Whether snapping is enabled */
   snappingEnabled: boolean;
-  /** Properties panel preview transforms (itemId -> partial transform) */
-  propertiesPreview: Record<string, Partial<Transform>> | null;
-  /** Properties panel preview for item properties like fades (itemId -> partial properties) */
-  itemPropertiesPreview: Record<string, ItemPropertiesPreview> | null;
+  /**
+   * Unified preview state for all items (itemId -> preview data).
+   * Consolidates: transform previews, item properties, effects.
+   *
+   * Performance note: Use granular selectors when reading!
+   * - Good: useGizmoStore(s => s.preview?.[itemId])
+   * - Avoid: useGizmoStore(s => s.preview) then accessing itemId
+   */
+  preview: Record<string, ItemPreview> | null;
   /** Canvas background color preview (during color picker drag) */
   canvasBackgroundPreview: string | null;
-  /** Group preview transforms during multi-item drag (itemId -> transform) */
+
+  // === DEPRECATED - Remove after migration ===
+  /** @deprecated Use preview[itemId].transform instead */
+  propertiesPreview: Record<string, Partial<Transform>> | null;
+  /** @deprecated Use preview[itemId].properties instead */
+  itemPropertiesPreview: Record<string, ItemPropertiesPreview> | null;
+  /** @deprecated Use preview[itemId].transform instead (with full transform) */
   groupPreviewTransforms: Map<string, Transform> | null;
-  /** Effects preview during slider drag (itemId -> effects array) */
+  /** @deprecated Use preview[itemId].effects instead */
   effectsPreview: Record<string, ItemEffect[]> | null;
 }
 
@@ -108,17 +148,37 @@ interface GizmoStoreActions {
   /** Cancel interaction without committing changes */
   cancelInteraction: () => void;
 
-  /** Set properties panel preview for multiple items */
-  setPropertiesPreview: (previews: Record<string, Partial<Transform>>) => void;
+  // === New unified preview actions ===
 
-  /** Clear properties panel preview */
-  clearPropertiesPreview: () => void;
+  /**
+   * Set unified preview for items.
+   * Merges with existing preview data for each item.
+   */
+  setPreview: (previews: Record<string, ItemPreview>) => void;
 
-  /** Set item properties preview (fades, etc.) for multiple items */
-  setItemPropertiesPreview: (previews: Record<string, ItemPropertiesPreview>) => void;
+  /**
+   * Update transform preview for specific items.
+   * Convenience method for panel sliders - merges with existing item preview.
+   */
+  setTransformPreview: (transforms: Record<string, Partial<Transform>>) => void;
 
-  /** Clear item properties preview */
-  clearItemPropertiesPreview: () => void;
+  /**
+   * Update properties preview for specific items.
+   * Convenience method for panel sliders - merges with existing item preview.
+   */
+  setPropertiesPreviewNew: (properties: Record<string, ItemPropertiesPreview>) => void;
+
+  /**
+   * Update effects preview for specific items.
+   * Convenience method for effects sliders.
+   */
+  setEffectsPreviewNew: (effects: Record<string, ItemEffect[]>) => void;
+
+  /** Clear all preview data */
+  clearPreview: () => void;
+
+  /** Clear preview for specific items */
+  clearPreviewForItems: (itemIds: string[]) => void;
 
   /** Set canvas background color preview */
   setCanvasBackgroundPreview: (color: string) => void;
@@ -126,13 +186,27 @@ interface GizmoStoreActions {
   /** Clear canvas background color preview */
   clearCanvasBackgroundPreview: () => void;
 
-  /** Set group preview transforms during multi-item drag */
+  // === DEPRECATED - Keep for backwards compatibility during migration ===
+
+  /** @deprecated Use setTransformPreview instead */
+  setPropertiesPreview: (previews: Record<string, Partial<Transform>>) => void;
+
+  /** @deprecated Use clearPreview instead */
+  clearPropertiesPreview: () => void;
+
+  /** @deprecated Use setPropertiesPreviewNew instead */
+  setItemPropertiesPreview: (previews: Record<string, ItemPropertiesPreview>) => void;
+
+  /** @deprecated Use clearPreview instead */
+  clearItemPropertiesPreview: () => void;
+
+  /** @deprecated Use setPreview with full transforms instead */
   setGroupPreviewTransforms: (transforms: Map<string, Transform> | null) => void;
 
-  /** Set effects preview for multiple items */
+  /** @deprecated Use setEffectsPreviewNew instead */
   setEffectsPreview: (previews: Record<string, ItemEffect[]>) => void;
 
-  /** Clear effects preview */
+  /** @deprecated Use clearPreview instead */
   clearEffectsPreview: () => void;
 }
 
@@ -144,9 +218,11 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
     canvasSize: { width: 1920, height: 1080 },
     snapLines: [],
     snappingEnabled: true,
+    preview: null,
+    canvasBackgroundPreview: null,
+    // Deprecated state - keep for backwards compatibility
     propertiesPreview: null,
     itemPropertiesPreview: null,
-    canvasBackgroundPreview: null,
     groupPreviewTransforms: null,
     effectsPreview: null,
 
@@ -282,6 +358,78 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
     cancelInteraction: () =>
       set({ activeGizmo: null, previewTransform: null, snapLines: [] }),
 
+    // === New unified preview actions ===
+
+    setPreview: (previews) => {
+      const current = get().preview ?? {};
+      const merged: Record<string, ItemPreview> = { ...current };
+      for (const [itemId, itemPreview] of Object.entries(previews)) {
+        merged[itemId] = {
+          ...merged[itemId],
+          ...itemPreview,
+          // Deep merge transform if both exist
+          transform: itemPreview.transform
+            ? { ...merged[itemId]?.transform, ...itemPreview.transform }
+            : merged[itemId]?.transform,
+          // Deep merge properties if both exist
+          properties: itemPreview.properties
+            ? { ...merged[itemId]?.properties, ...itemPreview.properties }
+            : merged[itemId]?.properties,
+        };
+      }
+      set({ preview: merged });
+    },
+
+    setTransformPreview: (transforms) => {
+      const current = get().preview ?? {};
+      const merged: Record<string, ItemPreview> = { ...current };
+      for (const [itemId, transform] of Object.entries(transforms)) {
+        merged[itemId] = {
+          ...merged[itemId],
+          transform: { ...merged[itemId]?.transform, ...transform },
+        };
+      }
+      set({ preview: merged });
+    },
+
+    setPropertiesPreviewNew: (properties) => {
+      const current = get().preview ?? {};
+      const merged: Record<string, ItemPreview> = { ...current };
+      for (const [itemId, props] of Object.entries(properties)) {
+        merged[itemId] = {
+          ...merged[itemId],
+          properties: { ...merged[itemId]?.properties, ...props },
+        };
+      }
+      set({ preview: merged });
+    },
+
+    setEffectsPreviewNew: (effects) => {
+      const current = get().preview ?? {};
+      const merged: Record<string, ItemPreview> = { ...current };
+      for (const [itemId, effectList] of Object.entries(effects)) {
+        merged[itemId] = {
+          ...merged[itemId],
+          effects: effectList,
+        };
+      }
+      set({ preview: merged });
+    },
+
+    clearPreview: () => set({ preview: null }),
+
+    clearPreviewForItems: (itemIds) => {
+      const current = get().preview;
+      if (!current) return;
+      const updated = { ...current };
+      for (const id of itemIds) {
+        delete updated[id];
+      }
+      set({ preview: Object.keys(updated).length > 0 ? updated : null });
+    },
+
+    // === Deprecated actions - keep for backwards compatibility ===
+
     setPropertiesPreview: (previews) =>
       set({ propertiesPreview: previews }),
 
@@ -310,3 +458,55 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
       set({ effectsPreview: null }),
   })
 );
+
+// === Helper hooks for granular preview access ===
+
+/**
+ * Hook to get preview for a specific item with proper memoization.
+ * This avoids creating a new selector function on every render.
+ *
+ * @example
+ * const preview = useItemPreview(itemId);
+ * const transform = preview?.transform;
+ */
+export function useItemPreview(itemId: string): ItemPreview | undefined {
+  const selector = useCallback(
+    (s: GizmoStoreState) => s.preview?.[itemId],
+    [itemId]
+  );
+  return useGizmoStore(selector);
+}
+
+/**
+ * Hook to get transform preview for a specific item.
+ * Returns undefined if no preview or no transform preview.
+ */
+export function useItemTransformPreview(itemId: string): Partial<Transform> | undefined {
+  const selector = useCallback(
+    (s: GizmoStoreState) => s.preview?.[itemId]?.transform,
+    [itemId]
+  );
+  return useGizmoStore(selector);
+}
+
+/**
+ * Hook to get properties preview for a specific item.
+ */
+export function useItemPropertiesPreviewHook(itemId: string): ItemPropertiesPreview | undefined {
+  const selector = useCallback(
+    (s: GizmoStoreState) => s.preview?.[itemId]?.properties,
+    [itemId]
+  );
+  return useGizmoStore(selector);
+}
+
+/**
+ * Hook to get effects preview for a specific item.
+ */
+export function useItemEffectsPreview(itemId: string): ItemEffect[] | undefined {
+  const selector = useCallback(
+    (s: GizmoStoreState) => s.preview?.[itemId]?.effects,
+    [itemId]
+  );
+  return useGizmoStore(selector);
+}

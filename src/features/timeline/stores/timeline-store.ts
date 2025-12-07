@@ -1592,3 +1592,34 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
   markClean: () => set({ isDirty: false }),
   }))
 );
+
+// === Memoized Selectors ===
+
+/**
+ * Memoized selector that returns keyframes as a Map for O(1) lookups by itemId.
+ * This avoids O(n) find() calls in hot paths like animation resolution.
+ *
+ * @example
+ * const keyframeMap = useKeyframeMap();
+ * const itemKeyframes = keyframeMap.get(itemId);
+ */
+export function useKeyframeMap(): Map<string, ItemKeyframes> {
+  return useTimelineStore((state: TimelineState) => {
+    // Create Map from array - this is memoized by Zustand's selector equality check
+    const map = new Map<string, ItemKeyframes>();
+    for (const kf of state.keyframes) {
+      map.set(kf.itemId, kf);
+    }
+    return map;
+  });
+}
+
+/**
+ * Get keyframes for a specific item using the memoized map.
+ * More efficient than using the array when you only need one item's keyframes.
+ */
+export function useItemKeyframes(itemId: string): ItemKeyframes | undefined {
+  return useTimelineStore((state: TimelineState) => {
+    return state.keyframes.find((k: ItemKeyframes) => k.itemId === itemId);
+  });
+}

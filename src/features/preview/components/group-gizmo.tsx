@@ -1,12 +1,10 @@
-import { useMemo, useCallback, useEffect, useState, useRef } from 'react';
+import { useMemo, useCallback, useState, useRef } from 'react';
 import type { TimelineItem } from '@/types/timeline';
 import type { GizmoHandle, Transform, CoordinateParams, Point, GroupTransformState } from '../types/gizmo';
-import { useAnimatedTransforms } from '@/features/keyframes/hooks/use-animated-transform';
-import {
-  screenToCanvas,
-  getScaleCursor,
-  getEffectiveScale,
-} from '../utils/coordinate-transform';
+import { useVisualTransforms } from '../hooks/use-visual-transform';
+import { useEscapeCancel } from '../hooks/use-drag-interaction';
+import { GizmoHandles } from './gizmo-handles';
+import { screenToCanvas, getEffectiveScale, getScaleCursor } from '../utils/coordinate-transform';
 import {
   calculateGroupBounds,
   initializeGroupState,
@@ -16,12 +14,7 @@ import {
   calculateGroupScaleFactor,
   calculateGroupRotationDelta,
 } from '../utils/group-transform-calculations';
-import { useGizmoStore } from '../stores/gizmo-store';
-
-const HANDLE_SIZE = 8;
-const ROTATION_HANDLE_OFFSET = 24;
-
-const SCALE_HANDLES: GizmoHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+import { useGizmoStore, type ItemPreview } from '../stores/gizmo-store';
 
 interface GroupGizmoProps {
   items: TimelineItem[];
@@ -55,30 +48,24 @@ export function GroupGizmo({
   const startPointRef = useRef<Point | null>(null);
   const startTransformsRef = useRef<Map<string, Transform>>(new Map());
 
-  // Preview transforms during interaction
-  const [previewTransforms, setPreviewTransformsState] = useState<Map<string, Transform> | null>(null);
   // Ref to track latest preview transforms for mouseup handler (avoids closure issues)
   const previewTransformsRef = useRef<Map<string, Transform> | null>(null);
 
-  // Helper to update both state and ref
-  const setPreviewTransforms = useCallback((transforms: Map<string, Transform> | null) => {
-    previewTransformsRef.current = transforms;
-    setPreviewTransformsState(transforms);
-  }, []);
-
-  // Group preview transforms for live rendering
-  const setGroupPreviewTransforms = useGizmoStore((s) => s.setGroupPreviewTransforms);
+  // Unified preview store actions
+  const setPreview = useGizmoStore((s) => s.setPreview);
+  const clearPreview = useGizmoStore((s) => s.clearPreview);
 
   const { projectSize } = coordParams;
   const scale = getEffectiveScale(coordParams);
 
-  // Get animated transforms for all items using centralized hook
-  const animatedTransforms = useAnimatedTransforms(items, projectSize);
+  // Get visual transforms for all items (includes keyframes and any existing preview)
+  // Note: During group interaction, we use our own preview which takes priority
+  const visualTransforms = useVisualTransforms(items, projectSize);
 
   // Convert ResolvedTransform to Transform type for gizmo system
   const itemTransforms = useMemo(() => {
     const transforms = new Map<string, Transform>();
-    for (const [id, resolved] of animatedTransforms) {
+    for (const [id, resolved] of visualTransforms) {
       transforms.set(id, {
         x: resolved.x,
         y: resolved.y,
@@ -90,10 +77,30 @@ export function GroupGizmo({
       });
     }
     return transforms;
-  }, [animatedTransforms]);
+  }, [visualTransforms]);
 
-  // Use preview transforms during interaction, otherwise use resolved transforms
-  const currentTransforms = previewTransforms ?? itemTransforms;
+  // Helper to convert Map<string, Transform> to Record<string, ItemPreview> for store
+  const mapToPreviewRecord = useCallback((transforms: Map<string, Transform>): Record<string, ItemPreview> => {
+    const record: Record<string, ItemPreview> = {};
+    for (const [id, transform] of transforms) {
+      record[id] = { transform };
+    }
+    return record;
+  }, []);
+
+  // Helper to update preview in store and ref
+  const setPreviewTransforms = useCallback((transforms: Map<string, Transform> | null) => {
+    previewTransformsRef.current = transforms;
+    if (transforms) {
+      setPreview(mapToPreviewRecord(transforms));
+    } else {
+      clearPreview();
+    }
+  }, [setPreview, clearPreview, mapToPreviewRecord]);
+
+  // Use itemTransforms directly since preview is now handled by useVisualTransforms
+  // (it reads from the unified preview store automatically)
+  const currentTransforms = itemTransforms;
 
   // Calculate group bounds from current transforms
   const groupBounds = useMemo(() => {
@@ -138,34 +145,6 @@ export function GroupGizmo({
       return screenToCanvas(e.clientX, e.clientY, coordParams);
     },
     [coordParams]
-  );
-
-  // Handle position for each scale handle
-  const getHandleStyle = useCallback(
-    (handle: GizmoHandle): React.CSSProperties => {
-      const half = HANDLE_SIZE / 2;
-      const { width, height } = screenBounds;
-
-      const positions: Record<string, React.CSSProperties> = {
-        nw: { left: -half, top: -half },
-        n: { left: width / 2 - half, top: -half },
-        ne: { left: width - half, top: -half },
-        e: { left: width - half, top: height / 2 - half },
-        se: { left: width - half, top: height - half },
-        s: { left: width / 2 - half, top: height - half },
-        sw: { left: -half, top: height - half },
-        w: { left: -half, top: height / 2 - half },
-      };
-
-      return {
-        position: 'absolute',
-        width: HANDLE_SIZE,
-        height: HANDLE_SIZE,
-        ...positions[handle],
-        cursor: getScaleCursor(handle, groupRotation),
-      };
-    },
-    [screenBounds, groupRotation]
   );
 
   // Check if transforms actually changed
@@ -271,7 +250,6 @@ export function GroupGizmo({
 
         const newTransforms = applyGroupTranslation(groupState, deltaX, deltaY);
         setPreviewTransforms(newTransforms);
-        setGroupPreviewTransforms(newTransforms);
       };
 
       const handleMouseUp = () => {
@@ -286,7 +264,6 @@ export function GroupGizmo({
             // Clean up without committing transform
             setInteractionMode('idle');
             setPreviewTransforms(null);
-            setGroupPreviewTransforms(null);
             groupStateRef.current = null;
             startPointRef.current = null;
             // Select just the clicked item
@@ -303,7 +280,6 @@ export function GroupGizmo({
 
         setInteractionMode('idle');
         setPreviewTransforms(null);
-        setGroupPreviewTransforms(null);
         groupStateRef.current = null;
         startPointRef.current = null;
       };
@@ -311,7 +287,7 @@ export function GroupGizmo({
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     },
-    [items, itemTransforms, projectSize, toCanvasPoint, onTransformStart, onTransformEnd, transformsChanged, setGroupPreviewTransforms, setPreviewTransforms, onItemClick, findItemAtPoint]
+    [items, itemTransforms, projectSize, toCanvasPoint, onTransformStart, onTransformEnd, transformsChanged, setPreviewTransforms, onItemClick, findItemAtPoint]
   );
 
   // Start scale interaction
@@ -349,7 +325,6 @@ export function GroupGizmo({
           maintainAspectRatio
         );
         setPreviewTransforms(newTransforms);
-        setGroupPreviewTransforms(newTransforms);
       };
 
       const handleMouseUp = () => {
@@ -365,7 +340,6 @@ export function GroupGizmo({
 
         setInteractionMode('idle');
         setPreviewTransforms(null);
-        setGroupPreviewTransforms(null);
         groupStateRef.current = null;
         startPointRef.current = null;
       };
@@ -373,7 +347,7 @@ export function GroupGizmo({
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     },
-    [items, itemTransforms, projectSize, toCanvasPoint, onTransformStart, onTransformEnd, transformsChanged, groupRotation, setGroupPreviewTransforms, setPreviewTransforms]
+    [items, itemTransforms, projectSize, toCanvasPoint, onTransformStart, onTransformEnd, transformsChanged, groupRotation, setPreviewTransforms]
   );
 
   // Start rotate interaction
@@ -413,7 +387,6 @@ export function GroupGizmo({
           projectSize.height
         );
         setPreviewTransforms(newTransforms);
-        setGroupPreviewTransforms(newTransforms);
       };
 
       const handleMouseUp = () => {
@@ -429,7 +402,6 @@ export function GroupGizmo({
 
         setInteractionMode('idle');
         setPreviewTransforms(null);
-        setGroupPreviewTransforms(null);
         groupStateRef.current = null;
         startPointRef.current = null;
       };
@@ -437,27 +409,20 @@ export function GroupGizmo({
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     },
-    [items, itemTransforms, projectSize, toCanvasPoint, onTransformStart, onTransformEnd, transformsChanged, setGroupPreviewTransforms, setPreviewTransforms]
+    [items, itemTransforms, projectSize, toCanvasPoint, onTransformStart, onTransformEnd, transformsChanged, setPreviewTransforms]
   );
 
   // Handle escape key to cancel interaction
-  useEffect(() => {
-    if (interactionMode === 'idle') return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setInteractionMode('idle');
-        setPreviewTransforms(null);
-        setGroupPreviewTransforms(null);
-        groupStateRef.current = null;
-        startPointRef.current = null;
-        document.body.style.cursor = '';
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [interactionMode, setGroupPreviewTransforms]);
+  useEscapeCancel(
+    interactionMode !== 'idle',
+    useCallback(() => {
+      setInteractionMode('idle');
+      setPreviewTransforms(null);
+      groupStateRef.current = null;
+      startPointRef.current = null;
+      document.body.style.cursor = '';
+    }, [setPreviewTransforms])
+  );
 
   const isInteracting = interactionMode !== 'idle';
 
@@ -479,54 +444,13 @@ export function GroupGizmo({
       onMouseDown={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
     >
-      {/* Selection border - high z-index to ensure it's above all SelectableItems */}
-      <div
-        className="absolute cursor-move"
-        style={{
-          inset: -2,
-          border: `2px dashed ${isInteracting ? '#ea580c' : '#f97316'}`,
-          boxSizing: 'border-box',
-          zIndex: 101,
-        }}
-        data-gizmo="border"
-        onMouseDown={handleTranslateStart}
-        onDoubleClick={(e) => e.stopPropagation()}
-      />
-
-      {/* Scale handles - high z-index to ensure they're above all SelectableItems */}
-      {SCALE_HANDLES.map((handle) => (
-        <div
-          key={handle}
-          className="bg-white border border-orange-500"
-          style={{ ...getHandleStyle(handle), zIndex: 102 }}
-          data-gizmo={`scale-${handle}`}
-          onMouseDown={(e) => handleScaleStart(handle, e)}
-        />
-      ))}
-
-      {/* Rotation handle - high z-index to ensure it's above all SelectableItems */}
-      <div
-        className="absolute bg-white border border-orange-500 rounded-full cursor-crosshair"
-        style={{
-          width: 10,
-          height: 10,
-          left: '50%',
-          top: -ROTATION_HANDLE_OFFSET,
-          marginLeft: -5,
-          zIndex: 102,
-        }}
-        data-gizmo="rotate"
-        onMouseDown={handleRotateStart}
-      />
-
-      {/* Rotation guide line */}
-      <div
-        className="absolute border-l border-dashed border-orange-500 pointer-events-none"
-        style={{
-          left: '50%',
-          top: -ROTATION_HANDLE_OFFSET + 10,
-          height: ROTATION_HANDLE_OFFSET - 10,
-        }}
+      <GizmoHandles
+        bounds={screenBounds}
+        rotation={groupRotation}
+        isInteracting={isInteracting}
+        onTranslateStart={handleTranslateStart}
+        onScaleStart={handleScaleStart}
+        onRotateStart={handleRotateStart}
       />
     </div>
   );
