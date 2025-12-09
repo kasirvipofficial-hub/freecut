@@ -218,8 +218,6 @@ export const PitchCorrectedAudio: React.FC<PitchCorrectedAudioProps> = React.mem
     if (!audio) return;
 
     // Calculate target time in the source audio
-    // frame is the current frame in the composition
-    // We need to convert to source time accounting for trim and speed
     const compositionTimeSeconds = frame / fps;
     const sourceTimeSeconds = (trimBefore / fps) + (compositionTimeSeconds * playbackRate);
 

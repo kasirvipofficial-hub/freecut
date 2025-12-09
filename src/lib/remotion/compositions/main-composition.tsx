@@ -13,6 +13,7 @@ import type { TextItem, ShapeItem, AdjustmentItem, VideoItem, ImageItem } from '
 import type { Transition, TransitionPresentation, TransitionTiming, WipeDirection, SlideDirection, FlipDirection } from '@/types/transition';
 import { Item } from '../components/item';
 import { PitchCorrectedAudio } from '../components/pitch-corrected-audio';
+import { EffectsBasedTransitionsLayer } from '../components/effects-based-transition';
 import { StableVideoSequence } from '../components/stable-video-sequence';
 import { loadFonts } from '../utils/fonts';
 import { resolveTransform } from '../utils/transform-resolver';
@@ -466,7 +467,7 @@ const ChainAudioRenderer = React.memo<{
     return info;
   }, [tracks]);
 
-  // Pre-compute audio clip data for each chain to avoid recalculating during render
+  // Pre-compute audio clip data for each chain
   const chainAudioData = useMemo(() => {
     return chains.map((chain) => {
       const trackData = trackInfo.get(chain.trackId);
@@ -478,6 +479,7 @@ const ChainAudioRenderer = React.memo<{
       const clipData: Array<{
         clip: VideoItem;
         clipStart: number;
+        audioDuration: number;
         fadeInDuration: number;
         fadeOutDuration: number;
         muted: boolean;
@@ -496,6 +498,7 @@ const ChainAudioRenderer = React.memo<{
           clipData.push({
             clip: clip as VideoItem,
             clipStart,
+            audioDuration: clip.durationInFrames,
             fadeInDuration: transitionBefore?.durationInFrames ?? 0,
             fadeOutDuration: transitionAfter?.durationInFrames ?? 0,
             muted: trackMuted || !trackVisible,
@@ -508,18 +511,17 @@ const ChainAudioRenderer = React.memo<{
   }, [chains, trackInfo, visibleTrackIds]);
 
   // Flatten and render all audio clips
-  // Use clip.id for keys (not originId) because after splits, both parts may end up in
-  // different chains with the same originId, causing duplicate key errors
   return (
     <>
       {chainAudioData.flat().map((data) => (
         <Sequence
           key={`chain-audio-${data.clip.id}`}
           from={data.clipStart}
-          durationInFrames={data.clip.durationInFrames}
+          durationInFrames={data.audioDuration}
         >
           <ChainClipAudio
             clip={data.clip}
+            audioDuration={data.audioDuration}
             fadeInDuration={data.fadeInDuration}
             fadeOutDuration={data.fadeOutDuration}
             muted={data.muted}
@@ -532,15 +534,22 @@ const ChainAudioRenderer = React.memo<{
 
 /**
  * Audio for a single clip in a chain with crossfade support.
- * Renders audio-only with volume interpolation for smooth transitions.
+ * Renders audio with equal-power crossfade for smooth transitions.
  * Memoized to prevent unnecessary re-renders during playback.
  */
 const ChainClipAudio = React.memo<{
   clip: VideoItem;
+  audioDuration: number;
   fadeInDuration: number;
   fadeOutDuration: number;
   muted: boolean;
-}>(function ChainClipAudio({ clip, fadeInDuration, fadeOutDuration, muted }) {
+}>(function ChainClipAudio({
+  clip,
+  audioDuration,
+  fadeInDuration,
+  fadeOutDuration,
+  muted,
+}) {
   // Skip if muted or no source
   if (muted || !clip.src) return null;
 
@@ -557,10 +566,10 @@ const ChainClipAudio = React.memo<{
       volume={clip.volume ?? 0}
       playbackRate={playbackRate}
       muted={false}
-      durationInFrames={clip.durationInFrames}
+      durationInFrames={audioDuration}
       audioFadeIn={clip.audioFadeIn}
       audioFadeOut={clip.audioFadeOut}
-      // Crossfade overrides for transitions
+      // Crossfade overrides for transitions (equal-power curve)
       crossfadeFadeIn={fadeInDuration}
       crossfadeFadeOut={fadeOutDuration}
     />
@@ -749,11 +758,38 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, transiti
     [tracks, visibleTrackIds, maxOrder]
   );
 
-  // Group clips into chains (connected by transitions) and standalone clips
+  // Separate transitions by mode
+  // Overlap transitions create chains with compressed timeline
+  // Effect transitions render visual effects without changing clip positions
+  const { overlapTransitions, effectTransitions } = useMemo(() => {
+    const overlap: Transition[] = [];
+    const effect: Transition[] = [];
+    for (const t of transitions) {
+      if (t.mode === 'effect') {
+        effect.push(t);
+      } else {
+        // Default to overlap for backward compatibility
+        overlap.push(t);
+      }
+    }
+    return { overlapTransitions: overlap, effectTransitions: effect };
+  }, [transitions]);
+
+  // Group clips into chains (connected by OVERLAP transitions only)
+  // Effect transitions don't create chains - clips stay at their original positions
   const { chains, standaloneClips } = useMemo(() =>
-    groupClipsIntoChains(allVisualItems, transitions),
-    [allVisualItems, transitions]
+    groupClipsIntoChains(allVisualItems, overlapTransitions),
+    [allVisualItems, overlapTransitions]
   );
+
+  // Build item lookup map for effects-based transitions
+  const itemsById = useMemo(() => {
+    const map = new Map<string, typeof allVisualItems[number]>();
+    for (const item of allVisualItems) {
+      map.set(item.id, item);
+    }
+    return map;
+  }, [allVisualItems]);
 
   // Calculate render offset for a clip based on chains that come before it on the same track
   // Transitions "compress" time, so clips after chains need to shift earlier
@@ -956,7 +992,7 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, transiti
           renderItem={renderVideoItem as any}
         />
 
-        {/* Transition chains - always render container for DOM stability (even when empty) */}
+        {/* Transition chains (OVERLAP mode) - uses TransitionSeries for compressed timeline */}
         {chains.map((chain) => {
           const track = tracks.find((t) => t.id === chain.trackId);
           const trackVisible = visibleTrackIds.has(chain.trackId);
@@ -978,6 +1014,13 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, transiti
             />
           );
         })}
+
+        {/* Effects-based transitions (EFFECT mode) - visual effect at cut point, no timeline compression */}
+        {/* These render ABOVE the normal clips during the transition window */}
+        <EffectsBasedTransitionsLayer
+          transitions={effectTransitions}
+          itemsById={itemsById}
+        />
       </StableMaskedGroup>
 
 

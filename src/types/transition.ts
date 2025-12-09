@@ -9,6 +9,13 @@
 export type TransitionType = 'crossfade';
 
 /**
+ * Transition mode determines how clips interact during the transition
+ * - 'overlap': Standard mode - clips physically overlap, timeline shortens
+ * - 'effect': Visual effect at cut point - clips stay in place, timeline unchanged
+ */
+export type TransitionMode = 'overlap' | 'effect';
+
+/**
  * Visual presentation styles for transitions
  * Maps to @remotion/transitions presentations
  */
@@ -57,6 +64,8 @@ export interface Transition {
   durationInFrames: number;
   /** Direction for wipe/slide/flip transitions */
   direction?: WipeDirection | SlideDirection | FlipDirection;
+  /** Transition mode: 'overlap' (standard) or 'effect' (no overlap) */
+  mode: TransitionMode;
   /** Custom properties for extensibility */
   properties?: Record<string, unknown>;
   /** Timestamp when transition was created */
@@ -160,6 +169,28 @@ export const TRANSITION_CONFIGS: Record<TransitionType, TransitionConfig> = {
     defaultDuration: 30, // 1 second at 30fps
     minDuration: 5,
     maxDuration: 90,
+  },
+};
+
+/**
+ * Configuration for transition modes
+ */
+export interface TransitionModeConfig {
+  label: string;
+  description: string;
+}
+
+/**
+ * Mode configurations for UI display
+ */
+export const TRANSITION_MODE_CONFIGS: Record<TransitionMode, TransitionModeConfig> = {
+  overlap: {
+    label: 'Standard',
+    description: 'Clips overlap during transition (shortens timeline)',
+  },
+  effect: {
+    label: 'Effect',
+    description: 'Visual effect at cut point (timeline unchanged)',
   },
 };
 

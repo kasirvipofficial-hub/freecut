@@ -956,6 +956,7 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
       trackId: leftClip.trackId,
       durationInFrames: duration,
       direction, // Include direction if provided
+      mode: 'overlap', // Default to overlap mode (standard behavior)
     };
 
     useTimelineStore.setState((state) => ({
