@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { AbsoluteFill, useCurrentFrame, Sequence, OffthreadVideo, Img, interpolate, useVideoConfig } from 'remotion';
-import type { VideoItem, ImageItem } from '@/types/timeline';
+import type { VideoItem, ImageItem, AdjustmentItem } from '@/types/timeline';
 import type { Transition, WipeDirection, SlideDirection, FlipDirection } from '@/types/transition';
 import { resolveTransform, toTransformStyle, getSourceDimensions } from '../utils/transform-resolver';
 import {
@@ -12,7 +12,13 @@ import {
   getGlitchEffects,
 } from '@/features/effects/utils/effect-to-css';
 import { getGlitchFilterString, getScanlinesStyle } from '@/features/effects/utils/glitch-algorithms';
-import type { GlitchEffect } from '@/types/effects';
+import type { GlitchEffect, ItemEffect } from '@/types/effects';
+
+/** Adjustment layer with its track order for scope calculation */
+export interface AdjustmentLayerWithTrackOrder {
+  layer: AdjustmentItem;
+  trackOrder: number;
+}
 
 /**
  * Enriched visual item with track metadata (same as main-composition)
@@ -31,6 +37,8 @@ interface EffectsBasedTransitionProps {
   leftClip: EnrichedVisualItem;
   /** Right clip (incoming) */
   rightClip: EnrichedVisualItem;
+  /** Adjustment layers for applying effects based on track order */
+  adjustmentLayers: AdjustmentLayerWithTrackOrder[];
 }
 
 /**
@@ -165,6 +173,7 @@ function getIrisMask(progress: number, isOutgoing: boolean): string {
  * - Glitch effects (color shift filter + scanlines overlay)
  * - Halftone effect (pattern overlay)
  * - Vignette effect (radial gradient overlay)
+ * - Adjustment layer effects (based on track order)
  */
 const ClipContent: React.FC<{
   clip: EnrichedVisualItem;
@@ -174,8 +183,14 @@ const ClipContent: React.FC<{
   canvasWidth: number;
   canvasHeight: number;
   fps: number;
-}> = ({ clip, sourceStartOffset = 0, canvasWidth, canvasHeight, fps }) => {
+  /** Adjustment layers for applying effects based on track order */
+  adjustmentLayers: AdjustmentLayerWithTrackOrder[];
+  /** The global frame position of this clip's start in the timeline */
+  clipGlobalFrom: number;
+}> = ({ clip, sourceStartOffset = 0, canvasWidth, canvasHeight, fps, adjustmentLayers, clipGlobalFrom }) => {
   const frame = useCurrentFrame();
+  // Convert local frame to global frame for adjustment layer timing
+  const globalFrame = frame + clipGlobalFrom;
 
   // Resolve the clip's transform to match normal rendering
   const canvas = { width: canvasWidth, height: canvasHeight, fps };
@@ -183,8 +198,39 @@ const ClipContent: React.FC<{
   const resolved = resolveTransform(clip, canvas, sourceDimensions);
   const transformStyle = toTransformStyle(resolved, canvas);
 
-  // Compute all effect types from clip's effects
-  const effects = clip.effects ?? [];
+  // Get adjustment layer effects that apply to this clip
+  // An adjustment layer affects this clip if:
+  // 1. The adjustment layer's track order < clip's track order (adjustment is ABOVE)
+  // 2. The adjustment layer is active at the current global frame
+  const adjustmentEffects = useMemo((): ItemEffect[] => {
+    if (adjustmentLayers.length === 0) return [];
+
+    const affectingLayers = adjustmentLayers.filter(({ layer, trackOrder }) => {
+      // Item must be BEHIND the adjustment (higher track order = lower zIndex)
+      if (clip.trackOrder <= trackOrder) return false;
+      // Adjustment must be active at current frame (global frame comparison)
+      return globalFrame >= layer.from && globalFrame < layer.from + layer.durationInFrames;
+    });
+
+    if (affectingLayers.length === 0) return [];
+
+    // Sort by track order (lowest first = applied first) and collect effects
+    return [...affectingLayers]
+      .sort((a, b) => a.trackOrder - b.trackOrder)
+      .flatMap(({ layer }) => {
+        const effects = layer.effects ?? [];
+        return effects.filter(e => e.enabled);
+      });
+  }, [adjustmentLayers, clip.trackOrder, globalFrame]);
+
+  // Combine clip's own effects with adjustment layer effects
+  const clipEffects = clip.effects ?? [];
+  const allEffects = useMemo(() => {
+    return [...adjustmentEffects, ...clipEffects];
+  }, [adjustmentEffects, clipEffects]);
+
+  // Use combined effects for all effect computations
+  const effects = allEffects;
 
   // CSS filter effects (brightness, contrast, etc.)
   const cssFilterString = useMemo(() => {
@@ -527,6 +573,7 @@ export const EffectsBasedTransitionRenderer = React.memo<EffectsBasedTransitionP
   transition,
   leftClip,
   rightClip,
+  adjustmentLayers,
 }) {
   // Get canvas dimensions for transform calculations
   const { width: canvasWidth, height: canvasHeight, fps } = useVideoConfig();
@@ -551,6 +598,12 @@ export const EffectsBasedTransitionRenderer = React.memo<EffectsBasedTransitionP
   // rendering jumps back to frame halfDuration, causing visible frame repetition.
   // With the offset, transition shows frames that lead into where normal rendering continues.
   const rightClipSourceOffset = -halfDuration;
+
+  // Calculate global frame positions for adjustment layer timing
+  // Left clip plays at its normal position (end portion during transition)
+  const leftClipGlobalFrom = transitionStart + leftClipContentOffset;
+  // Right clip starts at transitionStart in the timeline context
+  const rightClipGlobalFrom = transitionStart;
 
   return (
     <Sequence
@@ -581,7 +634,15 @@ export const EffectsBasedTransitionRenderer = React.memo<EffectsBasedTransitionP
             from={0}
             durationInFrames={transition.durationInFrames}
           >
-            <ClipContent clip={rightClip} sourceStartOffset={rightClipSourceOffset} canvasWidth={canvasWidth} canvasHeight={canvasHeight} fps={fps} />
+            <ClipContent
+              clip={rightClip}
+              sourceStartOffset={rightClipSourceOffset}
+              canvasWidth={canvasWidth}
+              canvasHeight={canvasHeight}
+              fps={fps}
+              adjustmentLayers={adjustmentLayers}
+              clipGlobalFrom={rightClipGlobalFrom}
+            />
           </Sequence>
         </TransitionOverlay>
 
@@ -598,7 +659,14 @@ export const EffectsBasedTransitionRenderer = React.memo<EffectsBasedTransitionP
             from={leftClipContentOffset}
             durationInFrames={transition.durationInFrames + Math.abs(leftClipContentOffset)}
           >
-            <ClipContent clip={leftClip} canvasWidth={canvasWidth} canvasHeight={canvasHeight} fps={fps} />
+            <ClipContent
+              clip={leftClip}
+              canvasWidth={canvasWidth}
+              canvasHeight={canvasHeight}
+              fps={fps}
+              adjustmentLayers={adjustmentLayers}
+              clipGlobalFrom={leftClipGlobalFrom}
+            />
           </Sequence>
         </TransitionOverlay>
       </AbsoluteFill>
@@ -613,7 +681,8 @@ export const EffectsBasedTransitionRenderer = React.memo<EffectsBasedTransitionP
 export const EffectsBasedTransitionsLayer = React.memo<{
   transitions: Transition[];
   itemsById: Map<string, EnrichedVisualItem>;
-}>(function EffectsBasedTransitionsLayer({ transitions, itemsById }) {
+  adjustmentLayers: AdjustmentLayerWithTrackOrder[];
+}>(function EffectsBasedTransitionsLayer({ transitions, itemsById, adjustmentLayers }) {
   if (transitions.length === 0) return null;
 
   return (
@@ -631,6 +700,7 @@ export const EffectsBasedTransitionsLayer = React.memo<{
             transition={transition}
             leftClip={leftClip}
             rightClip={rightClip}
+            adjustmentLayers={adjustmentLayers}
           />
         );
       })}

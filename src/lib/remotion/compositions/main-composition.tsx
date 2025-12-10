@@ -516,6 +516,7 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, transiti
         <EffectsBasedTransitionsLayer
           transitions={transitions}
           itemsById={itemsById}
+          adjustmentLayers={visibleAdjustmentLayers}
         />
       </StableMaskedGroup>
 
