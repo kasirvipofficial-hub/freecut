@@ -1,19 +1,12 @@
 /**
  * Transition Types
  *
- * Transitions are effects applied between two adjacent clips.
- * Uses Remotion's @remotion/transitions for rendering.
- * Clips stay adjacent in timeline UI - TransitionSeries handles overlap at render time.
+ * Transitions are visual effects applied between two adjacent clips.
+ * Transitions are centered on the cut point (half in exiting clip, half in entering clip).
+ * Timeline duration remains unchanged - transitions are purely visual effects.
  */
 
 export type TransitionType = 'crossfade';
-
-/**
- * Transition mode determines how clips interact during the transition
- * - 'overlap': Standard mode - clips physically overlap, timeline shortens
- * - 'effect': Visual effect at cut point - clips stay in place, timeline unchanged
- */
-export type TransitionMode = 'overlap' | 'effect';
 
 /**
  * Visual presentation styles for transitions
@@ -43,7 +36,7 @@ export type TransitionTiming = 'linear' | 'spring';
 
 /**
  * A transition between two adjacent clips.
- * Clips stay at their original positions - TransitionSeries calculates overlap at render time.
+ * Clips stay at their original positions - transition is a visual effect centered on the cut point.
  */
 export interface Transition {
   /** Unique identifier */
@@ -64,8 +57,6 @@ export interface Transition {
   durationInFrames: number;
   /** Direction for wipe/slide/flip transitions */
   direction?: WipeDirection | SlideDirection | FlipDirection;
-  /** Transition mode: 'overlap' (standard) or 'effect' (no overlap) */
-  mode: TransitionMode;
   /** Custom properties for extensibility */
   properties?: Record<string, unknown>;
   /** Timestamp when transition was created */
@@ -122,7 +113,7 @@ export interface ClipTransitionIndex {
 
 /**
  * A chain of clips connected by transitions on the same track.
- * Pre-computed for efficient rendering.
+ * Pre-computed for efficient transition lookups.
  */
 export interface TransitionChain {
   /** Unique identifier for the chain (based on first clip) */
@@ -139,10 +130,6 @@ export interface TransitionChain {
   startFrame: number;
   /** End frame in original timeline (last clip's from + duration) */
   endFrame: number;
-  /** Total overlap/compression from all transitions */
-  totalOverlap: number;
-  /** Rendered duration (total clip durations - total overlap) */
-  renderedDuration: number;
 }
 
 /**
@@ -169,28 +156,6 @@ export const TRANSITION_CONFIGS: Record<TransitionType, TransitionConfig> = {
     defaultDuration: 30, // 1 second at 30fps
     minDuration: 5,
     maxDuration: 90,
-  },
-};
-
-/**
- * Configuration for transition modes
- */
-export interface TransitionModeConfig {
-  label: string;
-  description: string;
-}
-
-/**
- * Mode configurations for UI display
- */
-export const TRANSITION_MODE_CONFIGS: Record<TransitionMode, TransitionModeConfig> = {
-  overlap: {
-    label: 'Standard',
-    description: 'Clips overlap during transition (shortens timeline)',
-  },
-  effect: {
-    label: 'Effect',
-    description: 'Visual effect at cut point (timeline unchanged)',
   },
 };
 

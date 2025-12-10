@@ -35,11 +35,9 @@ import type { SelectionState, SelectionActions } from '@/features/editor/types';
 import {
   TRANSITION_CONFIGS,
   PRESENTATION_CONFIGS,
-  TRANSITION_MODE_CONFIGS,
   type Transition,
   type TransitionPresentation,
   type TransitionTiming,
-  type TransitionMode,
   type WipeDirection,
   type SlideDirection,
   type FlipDirection,
@@ -243,16 +241,6 @@ export function TransitionPanel() {
     [selectedTransitionId, updateTransition]
   );
 
-  // Handle mode change
-  const handleModeChange = useCallback(
-    (mode: TransitionMode) => {
-      if (selectedTransitionId) {
-        updateTransition(selectedTransitionId, { mode });
-      }
-    },
-    [selectedTransitionId, updateTransition]
-  );
-
   // Handle delete
   const handleDelete = useCallback(() => {
     if (selectedTransitionId) {
@@ -350,38 +338,6 @@ export function TransitionPanel() {
             <SelectContent>
               <SelectItem value="linear">Linear</SelectItem>
               <SelectItem value="spring">Spring</SelectItem>
-            </SelectContent>
-          </Select>
-        </PropertyRow>
-
-        {/* Mode selector */}
-        <PropertyRow label="Mode" tooltip="How clips interact during transition">
-          <Select
-            value={selectedTransition.mode ?? 'overlap'}
-            onValueChange={(value) =>
-              handleModeChange(value as TransitionMode)
-            }
-          >
-            <SelectTrigger className="h-7 text-xs flex-1">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="overlap">
-                <div className="flex flex-col items-start">
-                  <span>{TRANSITION_MODE_CONFIGS.overlap.label}</span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {TRANSITION_MODE_CONFIGS.overlap.description}
-                  </span>
-                </div>
-              </SelectItem>
-              <SelectItem value="effect">
-                <div className="flex flex-col items-start">
-                  <span>{TRANSITION_MODE_CONFIGS.effect.label}</span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {TRANSITION_MODE_CONFIGS.effect.description}
-                  </span>
-                </div>
-              </SelectItem>
             </SelectContent>
           </Select>
         </PropertyRow>

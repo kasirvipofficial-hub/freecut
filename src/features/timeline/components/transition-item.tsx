@@ -73,29 +73,38 @@ export const TransitionItem = memo(function TransitionItem({
   const [hoveredEdge, setHoveredEdge] = useState<'left' | 'right' | null>(null);
 
   // Calculate position and size for the transition region
-  // The transition happens BEFORE the junction (last N frames of left clip overlapping first N frames of right clip)
-  // So the indicator should END at the junction, not be centered on it
+  // The transition is centered on the junction (half before, half after the cut point)
   // Use previewDuration during resize for visual feedback
   const position = useMemo(() => {
     if (!leftClip || !rightClip) return null;
 
-    // The junction is where the clips meet (rightClip.from)
+    // The junction is where the clips meet (rightClip.from = leftClip.from + leftClip.durationInFrames)
     const junctionFrame = rightClip.from;
     const junctionPixel = frameToPixels(junctionFrame);
 
-    // Transition region: ends at junction, spans transitionDuration frames before it
-    // Use previewDuration for visual feedback during resize
-    const transitionStart = Math.max(
-      leftClip.from,
-      junctionFrame - previewDuration
-    );
-    const startPixel = frameToPixels(transitionStart);
-    const naturalWidth = junctionPixel - startPixel;
+    // Transition is centered on junction: half before, half after
+    const halfDuration = Math.floor(previewDuration / 2);
+    const remainingDuration = previewDuration - halfDuration;
 
-    // Minimum width for visibility, but keep right edge at junction
+    // Clamp to clip boundaries
+    const transitionStart = Math.max(leftClip.from, junctionFrame - halfDuration);
+    const transitionEnd = Math.min(
+      rightClip.from + rightClip.durationInFrames,
+      junctionFrame + remainingDuration
+    );
+
+    const startPixel = frameToPixels(transitionStart);
+    const endPixel = frameToPixels(transitionEnd);
+    const naturalWidth = endPixel - startPixel;
+
+    // Minimum width for visibility
     const minWidth = 32;
     const effectiveWidth = Math.max(naturalWidth, minWidth);
-    const left = junctionPixel - effectiveWidth;
+
+    // Center the minimum width on the junction if natural width is too small
+    const left = naturalWidth < minWidth
+      ? junctionPixel - effectiveWidth / 2
+      : startPixel;
 
     return { left, width: effectiveWidth, junctionPixel };
   }, [leftClip, rightClip, frameToPixels, previewDuration]);
@@ -131,13 +140,31 @@ export const TransitionItem = memo(function TransitionItem({
     }
   }, [isResizing]);
 
-  // Handle click to select
+  // Handle click to select (only if not resizing)
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      selectTransition(transition.id);
+      // Don't select if we just finished resizing
+      if (!isResizing) {
+        selectTransition(transition.id);
+      }
     },
-    [transition.id, selectTransition]
+    [transition.id, selectTransition, isResizing]
+  );
+
+  // Stop all events on resize handles from bubbling
+  const stopEvent = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  // Handle mousedown on main container - stop propagation when on resize edge
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      // Always stop propagation to prevent timeline drag
+      e.stopPropagation();
+    },
+    []
   );
 
   // Handle delete
@@ -164,7 +191,7 @@ export const TransitionItem = memo(function TransitionItem({
       <ContextMenuTrigger asChild>
         <div
           className={cn(
-            'absolute transition-all duration-75',
+            'absolute',
             isSelected &&
               'ring-2 ring-primary ring-offset-1 ring-offset-background rounded',
             isResizing && 'ring-2 ring-purple-400'
@@ -177,6 +204,7 @@ export const TransitionItem = memo(function TransitionItem({
             zIndex: isResizing ? 50 : 10,
             cursor,
           }}
+          onMouseDown={handleMouseDown}
           onClick={handleClick}
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
@@ -214,23 +242,27 @@ export const TransitionItem = memo(function TransitionItem({
           {/* Left resize handle */}
           <div
             className={cn(
-              'absolute left-0 top-0 bottom-0 w-1.5 bg-purple-400 cursor-ew-resize transition-opacity duration-75 rounded-l',
+              'absolute left-0 top-0 bottom-0 w-1.5 bg-purple-400 cursor-ew-resize rounded-l',
               hoveredEdge === 'left' || (isResizing && resizeHandle === 'left')
                 ? 'opacity-100'
                 : 'opacity-0'
             )}
             onMouseDown={(e) => handleResizeStart(e, 'left')}
+            onMouseUp={stopEvent}
+            onClick={stopEvent}
           />
 
           {/* Right resize handle */}
           <div
             className={cn(
-              'absolute right-0 top-0 bottom-0 w-1.5 bg-purple-400 cursor-ew-resize transition-opacity duration-75 rounded-r',
+              'absolute right-0 top-0 bottom-0 w-1.5 bg-purple-400 cursor-ew-resize rounded-r',
               hoveredEdge === 'right' || (isResizing && resizeHandle === 'right')
                 ? 'opacity-100'
                 : 'opacity-0'
             )}
             onMouseDown={(e) => handleResizeStart(e, 'right')}
+            onMouseUp={stopEvent}
+            onClick={stopEvent}
           />
         </div>
       </ContextMenuTrigger>

@@ -49,6 +49,10 @@ export function useTransitionResize(transition: Transition) {
     (e: MouseEvent) => {
       if (!resizeStateRef.current.isResizing) return;
 
+      // Prevent other drag behaviors during resize
+      e.preventDefault();
+      e.stopPropagation();
+
       const deltaX = e.clientX - resizeStateRef.current.startX;
       const deltaTime = pixelsToTime(deltaX);
       let deltaFrames = Math.round(deltaTime * fps);
@@ -60,6 +64,11 @@ export function useTransitionResize(transition: Transition) {
       if (resizeStateRef.current.handle === 'left') {
         deltaFrames = -deltaFrames;
       }
+
+      // Double the delta because the transition is centered on the cut point,
+      // so each edge only moves by half the duration change. Doubling ensures
+      // the dragged handle follows the mouse position.
+      deltaFrames = deltaFrames * 2;
 
       // Calculate new duration and clamp
       const newDuration = Math.max(
@@ -77,8 +86,12 @@ export function useTransitionResize(transition: Transition) {
   );
 
   // Mouse up handler - commits changes to store
-  const handleMouseUp = useCallback(() => {
+  const handleMouseUp = useCallback((e: MouseEvent) => {
     if (!resizeStateRef.current.isResizing) return;
+
+    // Prevent other behaviors when finishing resize
+    e.preventDefault();
+    e.stopPropagation();
 
     const { initialDuration, currentDelta } = resizeStateRef.current;
     const newDuration = initialDuration + currentDelta;
@@ -120,15 +133,23 @@ export function useTransitionResize(transition: Transition) {
     [transition.durationInFrames]
   );
 
-  // Add/remove global listeners
+  // Add/remove global listeners with capture to intercept events first
   useEffect(() => {
     if (resizeState.isResizing) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
+      // Use capture phase to ensure these handlers run before other listeners
+      document.addEventListener('mousemove', handleMouseMove, { capture: true });
+      document.addEventListener('mouseup', handleMouseUp, { capture: true });
+      // Also prevent click events that might fire after mouseup
+      const preventClick = (e: MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+      };
+      document.addEventListener('click', preventClick, { capture: true, once: true });
 
       return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
+        document.removeEventListener('mousemove', handleMouseMove, { capture: true });
+        document.removeEventListener('mouseup', handleMouseUp, { capture: true });
+        document.removeEventListener('click', preventClick, { capture: true });
       };
     }
   }, [resizeState.isResizing, handleMouseMove, handleMouseUp]);

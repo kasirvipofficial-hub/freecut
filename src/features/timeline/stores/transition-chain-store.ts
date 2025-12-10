@@ -1,15 +1,12 @@
 /**
- * Transition Chain Store
+ * Transition Index Store
  *
- * Derived state store that pre-computes transition chains and indexes.
+ * Derived state store that pre-computes transition indexes for O(1) lookups.
  * Subscribes to timeline-store and recomputes only when items/transitions change.
- *
- * This replaces the per-render groupClipsIntoChains() call in MainComposition,
- * moving chain computation from 30-60x/sec to only when data actually changes.
  *
  * Performance benefits:
  * - O(1) transition lookups via indexes
- * - Chains computed once when data changes, not every frame
+ * - Indexes computed once when data changes, not every frame
  * - Version tracking enables efficient React.memo comparisons
  */
 
@@ -20,14 +17,11 @@ import { useTimelineStore } from './timeline-store';
 import type { TimelineItem, TimelineTrack } from '@/types/timeline';
 import type {
   Transition,
-  TransitionChain,
   ClipTransitionIndex,
 } from '@/types/transition';
 import {
   buildTransitionIndexes,
-  buildTransitionChains,
   type TransitionIndexes,
-  type TransitionChainResult,
 } from '../utils/transition-indexes';
 
 /**
@@ -42,16 +36,10 @@ export type EnrichedVisualItem = TimelineItem & {
 };
 
 interface TransitionChainState {
-  // Pre-computed indexes
+  // Pre-computed indexes for O(1) lookups
   transitionsByClipId: Map<string, ClipTransitionIndex>;
   transitionsByTrackId: Map<string, Transition[]>;
   transitionsById: Map<string, Transition>;
-
-  // Pre-computed chains
-  chains: TransitionChain[];
-  chainsByTrackId: Map<string, TransitionChain[]>;
-  standaloneClipIds: Set<string>;
-  chainByClipId: Map<string, TransitionChain>;
 
   // Enriched items for rendering
   enrichedItemsById: Map<string, EnrichedVisualItem>;
@@ -62,7 +50,7 @@ interface TransitionChainState {
 
 interface TransitionChainActions {
   /**
-   * Recompute all indexes and chains from timeline data.
+   * Recompute all indexes from timeline data.
    * Called automatically when timeline-store changes.
    */
   recompute: (
@@ -77,22 +65,12 @@ interface TransitionChainActions {
   getEnrichedItemsForTrack: (trackId: string) => EnrichedVisualItem[];
 
   /**
-   * Get the chain containing a specific clip.
-   */
-  getChainForClip: (clipId: string) => TransitionChain | undefined;
-
-  /**
    * Get transition between two clips (if exists).
    */
   getTransitionBetween: (
     leftClipId: string,
     rightClipId: string
   ) => Transition | undefined;
-
-  /**
-   * Calculate render offset for a clip based on chain overlaps.
-   */
-  getRenderOffset: (trackId: string, clipFrom: number) => number;
 }
 
 type TransitionChainStore = TransitionChainState & TransitionChainActions;
@@ -103,10 +81,6 @@ export const useTransitionChainStore = create<TransitionChainStore>()(
     transitionsByClipId: new Map(),
     transitionsByTrackId: new Map(),
     transitionsById: new Map(),
-    chains: [],
-    chainsByTrackId: new Map(),
-    standaloneClipIds: new Set(),
-    chainByClipId: new Map(),
     enrichedItemsById: new Map(),
     computeVersion: 0,
 
@@ -134,22 +108,10 @@ export const useTransitionChainStore = create<TransitionChainStore>()(
         }
       }
 
-      // Build chains
-      const chainResult: TransitionChainResult = buildTransitionChains(
-        items,
-        transitions,
-        indexes.transitionsByClipId,
-        state.chains // Pass previous chains for version comparison
-      );
-
       set({
         transitionsByClipId: indexes.transitionsByClipId,
         transitionsByTrackId: indexes.transitionsByTrackId,
         transitionsById: indexes.transitionsById,
-        chains: chainResult.allChains,
-        chainsByTrackId: chainResult.chainsByTrackId,
-        standaloneClipIds: chainResult.standaloneClipIds,
-        chainByClipId: chainResult.chainByClipId,
         enrichedItemsById,
         computeVersion: state.computeVersion + 1,
       });
@@ -166,10 +128,6 @@ export const useTransitionChainStore = create<TransitionChainStore>()(
       return items.sort((a, b) => a.from - b.from);
     },
 
-    getChainForClip: (clipId) => {
-      return get().chainByClipId.get(clipId);
-    },
-
     getTransitionBetween: (leftClipId, rightClipId) => {
       const { transitionsByClipId } = get();
       const leftIndex = transitionsByClipId.get(leftClipId);
@@ -180,17 +138,6 @@ export const useTransitionChainStore = create<TransitionChainStore>()(
         return leftIndex.outgoing;
       }
       return undefined;
-    },
-
-    getRenderOffset: (trackId, clipFrom) => {
-      const { chains } = get();
-      let offset = 0;
-      for (const chain of chains) {
-        if (chain.trackId === trackId && chain.endFrame <= clipFrom) {
-          offset += chain.totalOverlap;
-        }
-      }
-      return offset;
     },
   }))
 );
@@ -229,24 +176,6 @@ export function initTransitionChainSubscription(): () => void {
 }
 
 // Selectors for efficient component subscriptions
-
-/**
- * Select all chains (for MainComposition)
- */
-export const selectChains = (state: TransitionChainStore) => state.chains;
-
-/**
- * Select standalone clip IDs
- */
-export const selectStandaloneClipIds = (state: TransitionChainStore) =>
-  state.standaloneClipIds;
-
-/**
- * Select chains for a specific track
- */
-export const selectChainsForTrack =
-  (trackId: string) => (state: TransitionChainStore) =>
-    state.chainsByTrackId.get(trackId) ?? [];
 
 /**
  * Select transition indexes by clip

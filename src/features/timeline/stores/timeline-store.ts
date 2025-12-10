@@ -913,7 +913,7 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
 
   // Transition actions
   // Add a transition between two adjacent clips
-  // Clips stay at their original positions - TransitionSeries handles overlap at render time
+  // Clips stay at their original positions - transition is a visual effect centered on the cut point
   // Returns true if transition was added successfully
   addTransition: (leftClipId, rightClipId, type = 'crossfade', durationInFrames, presentation = 'fade', direction) => {
     const state = useTimelineStore.getState();
@@ -945,18 +945,16 @@ export const useTimelineStore = create<TimelineState & TimelineActions>()(
     }
 
     // Create the transition with all properties in a single operation
-    // Clips stay at their original positions - TransitionSeries handles overlap at render time
     const transition: Transition = {
       id: crypto.randomUUID(),
       type,
-      presentation, // Use provided presentation
-      timing: 'linear', // Default to linear timing
+      presentation,
+      timing: 'linear',
       leftClipId,
       rightClipId,
       trackId: leftClip.trackId,
       durationInFrames: duration,
-      direction, // Include direction if provided
-      mode: 'overlap', // Default to overlap mode (standard behavior)
+      direction,
     };
 
     useTimelineStore.setState((state) => ({

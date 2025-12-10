@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { AbsoluteFill, useCurrentFrame, Sequence, OffthreadVideo, Img, interpolate } from 'remotion';
 import type { VideoItem, ImageItem } from '@/types/timeline';
 import type { Transition, WipeDirection, SlideDirection, FlipDirection } from '@/types/transition';
@@ -313,6 +313,10 @@ const TransitionOverlay: React.FC<{
  * Renders a visual transition effect WITHOUT repositioning clips or changing timeline duration.
  * Uses Remotion's Sequence for proper video playback timing instead of manual frame seeking.
  *
+ * Transition is centered on the cut point:
+ * - First half plays during the end of the left clip's timeline region
+ * - Second half plays during the start of the right clip's timeline region
+ *
  * Performance optimization:
  * - Videos play continuously within their Sequences (no per-frame seeking)
  * - Only CSS styles update per frame (opacity, clip-path, transforms)
@@ -323,15 +327,20 @@ export const EffectsBasedTransitionRenderer = React.memo<EffectsBasedTransitionP
   leftClip,
   rightClip,
 }) {
-  // Calculate transition timing - transition ends at cut point (like Remotion's TransitionSeries)
+  // Calculate transition timing - transition is centered on cut point (half in, half out)
   const cutPoint = leftClip.from + leftClip.durationInFrames;
-  const transitionStart = cutPoint - transition.durationInFrames;
+  const halfDuration = Math.floor(transition.durationInFrames / 2);
+  const transitionStart = cutPoint - halfDuration;
 
   // Premount buffer for smoother video loading (about 1 second at 30fps)
   const premountFrames = 30;
 
   // Use higher z-index to ensure effects layer covers normal clips during transition
   const effectsZIndex = Math.max(leftClip.zIndex, rightClip.zIndex) + 2000;
+
+  // Calculate left clip's content offset to show its ending frames during transition
+  // We want to show the last `durationInFrames` frames of the left clip
+  const leftClipContentOffset = -(leftClip.durationInFrames - transition.durationInFrames);
 
   return (
     <Sequence
@@ -372,8 +381,8 @@ export const EffectsBasedTransitionRenderer = React.memo<EffectsBasedTransitionP
           zIndex={2}
         >
           <Sequence
-            from={-(transitionStart - leftClip.from)}
-            durationInFrames={transition.durationInFrames + (transitionStart - leftClip.from)}
+            from={leftClipContentOffset}
+            durationInFrames={transition.durationInFrames + Math.abs(leftClipContentOffset)}
           >
             <ClipContent clip={leftClip} />
           </Sequence>
@@ -384,24 +393,18 @@ export const EffectsBasedTransitionRenderer = React.memo<EffectsBasedTransitionP
 });
 
 /**
- * Container for all effects-based transitions
- * Renders each effect transition independently
+ * Container for all transitions
+ * Renders each transition as a visual effect independently
  */
 export const EffectsBasedTransitionsLayer = React.memo<{
   transitions: Transition[];
   itemsById: Map<string, EnrichedVisualItem>;
 }>(function EffectsBasedTransitionsLayer({ transitions, itemsById }) {
-  // Filter to only effects-mode transitions
-  const effectTransitions = useMemo(() =>
-    transitions.filter(t => t.mode === 'effect'),
-    [transitions]
-  );
-
-  if (effectTransitions.length === 0) return null;
+  if (transitions.length === 0) return null;
 
   return (
     <>
-      {effectTransitions.map((transition) => {
+      {transitions.map((transition) => {
         const leftClip = itemsById.get(transition.leftClipId);
         const rightClip = itemsById.get(transition.rightClipId);
 
