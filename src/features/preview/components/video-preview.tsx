@@ -3,7 +3,6 @@ import { Player, PlayerRef } from '@remotion/player';
 import { usePlaybackStore } from '@/features/preview/stores/playback-store';
 import { useTimelineStore } from '@/features/timeline/stores/timeline-store';
 import { useSelectionStore } from '@/features/editor/stores/selection-store';
-import { useGizmoStore } from '@/features/preview/stores/gizmo-store';
 import { MainComposition } from '@/lib/remotion/compositions/main-composition';
 import { useRemotionPlayer } from '../hooks/use-remotion-player';
 import { resolveMediaUrl } from '../utils/media-resolver';
@@ -59,7 +58,9 @@ export function VideoPreview({ project, containerSize }: VideoPreviewProps) {
   const items = useTimelineStore((s) => s.items);
   const transitions = useTimelineStore((s) => s.transitions);
   const zoom = usePlaybackStore((s) => s.zoom);
-  const canvasBackgroundPreview = useGizmoStore((s) => s.canvasBackgroundPreview);
+
+  // Note: canvasBackgroundPreview is now read directly in MainComposition
+  // to avoid inputProps changes during color picker drag (which caused Player seeks)
 
   // Note: Preview transform is now read directly in TransformWrapper component
   // to avoid re-rendering the entire composition on every gizmo update
@@ -210,13 +211,13 @@ export function VideoPreview({ project, containerSize }: VideoPreviewProps) {
 
   // Memoize inputProps to prevent Player from re-rendering
   // Note: previewTransform is no longer passed here - TransformWrapper reads directly from store
-  // Use preview color from gizmo store if actively picking, otherwise use project color
+  // Note: canvasBackgroundPreview is read directly in MainComposition to avoid inputProps changes
   const inputProps: RemotionInputProps = useMemo(() => ({
     fps,
     tracks: resolvedTracks as RemotionInputProps['tracks'],
     transitions,
-    backgroundColor: canvasBackgroundPreview ?? project.backgroundColor,
-  }), [fps, resolvedTracks, transitions, canvasBackgroundPreview, project.backgroundColor]);
+    backgroundColor: project.backgroundColor,
+  }), [fps, resolvedTracks, transitions, project.backgroundColor]);
 
   // Calculate player size based on zoom mode
   const playerSize = useMemo(() => {

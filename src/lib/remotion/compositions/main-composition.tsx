@@ -317,6 +317,12 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, transiti
   const { fps, width: canvasWidth, height: canvasHeight } = useVideoConfig();
   // NOTE: useCurrentFrame() removed from here to prevent per-frame re-renders.
   // Frame-dependent logic is now isolated in FrameAwareMaskDefinitions and ClearingLayer.
+
+  // Read preview color directly from store to avoid inputProps changes during color picker drag
+  // This prevents Player from seeking/refreshing when user scrubs the color picker
+  const canvasBackgroundPreview = useGizmoStore((s) => s.canvasBackgroundPreview);
+  const effectiveBackgroundColor = canvasBackgroundPreview ?? backgroundColor;
+
   const hasSoloTracks = useMemo(() => tracks.some((track) => track.solo), [tracks]);
   const maxOrder = useMemo(() => Math.max(...tracks.map((t) => t.order ?? 0), 0), [tracks]);
 
@@ -487,7 +493,7 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, transiti
       />
 
       {/* BACKGROUND LAYER */}
-      <AbsoluteFill style={{ backgroundColor, zIndex: -1 }} />
+      <AbsoluteFill style={{ backgroundColor: effectiveBackgroundColor, zIndex: -1 }} />
 
       {/* AUDIO LAYER - rendered outside visual layers to prevent re-renders from mask/visual changes */}
       {/* Audio uses item.id as key (not generateStableKey) to prevent remounts on speed changes */}
