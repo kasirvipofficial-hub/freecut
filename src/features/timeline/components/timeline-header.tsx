@@ -17,8 +17,8 @@ import {
   FlagOff,
 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
-import { useTimelineZoom } from '../../hooks/use-timeline-zoom';
-import { useTimelineStore } from '../../stores/timeline-store';
+import { useTimelineZoom } from '../hooks/use-timeline-zoom';
+import { useTimelineStore } from '../stores/timeline-store';
 import { usePlaybackStore } from '@/features/preview/stores/playback-store';
 import { useSelectionStore } from '@/features/editor/stores/selection-store';
 import {
@@ -26,7 +26,7 @@ import {
   ZOOM_MIN_VELOCITY,
   ZOOM_MIN,
   ZOOM_MAX,
-} from '../../constants/momentum';
+} from '../constants/momentum';
 
 export interface TimelineHeaderProps {
   onZoomChange?: (newZoom: number) => void;
