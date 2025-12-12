@@ -32,6 +32,16 @@ export interface KeyframeMovePayload {
   newFrame: number;
 }
 
+/** Payload for batch adding keyframes */
+export interface KeyframeAddPayload {
+  itemId: string;
+  property: AnimatableProperty;
+  frame: number;
+  value: number;
+  easing?: EasingType;
+  easingConfig?: EasingConfig;
+}
+
 export interface KeyframesActions {
   // Bulk setter for snapshot restore
   setKeyframes: (keyframes: ItemKeyframes[]) => void;
@@ -45,6 +55,7 @@ export interface KeyframesActions {
     easing?: EasingType,
     easingConfig?: EasingConfig
   ) => string;
+  _addKeyframes: (payloads: KeyframeAddPayload[]) => string[];
   _updateKeyframe: (itemId: string, property: AnimatableProperty, keyframeId: string, updates: Partial<Omit<Keyframe, 'id'>>) => void;
   _removeKeyframe: (itemId: string, property: AnimatableProperty, keyframeId: string) => void;
   _removeKeyframesForItem: (itemId: string) => void;
@@ -168,6 +179,82 @@ export const useKeyframesStore = create<KeyframesState & KeyframesActions>()(
       });
 
       return keyframeId;
+    },
+
+    // Add multiple keyframes at once (for batch operations like K hotkey)
+    _addKeyframes: (payloads) => {
+      if (payloads.length === 0) return [];
+
+      const newIds: string[] = [];
+
+      set((state) => {
+        let newKeyframes = [...state.keyframes];
+
+        for (const payload of payloads) {
+          const { itemId, property, frame, value, easing = 'linear', easingConfig } = payload;
+          const keyframeId = crypto.randomUUID();
+          newIds.push(keyframeId);
+
+          const newKeyframe: Keyframe = { id: keyframeId, frame, value, easing, easingConfig };
+          const existingItemIndex = newKeyframes.findIndex((k) => k.itemId === itemId);
+
+          if (existingItemIndex !== -1) {
+            const existingItem = newKeyframes[existingItemIndex]!;
+            const existingPropIndex = existingItem.properties.findIndex(
+              (p) => p.property === property
+            );
+
+            if (existingPropIndex !== -1) {
+              const existingProp = existingItem.properties[existingPropIndex]!;
+              // Check for existing keyframe at this frame
+              const existingAtFrameIndex = existingProp.keyframes.findIndex((k) => k.frame === frame);
+
+              if (existingAtFrameIndex !== -1) {
+                // Update existing keyframe
+                const updatedKeyframes = [...existingProp.keyframes];
+                updatedKeyframes[existingAtFrameIndex] = { ...updatedKeyframes[existingAtFrameIndex]!, value, easing, easingConfig };
+
+                const updatedProperties = [...existingItem.properties];
+                updatedProperties[existingPropIndex] = { ...existingProp, keyframes: updatedKeyframes };
+
+                newKeyframes = newKeyframes.map((ik, idx) =>
+                  idx === existingItemIndex ? { ...existingItem, properties: updatedProperties } : ik
+                );
+              } else {
+                // Add new keyframe to existing property
+                const updatedKeyframes = [...existingProp.keyframes, newKeyframe].sort((a, b) => a.frame - b.frame);
+
+                const updatedProperties = [...existingItem.properties];
+                updatedProperties[existingPropIndex] = { ...existingProp, keyframes: updatedKeyframes };
+
+                newKeyframes = newKeyframes.map((ik, idx) =>
+                  idx === existingItemIndex ? { ...existingItem, properties: updatedProperties } : ik
+                );
+              }
+            } else {
+              // Add new property with first keyframe
+              const updatedProperties = [...existingItem.properties, { property, keyframes: [newKeyframe] }];
+
+              newKeyframes = newKeyframes.map((ik, idx) =>
+                idx === existingItemIndex ? { ...existingItem, properties: updatedProperties } : ik
+              );
+            }
+          } else {
+            // Create new item keyframes entry
+            newKeyframes = [
+              ...newKeyframes,
+              {
+                itemId,
+                properties: [{ property, keyframes: [newKeyframe] }],
+              },
+            ];
+          }
+        }
+
+        return { keyframes: newKeyframes };
+      });
+
+      return newIds;
     },
 
     // Update keyframe

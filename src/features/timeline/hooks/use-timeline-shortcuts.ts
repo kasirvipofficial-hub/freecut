@@ -516,7 +516,7 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
 
       event.preventDefault();
       const currentFrame = usePlaybackStore.getState().currentFrame;
-      const addKeyframe = useTimelineStore.getState().addKeyframe;
+      const addKeyframes = useTimelineStore.getState().addKeyframes;
       const storeItems = useTimelineStore.getState().items;
       const storeKeyframes = useTimelineStore.getState().keyframes;
       const currentProject = useProjectStore.getState().currentProject;
@@ -525,6 +525,15 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
         height: currentProject?.metadata.height ?? 1080,
         fps: currentProject?.metadata.fps ?? 30,
       };
+
+      // Collect all keyframes to add in a single batch
+      const keyframesToAdd: Array<{
+        itemId: string;
+        property: 'x' | 'y' | 'opacity' | 'rotation' | 'width' | 'height';
+        frame: number;
+        value: number;
+        easing: 'linear';
+      }> = [];
 
       // Add keyframes for all transform properties of selected items
       for (const itemId of selectedItemIds) {
@@ -545,13 +554,20 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
           ? resolveAnimatedTransform(baseResolved, itemKeyframes, relativeFrame)
           : baseResolved;
 
-        // Add keyframes for each animatable property with current animated values
-        addKeyframe(itemId, 'x', relativeFrame, animated.x, 'linear');
-        addKeyframe(itemId, 'y', relativeFrame, animated.y, 'linear');
-        addKeyframe(itemId, 'opacity', relativeFrame, animated.opacity, 'linear');
-        addKeyframe(itemId, 'rotation', relativeFrame, animated.rotation, 'linear');
-        addKeyframe(itemId, 'width', relativeFrame, animated.width, 'linear');
-        addKeyframe(itemId, 'height', relativeFrame, animated.height, 'linear');
+        // Collect keyframes for each animatable property with current animated values
+        keyframesToAdd.push(
+          { itemId, property: 'x', frame: relativeFrame, value: animated.x, easing: 'linear' },
+          { itemId, property: 'y', frame: relativeFrame, value: animated.y, easing: 'linear' },
+          { itemId, property: 'opacity', frame: relativeFrame, value: animated.opacity, easing: 'linear' },
+          { itemId, property: 'rotation', frame: relativeFrame, value: animated.rotation, easing: 'linear' },
+          { itemId, property: 'width', frame: relativeFrame, value: animated.width, easing: 'linear' },
+          { itemId, property: 'height', frame: relativeFrame, value: animated.height, easing: 'linear' }
+        );
+      }
+
+      // Add all keyframes in a single batch (single undo operation)
+      if (keyframesToAdd.length > 0) {
+        addKeyframes(keyframesToAdd);
       }
     },
     HOTKEY_OPTIONS,

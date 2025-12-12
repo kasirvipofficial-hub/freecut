@@ -21,7 +21,7 @@ import type {
   FlipDirection,
 } from '@/types/transition';
 import type { AnimatableProperty, EasingType, EasingConfig, KeyframeRef } from '@/types/keyframe';
-import type { KeyframeUpdatePayload, KeyframeMovePayload } from './keyframes-store';
+import type { KeyframeUpdatePayload, KeyframeMovePayload, KeyframeAddPayload } from './keyframes-store';
 
 import { useTimelineCommandStore } from './timeline-command-store';
 import { useItemsStore } from './items-store';
@@ -524,6 +524,20 @@ export function addKeyframe(
     useTimelineSettingsStore.getState().markDirty();
     return id;
   }, { itemId, property, frame });
+}
+
+/**
+ * Add multiple keyframes at once (batched as single undo operation).
+ * Used by K hotkey to add keyframes for all properties at once.
+ */
+export function addKeyframes(payloads: KeyframeAddPayload[]): string[] {
+  if (payloads.length === 0) return [];
+
+  return execute('ADD_KEYFRAMES', () => {
+    const ids = useKeyframesStore.getState()._addKeyframes(payloads);
+    useTimelineSettingsStore.getState().markDirty();
+    return ids;
+  }, { count: payloads.length });
 }
 
 export function updateKeyframe(

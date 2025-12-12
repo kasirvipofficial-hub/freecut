@@ -320,6 +320,7 @@ function getSnapshot(): TimelineState & TimelineActions {
       removeTransition: timelineActions.removeTransition,
       clearPendingBreakages: timelineActions.clearPendingBreakages,
       addKeyframe: timelineActions.addKeyframe,
+      addKeyframes: timelineActions.addKeyframes,
       updateKeyframe: timelineActions.updateKeyframe,
       removeKeyframe: timelineActions.removeKeyframe,
       removeKeyframesForItem: timelineActions.removeKeyframesForItem,
