@@ -55,6 +55,7 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
   const updateTransition = useTimelineStore((s) => s.updateTransition);
   const rippleDeleteItems = useTimelineStore((s) => s.rippleDeleteItems);
   const joinItems = useTimelineStore((s) => s.joinItems);
+  const splitItem = useTimelineStore((s) => s.splitItem);
   const toggleSnap = useTimelineStore((s) => s.toggleSnap);
   const items = useTimelineStore((s) => s.items);
   const transitions = useTimelineStore((s) => s.transitions);
@@ -63,18 +64,19 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
   const copyTransition = useClipboardStore((s) => s.copyTransition);
   const transitionClipboard = useClipboardStore((s) => s.transitionClipboard);
 
-  // Calculate all unique clip edges and marker positions (start and end frames) sorted ascending
-  const clipEdges = useMemo(() => {
-    const edges = new Set<number>();
+  // Calculate all snap points: clip edges (start/end frames) and marker positions
+  const snapPoints = useMemo(() => {
+    const points = new Set<number>();
+    // Add clip edges
     for (const item of items) {
-      edges.add(item.from);
-      edges.add(item.from + item.durationInFrames);
+      points.add(item.from);
+      points.add(item.from + item.durationInFrames);
     }
-    // Include marker positions
+    // Add marker positions
     for (const marker of markers) {
-      edges.add(marker.frame);
+      points.add(marker.frame);
     }
-    return Array.from(edges).sort((a, b) => a - b);
+    return Array.from(points).sort((a, b) => a - b);
   }, [items, markers]);
 
   // Playback: Space - Play/Pause (global shortcut)
@@ -129,46 +131,50 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
     [setCurrentFrame]
   );
 
-  // Navigation: End - Go to end
+  // Navigation: End - Go to end of timeline (last frame of last item)
   useHotkeys(
     HOTKEYS.GO_TO_END,
     (event) => {
       event.preventDefault();
-      // TODO: Calculate total timeline duration
-      setCurrentFrame(900); // Placeholder
+      // Calculate the last frame from all items
+      const lastFrame = items.reduce((max, item) => {
+        const itemEnd = item.from + item.durationInFrames;
+        return Math.max(max, itemEnd);
+      }, 0);
+      setCurrentFrame(lastFrame);
     },
     HOTKEY_OPTIONS,
-    [setCurrentFrame]
+    [setCurrentFrame, items]
   );
 
-  // Navigation: Down - Jump to next clip edge
+  // Navigation: Down - Jump to next snap point (clip edge or marker)
   useHotkeys(
-    HOTKEYS.NEXT_EDGE,
+    HOTKEYS.NEXT_SNAP_POINT,
     (event) => {
       event.preventDefault();
       const currentFrame = usePlaybackStore.getState().currentFrame;
       // Find the next edge after current frame
-      const nextEdge = clipEdges.find((edge) => edge > currentFrame);
+      const nextEdge = snapPoints.find((edge) => edge > currentFrame);
       if (nextEdge !== undefined) {
         setCurrentFrame(nextEdge);
       }
     },
     HOTKEY_OPTIONS,
-    [setCurrentFrame, clipEdges]
+    [setCurrentFrame, snapPoints]
   );
 
-  // Navigation: Up - Jump to previous clip edge
+  // Navigation: Up - Jump to previous snap point (clip edge or marker)
   useHotkeys(
-    HOTKEYS.PREVIOUS_EDGE,
+    HOTKEYS.PREVIOUS_SNAP_POINT,
     (event) => {
       event.preventDefault();
       const currentFrame = usePlaybackStore.getState().currentFrame;
       // Find the previous edge before current frame
       // Iterate backwards through sorted edges
       let previousEdge: number | undefined;
-      for (let i = clipEdges.length - 1; i >= 0; i--) {
-        if (clipEdges[i] < currentFrame) {
-          previousEdge = clipEdges[i];
+      for (let i = snapPoints.length - 1; i >= 0; i--) {
+        if (snapPoints[i] < currentFrame) {
+          previousEdge = snapPoints[i];
           break;
         }
       }
@@ -177,7 +183,7 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
       }
     },
     HOTKEY_OPTIONS,
-    [setCurrentFrame, clipEdges]
+    [setCurrentFrame, snapPoints]
   );
 
   // Editing: Delete - Delete selected items, marker, or transition
@@ -298,6 +304,30 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks = {}) 
     },
     HOTKEY_OPTIONS,
     [selectedItemIds, items, joinItems]
+  );
+
+  // Editing: Alt+C - Split all items at playhead
+  useHotkeys(
+    HOTKEYS.SPLIT_AT_PLAYHEAD,
+    (event) => {
+      event.preventDefault();
+      const currentFrame = usePlaybackStore.getState().currentFrame;
+
+      // Find all items that span the current playhead position
+      const itemsToSplit = items.filter((item) => {
+        const itemStart = item.from;
+        const itemEnd = item.from + item.durationInFrames;
+        // Item must contain the playhead (not at edges)
+        return currentFrame > itemStart && currentFrame < itemEnd;
+      });
+
+      // Split each item at the playhead
+      for (const item of itemsToSplit) {
+        splitItem(item.id, currentFrame);
+      }
+    },
+    HOTKEY_OPTIONS,
+    [items, splitItem]
   );
 
   // Selection: Escape - Deselect all items

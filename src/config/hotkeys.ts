@@ -12,11 +12,11 @@ export const HOTKEYS = {
   NEXT_FRAME: 'right',
   GO_TO_START: 'home',
   GO_TO_END: 'end',
-  NEXT_EDGE: 'down',
-  PREVIOUS_EDGE: 'up',
+  NEXT_SNAP_POINT: 'down',
+  PREVIOUS_SNAP_POINT: 'up',
 
   // Timeline editing
-  SPLIT_ITEM: 'c',
+  SPLIT_AT_PLAYHEAD: 'alt+c',
   JOIN_ITEMS: 'j',
   DELETE_SELECTED: 'delete',
   DELETE_SELECTED_ALT: 'backspace',
@@ -48,12 +48,10 @@ export const HOTKEYS = {
   SELECTION_TOOL: 'v',
   RAZOR_TOOL: 'c',
   RATE_STRETCH_TOOL: 'r',
-  TEXT_TOOL: 't',
 
   // Project
   SAVE: 'mod+s',
   EXPORT: 'mod+e',
-  NEW_PROJECT: 'mod+n',
 
   // UI
   TOGGLE_SIDEBAR: 'tab',
@@ -83,11 +81,11 @@ export const HOTKEY_DESCRIPTIONS: Record<HotkeyKey, string> = {
   NEXT_FRAME: 'Next frame',
   GO_TO_START: 'Go to start',
   GO_TO_END: 'Go to end',
-  NEXT_EDGE: 'Next clip edge',
-  PREVIOUS_EDGE: 'Previous clip edge',
+  NEXT_SNAP_POINT: 'Next snap point',
+  PREVIOUS_SNAP_POINT: 'Previous snap point',
 
   // Timeline editing
-  SPLIT_ITEM: 'Split item at playhead',
+  SPLIT_AT_PLAYHEAD: 'Split at playhead',
   JOIN_ITEMS: 'Join selected clips',
   DELETE_SELECTED: 'Delete selected items',
   DELETE_SELECTED_ALT: 'Delete selected items (alternative)',
@@ -99,9 +97,9 @@ export const HOTKEY_DESCRIPTIONS: Record<HotkeyKey, string> = {
   REDO: 'Redo',
 
   // Zoom
-  ZOOM_IN: 'Zoom in',
+  ZOOM_IN: 'Zoom in (or Ctrl+Scroll)',
   ZOOM_IN_ALT: 'Zoom in (alternative)',
-  ZOOM_OUT: 'Zoom out',
+  ZOOM_OUT: 'Zoom out (or Ctrl+Scroll)',
   ZOOM_OUT_ALT: 'Zoom out (alternative)',
   ZOOM_RESET: 'Reset zoom to 100%',
   ZOOM_TO_FIT: 'Zoom to fit all content',
@@ -119,12 +117,10 @@ export const HOTKEY_DESCRIPTIONS: Record<HotkeyKey, string> = {
   SELECTION_TOOL: 'Selection tool',
   RAZOR_TOOL: 'Razor/Cut tool',
   RATE_STRETCH_TOOL: 'Rate stretch tool',
-  TEXT_TOOL: 'Text tool',
 
   // Project
   SAVE: 'Save project',
   EXPORT: 'Export video',
-  NEW_PROJECT: 'New project',
 
   // UI
   TOGGLE_SIDEBAR: 'Toggle sidebar',

@@ -1,4 +1,5 @@
 import { useRef, useEffect, useMemo, memo, useCallback, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { TimelineItem as TimelineItemType } from '@/types/timeline';
 import { useTimelineZoom } from '../../hooks/use-timeline-zoom';
 import { useTimelineStore } from '../../stores/timeline-store';
@@ -86,6 +87,17 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
 
   // Track which edge is being hovered for showing trim/rate-stretch handles
   const [hoveredEdge, setHoveredEdge] = useState<'start' | 'end' | null>(null);
+
+  // Track blocked drag attempt tooltip (shown on mousedown in rate-stretch mode)
+  const [dragBlockedTooltip, setDragBlockedTooltip] = useState<{ x: number; y: number } | null>(null);
+
+  // Hide drag blocked tooltip on mouseup
+  useEffect(() => {
+    if (!dragBlockedTooltip) return;
+    const handleMouseUp = () => setDragBlockedTooltip(null);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => window.removeEventListener('mouseup', handleMouseUp);
+  }, [dragBlockedTooltip]);
 
   // Track global drag state for join indicators (needs re-render to hide when other clips drag)
   const [isAnyDragActive, setIsAnyDragActive] = useState(false);
@@ -578,7 +590,21 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
         containIntrinsicSize: `0 ${CLIP_HEIGHT}px`,
       }}
       onClick={handleClick}
-      onMouseDown={trackLocked || isTrimming || isStretching || activeTool === 'razor' || activeTool === 'rate-stretch' || hoveredEdge !== null ? undefined : handleDragStart}
+      onMouseDown={(e) => {
+        // Show blocked tooltip when trying to drag in rate-stretch mode (not on stretch handles)
+        if (activeTool === 'rate-stretch' && !trackLocked && !isStretching) {
+          // Only show if not clicking on the stretch handle edges
+          const rect = e.currentTarget.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const isOnEdge = x <= EDGE_HOVER_ZONE || x >= rect.width - EDGE_HOVER_ZONE;
+          if (!isOnEdge) {
+            setDragBlockedTooltip({ x: e.clientX, y: e.clientY });
+            return;
+          }
+        }
+        if (trackLocked || isTrimming || isStretching || activeTool === 'razor' || activeTool === 'rate-stretch' || hoveredEdge !== null) return;
+        handleDragStart(e);
+      }}
       onMouseMove={handleMouseMove}
       onMouseLeave={() => setHoveredEdge(null)}
     >
@@ -762,6 +788,25 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
           +
         </div>
       </div>
+
+      {/* Drag blocked tooltip - shown when trying to drag in rate-stretch mode */}
+      {dragBlockedTooltip && createPortal(
+        <div
+          className="pointer-events-none"
+          style={{
+            position: 'fixed',
+            left: dragBlockedTooltip.x,
+            top: dragBlockedTooltip.y - 8,
+            transform: 'translate(-50%, -100%)',
+            zIndex: 9999,
+          }}
+        >
+          <div className="overflow-hidden rounded-md bg-orange-500 px-3 py-1.5 text-xs text-white shadow-lg">
+            Can't move clips in rate stretch mode
+          </div>
+        </div>,
+        document.body
+      )}
     </>
   );
 }, (prevProps, nextProps) => {

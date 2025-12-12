@@ -16,11 +16,11 @@ interface ShortcutsDialogProps {
 const SHORTCUT_CATEGORIES: { name: string; keys: HotkeyKey[] }[] = [
   {
     name: 'Playback',
-    keys: ['PLAY_PAUSE', 'PREVIOUS_FRAME', 'NEXT_FRAME', 'GO_TO_START', 'GO_TO_END', 'PREVIOUS_EDGE', 'NEXT_EDGE'],
+    keys: ['PLAY_PAUSE', 'PREVIOUS_FRAME', 'NEXT_FRAME', 'GO_TO_START', 'GO_TO_END', 'PREVIOUS_SNAP_POINT', 'NEXT_SNAP_POINT'],
   },
   {
     name: 'Editing',
-    keys: ['SPLIT_ITEM', 'JOIN_ITEMS', 'DELETE_SELECTED', 'RIPPLE_DELETE'],
+    keys: ['SPLIT_AT_PLAYHEAD', 'JOIN_ITEMS', 'DELETE_SELECTED', 'RIPPLE_DELETE'],
   },
   {
     name: 'History',
@@ -40,11 +40,11 @@ const SHORTCUT_CATEGORIES: { name: string; keys: HotkeyKey[] }[] = [
   },
   {
     name: 'Tools',
-    keys: ['SELECTION_TOOL', 'RAZOR_TOOL', 'RATE_STRETCH_TOOL', 'TEXT_TOOL'],
+    keys: ['SELECTION_TOOL', 'RAZOR_TOOL', 'RATE_STRETCH_TOOL'],
   },
   {
     name: 'Project',
-    keys: ['SAVE', 'EXPORT', 'NEW_PROJECT'],
+    keys: ['SAVE', 'EXPORT'],
   },
   {
     name: 'UI',
