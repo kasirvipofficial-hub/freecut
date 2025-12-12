@@ -241,7 +241,8 @@ export function useRateStretch(item: TimelineItem, timelineDuration: number, tra
         // Calculate speed change based on drag distance
         // Use a sensitivity factor: ~30 pixels per 0.1x speed change
         const speedDelta = currentDelta / 30 * 0.1;
-        newSpeed = Math.max(MIN_SPEED, Math.min(MAX_SPEED, initialSpeed + speedDelta));
+        // Round to 2 decimal places for consistent precision
+        newSpeed = Math.round(Math.max(MIN_SPEED, Math.min(MAX_SPEED, initialSpeed + speedDelta)) * 100) / 100;
 
         // Only update if speed actually changed
         if (Math.abs(newSpeed - initialSpeed) > 0.01) {
@@ -347,7 +348,8 @@ export function useRateStretch(item: TimelineItem, timelineDuration: number, tra
     // For looping media (GIFs): duration and position stay the same, only speed changes
     if (isLoopingMedia) {
       const speedDelta = currentDelta / 30 * 0.1;
-      const previewSpeed = Math.max(MIN_SPEED, Math.min(MAX_SPEED, initialSpeed + speedDelta));
+      // Round to 2 decimal places for consistent precision
+      const previewSpeed = Math.round(Math.max(MIN_SPEED, Math.min(MAX_SPEED, initialSpeed + speedDelta)) * 100) / 100;
 
       return {
         from: initialFrom,

@@ -97,10 +97,11 @@ export function calculateSpeed(sourceDuration: number, timelineDuration: number)
 }
 
 /**
- * Clamp speed to valid range.
+ * Clamp speed to valid range and round to 2 decimal places.
  */
 export function clampSpeed(speed: number): number {
-  return Math.max(MIN_SPEED, Math.min(MAX_SPEED, speed));
+  const clamped = Math.max(MIN_SPEED, Math.min(MAX_SPEED, speed));
+  return Math.round(clamped * 100) / 100;
 }
 
 /**
