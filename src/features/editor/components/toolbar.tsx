@@ -15,6 +15,7 @@ import {
   Video,
   FolderArchive,
   ChevronDown,
+  Github,
 } from 'lucide-react';
 import { UnsavedChangesDialog } from './unsaved-changes-dialog';
 
@@ -90,6 +91,22 @@ export function Toolbar({ project, isDirty = false, onSave, onExport, onExportBu
 
       {/* Save & Export */}
       <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-8 w-8"
+          asChild
+        >
+          <a
+            href="https://github.com/walterlow/freecut"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-tooltip="View on GitHub"
+            data-tooltip-side="left"
+          >
+            <Github className="w-4 h-4" />
+          </a>
+        </Button>
         <Button variant="outline" size="sm" className="gap-2" onClick={handleSave}>
           <div className="relative">
             <Save className="w-4 h-4" />

@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Search, SlidersHorizontal, ArrowUpDown, X } from 'lucide-react';
+import { Search, ArrowUpDown, X } from 'lucide-react';
+import { FreeCutLogo } from '@/components/brand/freecut-logo';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -191,10 +192,8 @@ export function ProjectList({ onEditProject }: ProjectListProps) {
       {/* Empty State - No Projects */}
       {isEmpty && (
         <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-            <SlidersHorizontal className="w-8 h-8 text-primary" />
-          </div>
-          <h3 className="text-xl font-semibold text-foreground mb-2">No projects yet</h3>
+          <FreeCutLogo variant="full" size="lg" className="mb-6" />
+          <h3 className="text-xl font-semibold text-foreground mb-2">Welcome to FreeCut</h3>
           <p className="text-muted-foreground max-w-md mb-6">
             Get started by creating your first video project. Choose your resolution, frame rate, and
             start editing!
