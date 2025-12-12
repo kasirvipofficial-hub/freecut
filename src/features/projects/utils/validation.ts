@@ -52,13 +52,23 @@ export type ProjectFormData = z.infer<typeof projectFormSchema>;
 
 /**
  * Common resolution presets
+ * Updated for 2025 social media standards
  */
 export const RESOLUTION_PRESETS = [
+  // Landscape (16:9)
   { label: '1280×720 (HD)', value: '1280x720', width: 1280, height: 720 },
   { label: '1920×1080 (Full HD)', value: '1920x1080', width: 1920, height: 1080 },
   { label: '2560×1440 (2K)', value: '2560x1440', width: 2560, height: 1440 },
   { label: '3840×2160 (4K)', value: '3840x2160', width: 3840, height: 2160 },
-  { label: '7680×4320 (8K)', value: '7680x4320', width: 7680, height: 4320 },
+  // Vertical (9:16) - TikTok, Reels, Shorts, Stories
+  { label: '1080×1920 (TikTok / Reels / Shorts)', value: '1080x1920', width: 1080, height: 1920 },
+  { label: '720×1280 (Vertical 720p)', value: '720x1280', width: 720, height: 1280 },
+  // Square (1:1) - Instagram, Facebook, LinkedIn feeds
+  { label: '1080×1080 (Square)', value: '1080x1080', width: 1080, height: 1080 },
+  // Portrait (4:5) - Instagram feed optimal
+  { label: '1080×1350 (Instagram Portrait)', value: '1080x1350', width: 1080, height: 1350 },
+  // Ultrawide (21:9)
+  { label: '2560×1080 (Ultrawide)', value: '2560x1080', width: 2560, height: 1080 },
 ] as const;
 
 /**
@@ -115,9 +125,15 @@ export function getAspectRatio(width: number, height: number): string {
 
   // Common aspect ratios
   if (ratioWidth === 16 && ratioHeight === 9) return '16:9';
+  if (ratioWidth === 9 && ratioHeight === 16) return '9:16';
   if (ratioWidth === 4 && ratioHeight === 3) return '4:3';
+  if (ratioWidth === 3 && ratioHeight === 4) return '3:4';
   if (ratioWidth === 21 && ratioHeight === 9) return '21:9';
   if (ratioWidth === 1 && ratioHeight === 1) return '1:1';
+  if (ratioWidth === 2 && ratioHeight === 3) return '2:3';
+  if (ratioWidth === 3 && ratioHeight === 2) return '3:2';
+  if (ratioWidth === 4 && ratioHeight === 5) return '4:5';
+  if (ratioWidth === 5 && ratioHeight === 4) return '5:4';
 
   return `${ratioWidth}:${ratioHeight}`;
 }

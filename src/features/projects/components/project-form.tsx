@@ -3,7 +3,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import {
   projectFormSchema,
@@ -17,6 +16,7 @@ import type { Project } from '@/types/project';
 
 export interface ProjectFormProps {
   onSubmit: (data: ProjectFormData) => Promise<void> | void;
+  onCancel?: () => void;
   defaultValues?: Partial<ProjectFormData>;
   isEditing?: boolean;
   isSubmitting?: boolean;
@@ -25,6 +25,7 @@ export interface ProjectFormProps {
 
 export function ProjectForm({
   onSubmit,
+  onCancel,
   defaultValues,
   isEditing = false,
   isSubmitting = false,
@@ -58,17 +59,10 @@ export function ProjectForm({
   const aspectRatio = getAspectRatio(width, height);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       {/* Header */}
       <div className="panel-header border-b border-border">
         <div className="max-w-3xl mx-auto px-6 py-5">
-          <Link
-            to="/projects"
-            className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-4 group"
-          >
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-            Back to Projects
-          </Link>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground mb-1">
             {isEditing ? 'Edit Project' : 'Create New Project'}
           </h1>
@@ -206,11 +200,17 @@ export function ProjectForm({
 
           {/* Actions */}
           <div className="flex gap-3 justify-end">
-            <Link to="/projects">
-              <Button type="button" variant="outline" size="lg" disabled={isSubmitting}>
+            {onCancel ? (
+              <Button type="button" variant="outline" size="lg" disabled={isSubmitting} onClick={onCancel}>
                 Cancel
               </Button>
-            </Link>
+            ) : (
+              <Link to="/projects">
+                <Button type="button" variant="outline" size="lg" disabled={isSubmitting}>
+                  Cancel
+                </Button>
+              </Link>
+            )}
             <Button type="submit" size="lg" className="min-w-[160px]" disabled={!isValid || isSubmitting}>
               {isSubmitting ? 'Saving...' : isEditing ? 'Update Project' : 'Create Project'}
             </Button>

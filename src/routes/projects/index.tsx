@@ -287,6 +287,7 @@ function ProjectsIndex() {
           {editingProject && (
             <ProjectForm
               onSubmit={handleEditSubmit}
+              onCancel={() => setEditingProject(null)}
               defaultValues={{
                 name: editingProject.name,
                 description: editingProject.description,
