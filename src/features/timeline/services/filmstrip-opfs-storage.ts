@@ -16,7 +16,7 @@ import { getCacheMigration } from '@/lib/storage/cache-version';
 const logger = createLogger('FilmstripOPFS');
 
 const FILMSTRIP_DIR = 'filmstrips';
-const FRAME_RATE = 2; // Must match worker - 2fps for filmstrip thumbnails
+const FRAME_RATE = 1; // Must match worker - 1fps for filmstrip thumbnails
 
 export interface FilmstripMetadata {
   width: number;
@@ -135,8 +135,8 @@ class FilmstripOPFSStorage {
       // Sort by index
       frameFiles.sort((a, b) => a.index - b.index);
 
-      // Revoke old object URLs for this media
-      this.revokeUrls(mediaId);
+      // Don't revoke URLs here - they may still be in use by displayed components.
+      // URLs are only cleaned up when filmstrip is explicitly deleted or cleared.
 
       // Create object URLs
       const urls: string[] = [];

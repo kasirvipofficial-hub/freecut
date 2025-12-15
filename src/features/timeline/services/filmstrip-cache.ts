@@ -30,9 +30,9 @@ export interface Filmstrip {
 export type FilmstripUpdateCallback = (filmstrip: Filmstrip) => void;
 
 // Configuration for parallel extraction
-const FRAME_RATE = 2; // Must match worker
-const MIN_FRAMES_PER_WORKER = 50; // Don't spawn workers for tiny chunks
-const MAX_WORKERS = 4; // Limit parallel workers
+const FRAME_RATE = 1; // Must match worker - 1fps for filmstrip thumbnails
+const MIN_FRAMES_PER_WORKER = 30; // Don't spawn workers for tiny chunks
+const MAX_WORKERS = 2; // Limit parallel workers (reduced for 1fps)
 
 interface WorkerState {
   worker: Worker;

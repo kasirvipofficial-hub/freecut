@@ -13,7 +13,7 @@
 const FILMSTRIP_DIR = 'filmstrips';
 const IMAGE_FORMAT = 'image/webp';
 const IMAGE_QUALITY = 0.6; // Slightly lower for faster encoding
-const FRAME_RATE = 2; // 2fps for filmstrip thumbnails
+const FRAME_RATE = 1; // 1fps for filmstrip thumbnails
 
 // Message types
 export interface ExtractRequest {
@@ -155,6 +155,7 @@ async function extractAndSave(
   const { Input, UrlSource, CanvasSink, MP4, WEBM, MATROSKA } = await loadMediabunny();
 
   let input: InstanceType<typeof Input> | null = null;
+  let sink: InstanceType<typeof CanvasSink> | null = null;
 
   try {
     // Create input from blob URL
@@ -172,11 +173,11 @@ async function extractAndSave(
 
     // Create CanvasSink with poolSize matching our parallel save capacity
     // This keeps VRAM constant and prevents allocation/deallocation churn
-    const sink = new CanvasSink(videoTrack, {
+    sink = new CanvasSink(videoTrack, {
       width,
       height,
       fit: 'cover',
-      poolSize: 8, // Matches our parallel processing - allows pipeline to stay full
+      poolSize: 4, // Reduced for 1fps extraction
     });
     console.log(`[FilmstripWorker:${workerId}] Created CanvasSink`);
 
@@ -272,7 +273,10 @@ async function extractAndSave(
       } as CompleteResponse);
     }
   } finally {
+    // Clean up mediabunny resources to free memory
+    sink?.dispose?.();
     input?.dispose();
+    console.log(`[FilmstripWorker:${workerId}] Cleaned up resources`);
   }
 }
 
