@@ -25,6 +25,11 @@ export interface ExtractRequest {
   width: number;
   height: number;
   skipIndices?: number[]; // Indices to skip (already extracted)
+  // For parallel extraction - each worker handles a range
+  startIndex?: number; // Start frame index (inclusive)
+  endIndex?: number; // End frame index (exclusive)
+  totalFrames?: number; // Total frames across all workers (for progress)
+  workerId?: number; // Worker identifier for debugging
 }
 
 export interface AbortRequest {
@@ -104,18 +109,27 @@ async function extractAndSave(
   request: ExtractRequest,
   state: { aborted: boolean }
 ): Promise<void> {
-  const { requestId, mediaId, blobUrl, duration, width, height, skipIndices } = request;
+  const {
+    requestId, mediaId, blobUrl, duration, width, height, skipIndices,
+    startIndex, endIndex, totalFrames: totalFramesOverride, workerId = 0
+  } = request;
 
-  console.log('[FilmstripWorker] Starting extraction:', { mediaId, duration, width, height });
-
-  // Calculate all frame indices
-  const totalFrames = Math.ceil(duration * FRAME_RATE);
+  // Calculate frame range - support both full extraction and chunked
+  const allFrames = Math.ceil(duration * FRAME_RATE);
+  const rangeStart = startIndex ?? 0;
+  const rangeEnd = endIndex ?? allFrames;
+  const totalFrames = totalFramesOverride ?? allFrames;
   const skipSet = new Set(skipIndices || []);
-  console.log('[FilmstripWorker] Total frames:', totalFrames, 'Skip:', skipSet.size);
 
-  // Generate timestamps for frames we need to extract
+  console.log(`[FilmstripWorker:${workerId}] Starting extraction:`, {
+    mediaId: mediaId.slice(0, 8),
+    range: `${rangeStart}-${rangeEnd}`,
+    totalFrames,
+  });
+
+  // Generate timestamps for frames we need to extract (within our range)
   const framesToExtract: { index: number; timestamp: number }[] = [];
-  for (let i = 0; i < totalFrames; i++) {
+  for (let i = rangeStart; i < rangeEnd; i++) {
     if (!skipSet.has(i)) {
       framesToExtract.push({ index: i, timestamp: i / FRAME_RATE });
     }
@@ -154,7 +168,7 @@ async function extractAndSave(
     if (!videoTrack) {
       throw new Error('No video track found');
     }
-    console.log('[FilmstripWorker] Got video track');
+    console.log(`[FilmstripWorker:${workerId}] Got video track`);
 
     // Create CanvasSink with poolSize matching our parallel save capacity
     // This keeps VRAM constant and prevents allocation/deallocation churn
@@ -164,7 +178,7 @@ async function extractAndSave(
       fit: 'cover',
       poolSize: 8, // Matches our parallel processing - allows pipeline to stay full
     });
-    console.log('[FilmstripWorker] Created CanvasSink with poolSize: 8');
+    console.log(`[FilmstripWorker:${workerId}] Created CanvasSink`);
 
     // Track extracted frames
     let extractedCount = skipSet.size;
@@ -176,25 +190,16 @@ async function extractAndSave(
       for (const frame of framesToExtract) {
         if (state.aborted) return;
         timestampsYielded++;
-        if (timestampsYielded <= 3) {
-          console.log('[FilmstripWorker] Yielding timestamp:', frame.timestamp);
-        }
         yield frame.timestamp;
       }
-      console.log('[FilmstripWorker] Generator finished, yielded:', timestampsYielded);
     }
 
     // Extract and save each frame with parallel writes
-    console.log('[FilmstripWorker] Starting extraction loop...');
     const pendingSaves: Promise<void>[] = [];
     const MAX_PARALLEL_SAVES = 10;
-    let lastReportedFrame = -1;
 
     for await (const wrapped of sink.canvasesAtTimestamps(timestampGenerator())) {
-      if (state.aborted) {
-        console.log('[FilmstripWorker] Aborted');
-        break;
-      }
+      if (state.aborted) break;
 
       const frame = framesToExtract[frameListIndex];
       if (!frame) break;
@@ -229,14 +234,10 @@ async function extractAndSave(
       extractedCount++;
       frameListIndex++;
 
-      // Batch progress updates - report first 5, then every 10 frames
-      const shouldReport = extractedCount <= 5 || extractedCount % 10 === 0;
+      // Batch progress updates - report first 3, then every 10 frames
+      const shouldReport = extractedCount <= 3 || extractedCount % 10 === 0;
       if (shouldReport) {
         const progress = Math.round((extractedCount / totalFrames) * 100);
-
-        if (extractedCount <= 5 || extractedCount % 50 === 0) {
-          console.log('[FilmstripWorker] Extracted frame:', frameIndex, 'total:', extractedCount, 'progress:', progress);
-        }
 
         self.postMessage({
           type: 'progress',
@@ -245,23 +246,17 @@ async function extractAndSave(
           frameCount: extractedCount,
           progress: Math.min(progress, 99),
         } as ProgressResponse);
-        lastReportedFrame = frameIndex;
       }
     }
 
     // Wait for all pending saves to complete
     if (pendingSaves.length > 0) {
-      console.log('[FilmstripWorker] Waiting for', pendingSaves.length, 'pending saves...');
       await Promise.all(pendingSaves);
     }
 
     // Save final metadata - only mark complete if we actually have frames
     if (!state.aborted) {
       const actuallyComplete = extractedCount > 0;
-
-      if (!actuallyComplete) {
-        console.warn('[FilmstripWorker] Extraction finished but no frames extracted');
-      }
 
       await saveMetadata(dir, {
         width,
