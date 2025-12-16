@@ -388,7 +388,8 @@ export const TimelineMarkers = memo(function TimelineMarkers({ duration, width }
   }, [fps]);
 
   // Limit cache size to prevent memory bloat (LRU-style: clear oldest when over limit)
-  const MAX_CACHED_TILES = 100;
+  // Reduced from 100 to 50 for memory savings
+  const MAX_CACHED_TILES = 50;
   useEffect(() => {
     const cache = tileCacheRef.current;
     if (cache.size > MAX_CACHED_TILES) {

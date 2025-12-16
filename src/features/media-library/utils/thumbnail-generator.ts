@@ -16,7 +16,7 @@ export interface ThumbnailOptions {
 const DEFAULT_THUMBNAIL_OPTIONS: Required<ThumbnailOptions> = {
   width: 320,
   height: 180,
-  quality: 0.8,
+  quality: 0.6,
   timestamp: 1, // Capture at 1 second mark (as specified in requirements)
 };
 

@@ -19,7 +19,7 @@ export interface ThumbnailOptions {
 const DEFAULT_THUMBNAIL_OPTIONS: Required<ThumbnailOptions> = {
   width: 320,
   height: 180,
-  quality: 0.8,
+  quality: 0.6,
   format: 'image/jpeg',
 };
 
@@ -300,7 +300,7 @@ export function resizeThumbnail(
       canvas.height = targetHeight;
 
       ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-      resolve(canvas.toDataURL('image/jpeg', 0.8));
+      resolve(canvas.toDataURL('image/jpeg', 0.6));
     };
 
     img.onerror = () => reject(new Error('Failed to load image'));
