@@ -34,6 +34,7 @@ export const MediaGrid = memo(function MediaGrid({ onMediaSelect, onImportHandle
   const containerRef = useRef<HTMLDivElement>(null);
   const wasMarqueeDraggingRef = useRef(false);
   const hasAnimatedRef = useRef(false);
+  const lastSelectedIdRef = useRef<string | null>(null);
 
   const filteredItems = useFilteredMediaItems();
   const isLoading = useMediaLibraryStore((s) => s.isLoading);
@@ -104,12 +105,33 @@ export const MediaGrid = memo(function MediaGrid({ onMediaSelect, onImportHandle
   }, [filteredItems.length]);
 
   const handleCardSelect = (mediaId: string, event?: React.MouseEvent) => {
-    // Ctrl/Cmd click: toggle selection (add/remove from current selection)
-    if (event?.ctrlKey || event?.metaKey) {
+    // Shift click: select range from last selected item to this item
+    if (event?.shiftKey && lastSelectedIdRef.current) {
+      const lastIndex = filteredItems.findIndex((item) => item.id === lastSelectedIdRef.current);
+      const currentIndex = filteredItems.findIndex((item) => item.id === mediaId);
+
+      if (lastIndex !== -1 && currentIndex !== -1) {
+        const startIndex = Math.min(lastIndex, currentIndex);
+        const endIndex = Math.max(lastIndex, currentIndex);
+        const rangeIds = filteredItems.slice(startIndex, endIndex + 1).map((item) => item.id);
+
+        // If Ctrl/Cmd is also held, add range to existing selection
+        if (event.ctrlKey || event.metaKey) {
+          const newSelection = [...new Set([...selectedMediaIds, ...rangeIds])];
+          selectMedia(newSelection);
+        } else {
+          // Replace selection with range
+          selectMedia(rangeIds);
+        }
+      }
+    } else if (event?.ctrlKey || event?.metaKey) {
+      // Ctrl/Cmd click: toggle selection (add/remove from current selection)
       toggleMediaSelection(mediaId);
+      lastSelectedIdRef.current = mediaId;
     } else {
       // Normal click: select only this item (clear others)
       selectMedia([mediaId]);
+      lastSelectedIdRef.current = mediaId;
     }
     onMediaSelect?.(mediaId);
   };
@@ -305,7 +327,7 @@ export const MediaGrid = memo(function MediaGrid({ onMediaSelect, onImportHandle
   return (
     <div
       ref={containerRef}
-      className="relative h-full"
+      className="relative min-h-full"
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}

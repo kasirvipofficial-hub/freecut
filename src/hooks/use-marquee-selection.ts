@@ -156,6 +156,7 @@ export function useMarqueeSelection({
   const prevSelectedIdsRef = useRef<string[]>([]);
   const rafIdRef = useRef<number | null>(null);
   const itemsRef = useRef(items);
+  const enabledRef = useRef(enabled);
 
   // Keep refs up to date
   useEffect(() => {
@@ -165,6 +166,10 @@ export function useMarqueeSelection({
   useEffect(() => {
     itemsRef.current = items;
   }, [items]);
+
+  useEffect(() => {
+    enabledRef.current = enabled;
+  }, [enabled]);
 
   // Update selection based on current marquee intersection (uses refs for performance)
   const updateSelectionFromRefs = useCallback(() => {
@@ -208,7 +213,7 @@ export function useMarqueeSelection({
   // Handle mouse down - start marquee
   // Using useEffectEvent so changes to enabled, appendMode don't re-register listeners
   const onMouseDown = useEffectEvent((e: MouseEvent) => {
-    if (!enabled || !containerRef.current || !boundsRef.current) return;
+    if (!enabledRef.current || !containerRef.current || !boundsRef.current) return;
 
     // Only trigger on left click
     if (e.button !== 0) return;
@@ -249,7 +254,6 @@ export function useMarqueeSelection({
     ) {
       return;
     }
-
     isDraggingRef.current = true;
     hasMovedRef.current = false;
     prevSelectedIdsRef.current = []; // Reset accumulated selection for new marquee
@@ -376,12 +380,9 @@ export function useMarqueeSelection({
 
   // Register global mouse event listeners
   // Listen at document level to support containers with pointer-events: none
-  // Note: Don't check containerRef.current here - handlers check it themselves
-  // This ensures listeners are registered even if refs aren't set yet on first render
-  // With useEffectEvent, we only need to depend on enabled
+  // Always register listeners - the handler checks `enabled` via useEffectEvent
+  // This ensures marquee works even when items load after mount
   useEffect(() => {
-    if (!enabled) return;
-
     // Use capture phase to intercept before other handlers
     document.addEventListener('mousedown', onMouseDown, true);
     document.addEventListener('mousemove', onMouseMove);
@@ -392,7 +393,7 @@ export function useMarqueeSelection({
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp, true);
     };
-  }, [enabled]);
+  }, []);
 
   return {
     marqueeState,
