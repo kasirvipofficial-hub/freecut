@@ -118,6 +118,7 @@ async function saveTimeline(projectId: string): Promise<void> {
         const fps = project.metadata?.fps || 30;
         const width = project.metadata?.width || 1920;
         const height = project.metadata?.height || 1080;
+        const backgroundColor = project.metadata?.backgroundColor;
 
         // Convert timeline to Remotion composition format
         const composition = convertTimelineToRemotion(
@@ -129,7 +130,8 @@ async function saveTimeline(projectId: string): Promise<void> {
           height,
           null, // inPoint - render full timeline
           null, // outPoint
-          keyframesState.keyframes
+          keyframesState.keyframes,
+          backgroundColor
         );
 
         // Resolve media URLs (convert mediaId to blob URLs)

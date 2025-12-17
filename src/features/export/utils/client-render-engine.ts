@@ -154,13 +154,40 @@ export async function renderComposition(options: RenderEngineOptions): Promise<C
     target,
   });
 
-  // Create canvas for rendering frames
-  const renderCanvas = new OffscreenCanvas(settings.resolution.width, settings.resolution.height);
+  // Get composition (project) resolution - this is what we render at
+  const compositionWidth = composition.width ?? settings.resolution.width;
+  const compositionHeight = composition.height ?? settings.resolution.height;
+
+  // Export resolution - this is what we output (may be different from composition)
+  const exportWidth = settings.resolution.width;
+  const exportHeight = settings.resolution.height;
+
+  // Check if we need to scale (export resolution differs from composition)
+  const needsScaling = exportWidth !== compositionWidth || exportHeight !== compositionHeight;
+
+  log.info('Resolution settings', {
+    composition: { width: compositionWidth, height: compositionHeight },
+    export: { width: exportWidth, height: exportHeight },
+    needsScaling,
+  });
+
+  // Create canvas for rendering frames at COMPOSITION resolution
+  // This ensures all positioning/transforms are calculated correctly
+  const renderCanvas = new OffscreenCanvas(compositionWidth, compositionHeight);
   const ctx = renderCanvas.getContext('2d');
 
   if (!ctx) {
     throw new Error('Failed to create OffscreenCanvas 2D context');
   }
+
+  // Create output canvas at EXPORT resolution (for encoding)
+  // If no scaling needed, we'll use renderCanvas directly
+  const outputCanvas = needsScaling
+    ? new OffscreenCanvas(exportWidth, exportHeight)
+    : renderCanvas;
+  const outputCtx = needsScaling
+    ? outputCanvas.getContext('2d')!
+    : ctx;
 
   onProgress({
     phase: 'preparing',
@@ -169,8 +196,8 @@ export async function renderComposition(options: RenderEngineOptions): Promise<C
     message: 'Setting up video encoder...',
   });
 
-  // Create video source
-  const videoSource = new CanvasSource(renderCanvas as unknown as HTMLCanvasElement, {
+  // Create video source from OUTPUT canvas (at export resolution)
+  const videoSource = new CanvasSource(outputCanvas as unknown as HTMLCanvasElement, {
     codec: settings.codec,
     bitrate: settings.videoBitrate ?? 10_000_000,
   });
@@ -249,18 +276,27 @@ export async function renderComposition(options: RenderEngineOptions): Promise<C
         throw new DOMException('Render cancelled', 'AbortError');
       }
 
-      // Render frame to canvas
+      // Render frame to canvas (at composition resolution)
       await frameRenderer.renderFrame(frame);
 
-      // Ensure canvas operations are flushed before capturing
-      // This forces the browser to complete all pending draw operations
-      ctx.getImageData(0, 0, 1, 1);
+      // Scale to output resolution if needed
+      if (needsScaling) {
+        // Clear output canvas and draw scaled version
+        outputCtx.clearRect(0, 0, exportWidth, exportHeight);
+        outputCtx.drawImage(renderCanvas, 0, 0, exportWidth, exportHeight);
+        // Flush output canvas operations
+        outputCtx.getImageData(0, 0, 1, 1);
+      } else {
+        // Ensure canvas operations are flushed before capturing
+        // This forces the browser to complete all pending draw operations
+        ctx.getImageData(0, 0, 1, 1);
+      }
 
       // Calculate timestamp in seconds
       const timestamp = frame / fps;
       const frameDuration = 1 / fps;
 
-      // Add frame to video source
+      // Add frame to video source (from output canvas)
       videoSource.add(timestamp, frameDuration);
 
       // Report progress
@@ -1320,6 +1356,8 @@ async function createCompositionRenderer(
 
   /**
    * Calculate draw dimensions for media items
+   * Uses "contain" mode - fits content within canvas bounds while maintaining aspect ratio.
+   * This allows background color to show in letterbox (top/bottom) or pillarbox (left/right) areas.
    */
   function calculateMediaDrawDimensions(
     sourceWidth: number,
@@ -1337,20 +1375,14 @@ async function createCompositionRenderer(
       };
     }
 
-    // Otherwise, fit to canvas maintaining aspect ratio
-    const sourceAspect = sourceWidth / sourceHeight;
-    const canvasAspect = canvas.width / canvas.height;
+    // Otherwise, fit to canvas maintaining aspect ratio ("contain" mode)
+    // This matches transform-resolver.ts behavior for consistency between preview and export
+    const scaleX = canvas.width / sourceWidth;
+    const scaleY = canvas.height / sourceHeight;
+    const fitScale = Math.min(scaleX, scaleY); // Use min for "contain" (not max for "cover")
 
-    let drawWidth: number;
-    let drawHeight: number;
-
-    if (sourceAspect > canvasAspect) {
-      drawHeight = canvas.height;
-      drawWidth = canvas.height * sourceAspect;
-    } else {
-      drawWidth = canvas.width;
-      drawHeight = canvas.width / sourceAspect;
-    }
+    const drawWidth = sourceWidth * fitScale;
+    const drawHeight = sourceHeight * fitScale;
 
     return {
       x: (canvas.width - drawWidth) / 2 + transform.x,

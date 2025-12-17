@@ -25,6 +25,7 @@ import {
 import { renderComposition } from '../utils/client-render-engine';
 import { convertTimelineToRemotion } from '../utils/timeline-to-remotion';
 import { useTimelineStore } from '@/features/timeline/stores/timeline-store';
+import { useProjectStore } from '@/features/projects/stores/project-store';
 import { resolveMediaUrls } from '@/features/preview/utils/media-resolver';
 import { createLogger } from '@/lib/logger';
 
@@ -115,9 +116,16 @@ export function useClientRender(): UseClientRenderReturn {
         // Create abort controller for cancellation
         abortControllerRef.current = new AbortController();
 
-        // Read current state from store
+        // Read current state from stores
         const state = useTimelineStore.getState();
         const { tracks, items, transitions, fps, inPoint, outPoint, keyframes } = state;
+
+        // Get project metadata (background color and native resolution)
+        const currentProject = useProjectStore.getState().currentProject;
+        const backgroundColor = currentProject?.metadata?.backgroundColor;
+        // Use PROJECT resolution for composition (transform calculations match preview)
+        const projectWidth = currentProject?.metadata?.width ?? 1920;
+        const projectHeight = currentProject?.metadata?.height ?? 1080;
 
         log.debug('Starting client export', {
           fps,
@@ -126,6 +134,8 @@ export function useClientRender(): UseClientRenderReturn {
           inPoint,
           outPoint,
           keyframeCount: keyframes?.length ?? 0,
+          backgroundColor,
+          projectResolution: { width: projectWidth, height: projectHeight },
         });
 
         // Map settings to client-compatible settings
@@ -161,16 +171,18 @@ export function useClientRender(): UseClientRenderReturn {
         }
 
         // Convert timeline to Remotion format (handles I/O point trimming)
+        // Use PROJECT resolution so transforms match preview (will scale to export res later)
         const composition = convertTimelineToRemotion(
           tracks,
           items,
           transitions,
           fps,
-          clientSettings.resolution.width,
-          clientSettings.resolution.height,
+          projectWidth,
+          projectHeight,
           inPoint,
           outPoint,
-          keyframes
+          keyframes,
+          backgroundColor
         );
 
         // Count items per track for debugging

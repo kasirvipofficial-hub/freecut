@@ -30,7 +30,8 @@ export function convertTimelineToRemotion(
   height: number,
   inPoint?: number | null,
   outPoint?: number | null,
-  keyframes?: ItemKeyframes[]
+  keyframes?: ItemKeyframes[],
+  backgroundColor?: string
 ): RemotionInputProps {
   // Determine if we're exporting a specific in/out range
   const hasInOutRange = inPoint !== null && inPoint !== undefined &&
@@ -177,6 +178,7 @@ export function convertTimelineToRemotion(
     tracks: sortedTracks,
     transitions: processedTransitions,
     keyframes: processedKeyframes,
+    backgroundColor,
   };
 }
 

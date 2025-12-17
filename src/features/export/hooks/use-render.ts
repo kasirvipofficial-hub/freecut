@@ -10,6 +10,7 @@ import {
 } from '@/api/render';
 import { convertTimelineToRemotion } from '../utils/timeline-to-remotion';
 import { useTimelineStore } from '@/features/timeline/stores/timeline-store';
+import { useProjectStore } from '@/features/projects/stores/project-store';
 import { mediaLibraryService } from '@/features/media-library/services/media-library-service';
 import { config } from '@/lib/config';
 import { createLogger } from '@/lib/logger';
@@ -120,21 +121,29 @@ export function useRender(): UseRenderReturn {
         const state = useTimelineStore.getState();
         const { tracks, items, transitions, fps, inPoint, outPoint, keyframes } = state;
 
-        log.debug('Export with IO points:', { inPoint, outPoint, fps, transitionCount: transitions.length, keyframeCount: keyframes.length });
+        // Get project metadata (background color and native resolution)
+        const currentProject = useProjectStore.getState().currentProject;
+        const backgroundColor = currentProject?.metadata?.backgroundColor;
+        // Use PROJECT resolution for composition (transform calculations match preview)
+        const projectWidth = currentProject?.metadata?.width ?? settings.resolution.width;
+        const projectHeight = currentProject?.metadata?.height ?? settings.resolution.height;
+
+        log.debug('Export with IO points:', { inPoint, outPoint, fps, transitionCount: transitions.length, keyframeCount: keyframes.length, backgroundColor, projectResolution: { width: projectWidth, height: projectHeight } });
 
         // Convert timeline to Remotion format with export settings
-        // Use project FPS from timeline store
+        // Use PROJECT resolution so transforms match preview
         // Pass in/out points to export only the selected range
         const composition = convertTimelineToRemotion(
           tracks,
           items,
           transitions,
           fps,
-          settings.resolution.width,
-          settings.resolution.height,
+          projectWidth,
+          projectHeight,
           inPoint,
           outPoint,
-          keyframes
+          keyframes,
+          backgroundColor
         );
 
         log.debug('Composition duration:', composition.durationInFrames, 'frames');
