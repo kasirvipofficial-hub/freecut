@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,7 @@ import { Download, Loader2, X, CheckCircle2, AlertCircle, Monitor, Cloud } from 
 import type { ExportSettings } from '@/types/export';
 import { useRender } from '../hooks/use-render';
 import { useClientRender } from '../hooks/use-client-render';
+import { useProjectStore } from '@/features/projects/stores/project-store';
 
 export interface ExportDialogProps {
   open: boolean;
@@ -24,12 +25,54 @@ export interface ExportDialogProps {
 
 type RenderMode = 'client' | 'server';
 
+/**
+ * Generate resolution options based on project dimensions.
+ * Maintains aspect ratio and provides scaled-down options.
+ */
+function getResolutionOptions(projectWidth: number, projectHeight: number) {
+  // Scale factors: 100%, ~66% (720p equivalent), ~50% (540p equivalent)
+  const scales = [1, 0.666, 0.5];
+
+  return scales.map((scale) => {
+    const w = Math.round(projectWidth * scale);
+    const h = Math.round(projectHeight * scale);
+    // Ensure even dimensions (required by most codecs)
+    const width = w % 2 === 0 ? w : w + 1;
+    const height = h % 2 === 0 ? h : h + 1;
+
+    const label =
+      scale === 1
+        ? `Same as project (${width}×${height})`
+        : `${Math.min(width, height)}p (${width}×${height})`;
+
+    return { value: `${width}x${height}`, label };
+  });
+}
+
 export function ExportDialog({ open, onClose }: ExportDialogProps) {
+  // Get project canvas dimensions
+  const projectWidth = useProjectStore((s) => s.currentProject?.metadata.width ?? 1920);
+  const projectHeight = useProjectStore((s) => s.currentProject?.metadata.height ?? 1080);
+
   const [settings, setSettings] = useState<ExportSettings>({
     codec: 'h264',
     quality: 'high',
-    resolution: { width: 1920, height: 1080 },
+    resolution: { width: projectWidth, height: projectHeight },
   });
+
+  // Generate resolution options based on project dimensions
+  const resolutionOptions = useMemo(
+    () => getResolutionOptions(projectWidth, projectHeight),
+    [projectWidth, projectHeight]
+  );
+
+  // Sync resolution when project dimensions change
+  useEffect(() => {
+    setSettings((prev) => ({
+      ...prev,
+      resolution: { width: projectWidth, height: projectHeight },
+    }));
+  }, [projectWidth, projectHeight]);
 
   const [renderMode, setRenderMode] = useState<RenderMode>('client');
 
@@ -201,8 +244,8 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
                   value={`${settings.resolution.width}x${settings.resolution.height}`}
                   onValueChange={(value) => {
                     const parts = value.split('x').map(Number);
-                    const width = parts[0] ?? 1920;
-                    const height = parts[1] ?? 1080;
+                    const width = parts[0] ?? projectWidth;
+                    const height = parts[1] ?? projectHeight;
                     setSettings({ ...settings, resolution: { width, height } });
                   }}
                 >
@@ -210,10 +253,11 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
                     <SelectValue placeholder="Select resolution" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="1280x720">720p (1280x720)</SelectItem>
-                    <SelectItem value="1920x1080">1080p (1920x1080)</SelectItem>
-                    <SelectItem value="2560x1440">1440p (2560x1440)</SelectItem>
-                    <SelectItem value="3840x2160">4K (3840x2160)</SelectItem>
+                    {resolutionOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
