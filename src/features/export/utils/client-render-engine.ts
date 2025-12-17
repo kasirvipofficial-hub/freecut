@@ -517,84 +517,92 @@ async function createCompositionRenderer(
       contentCtx.clearRect(0, 0, canvas.width, canvas.height);
 
 
-      // Render each track
+      // Helper function to render a single item with effects
+      const renderItemWithEffects = async (
+        item: TimelineItem,
+        trackOrder: number
+      ) => {
+        // Get animated transform
+        const itemKeyframes = keyframesMap.get(item.id);
+        const transform = getAnimatedTransform(item, itemKeyframes, frame, canvasSettings);
+
+        // Get effects (item effects + adjustment layer effects)
+        const adjEffects = getAdjustmentLayerEffects(
+          trackOrder,
+          adjustmentLayers,
+          frame
+        );
+        const combinedEffects = combineEffects(item.effects, adjEffects);
+
+        // Render item to temporary canvas for effect application
+        const itemCanvas = new OffscreenCanvas(canvas.width, canvas.height);
+        const itemCtx = itemCanvas.getContext('2d')!;
+
+        // Render based on item type
+        await renderItem(
+          itemCtx,
+          item,
+          transform,
+          frame,
+          canvasSettings,
+          videoElements,
+          imageElements
+        );
+
+        // Debug: check if itemCanvas has content
+        if (frame === 0) {
+          const imageData = itemCtx.getImageData(0, 0, 100, 100);
+          const hasContent = imageData.data.some((v, i) => i % 4 !== 3 && v > 0);
+          const hasAlpha = imageData.data.some((v, i) => i % 4 === 3 && v > 0);
+          log.info(`ITEM CANVAS CHECK: hasContent=${hasContent} hasAlpha=${hasAlpha} itemType=${item.type}`);
+        }
+
+        // Apply effects
+        if (combinedEffects.length > 0) {
+          const effectCanvas = new OffscreenCanvas(canvas.width, canvas.height);
+          const effectCtx = effectCanvas.getContext('2d')!;
+          applyAllEffects(effectCtx, itemCanvas, combinedEffects, frame, canvasSettings);
+          contentCtx.drawImage(effectCanvas, 0, 0);
+        } else {
+          contentCtx.drawImage(itemCanvas, 0, 0);
+        }
+      };
+
+      // Helper to check if item should be rendered
+      const shouldRenderItem = (item: TimelineItem): boolean => {
+        // Skip items not visible at this frame
+        if (frame < item.from || frame >= item.from + item.durationInFrames) {
+          return false;
+        }
+        // Skip items being handled by transitions
+        if (transitionClipIds.has(item.id)) {
+          if (frame === activeTransitions[0]?.transitionStart) {
+            log.info(`SKIPPING clip ${item.id.substring(0,8)} - handled by transition`);
+          }
+          return false;
+        }
+        // Skip audio items (handled separately)
+        if (item.type === 'audio') return false;
+        // Skip adjustment items (they apply effects, not render content)
+        if (item.type === 'adjustment') return false;
+        // Skip mask shapes (handled by mask system)
+        if (item.type === 'shape' && (item as ShapeItem).isMask) return false;
+        return true;
+      };
+
+      // PASS 1: Render media items (video/image) - these go BEHIND transitions
       for (const track of sortedTracks) {
         if (track.visible === false) continue;
 
         for (const item of track.items ?? []) {
-          // Skip items not visible at this frame
-          if (frame < item.from || frame >= item.from + item.durationInFrames) {
-            continue;
-          }
-
-          // Skip items being handled by transitions
-          if (transitionClipIds.has(item.id)) {
-            if (frame === activeTransitions[0]?.transitionStart) {
-              log.info(`SKIPPING clip ${item.id.substring(0,8)} - handled by transition`);
-            }
-            continue;
-          }
-
-          // Skip audio items (handled separately)
-          if (item.type === 'audio') continue;
-
-          // Skip adjustment items (they apply effects, not render content)
-          if (item.type === 'adjustment') continue;
-
-          // Skip mask shapes (handled by mask system)
-          if (item.type === 'shape' && (item as ShapeItem).isMask) continue;
-
-          // Get animated transform
-          const itemKeyframes = keyframesMap.get(item.id);
-          const transform = getAnimatedTransform(item, itemKeyframes, frame, canvasSettings);
-
-
-          // Get effects (item effects + adjustment layer effects)
-          const adjEffects = getAdjustmentLayerEffects(
-            track.order ?? 0,
-            adjustmentLayers,
-            frame
-          );
-          const combinedEffects = combineEffects(item.effects, adjEffects);
-
-          // Render item to temporary canvas for effect application
-          const itemCanvas = new OffscreenCanvas(canvas.width, canvas.height);
-          const itemCtx = itemCanvas.getContext('2d')!;
-
-          // Render based on item type
-          await renderItem(
-            itemCtx,
-            item,
-            transform,
-            frame,
-            canvasSettings,
-            videoElements,
-            imageElements
-          );
-
-          // Debug: check if itemCanvas has content
-          if (frame === 0) {
-            const imageData = itemCtx.getImageData(0, 0, 100, 100);
-            const hasContent = imageData.data.some((v, i) => i % 4 !== 3 && v > 0); // Check if any non-alpha pixel is non-zero
-            const hasAlpha = imageData.data.some((v, i) => i % 4 === 3 && v > 0); // Check if any alpha is non-zero
-            log.info(`ITEM CANVAS CHECK: hasContent=${hasContent} hasAlpha=${hasAlpha} itemType=${item.type}`);
-          }
-
-          // Apply effects
-          if (combinedEffects.length > 0) {
-            const effectCanvas = new OffscreenCanvas(canvas.width, canvas.height);
-            const effectCtx = effectCanvas.getContext('2d')!;
-            applyAllEffects(effectCtx, itemCanvas, combinedEffects, frame, canvasSettings);
-            contentCtx.drawImage(effectCanvas, 0, 0);
-          } else {
-            contentCtx.drawImage(itemCanvas, 0, 0);
-          }
+          if (!shouldRenderItem(item)) continue;
+          // Only render media items in first pass
+          if (item.type !== 'video' && item.type !== 'image') continue;
+          await renderItemWithEffects(item, track.order ?? 0);
         }
       }
 
-      // Render transitions
-      // Note: Transitions should be rendered at the appropriate layer position
-      // For now, we render them after all regular items
+      // Render transitions (between media and non-media items)
       for (const activeTransition of activeTransitions) {
         await renderTransitionToCanvas(
           contentCtx,
@@ -611,6 +619,18 @@ async function createCompositionRenderer(
         if (frame === activeTransition.transitionStart) {
           const afterData = contentCtx.getImageData(Math.floor(canvas.width/2), Math.floor(canvas.height/2), 1, 1).data;
           log.info(`TRANSITION RENDERED: frame=${frame} progress=${activeTransition.progress.toFixed(3)} centerPixel=(${afterData[0]},${afterData[1]},${afterData[2]},${afterData[3]})`);
+        }
+      }
+
+      // PASS 2: Render non-media items (text/shape) - these go ON TOP of transitions
+      for (const track of sortedTracks) {
+        if (track.visible === false) continue;
+
+        for (const item of track.items ?? []) {
+          if (!shouldRenderItem(item)) continue;
+          // Only render non-media items in second pass
+          if (item.type === 'video' || item.type === 'image') continue;
+          await renderItemWithEffects(item, track.order ?? 0);
         }
       }
 
