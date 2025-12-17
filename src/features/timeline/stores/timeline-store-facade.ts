@@ -33,11 +33,19 @@ import { useTimelineCommandStore } from './timeline-command-store';
 import * as timelineActions from './timeline-actions';
 
 // External dependencies for save/load
-import { getProject, updateProject } from '@/lib/storage/indexeddb';
+import { getProject, updateProject, saveThumbnail } from '@/lib/storage/indexeddb';
 import { usePlaybackStore } from '@/features/preview/stores/playback-store';
 import { useZoomStore } from './zoom-store';
 import { generatePlayheadThumbnail } from '@/features/projects/utils/thumbnail-generator';
 import type { ProjectTimeline } from '@/types/project';
+
+/**
+ * Convert a data URL to a Blob
+ */
+async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
+  const response = await fetch(dataUrl);
+  return response.blob();
+}
 
 
 /**
@@ -107,28 +115,38 @@ async function saveTimeline(projectId: string): Promise<void> {
       }),
     };
 
-    // Generate thumbnail from current Player frame
-    let thumbnail: string | undefined;
+    // Generate thumbnail from current Player frame and save as Blob
+    let thumbnailId: string | undefined;
     if (itemsState.items.length > 0) {
       try {
+        let thumbnailDataUrl: string | null = null;
+
         const captureFrame = usePlaybackStore.getState().captureFrame;
         if (captureFrame) {
-          const capturedThumbnail = await captureFrame();
-          if (capturedThumbnail) {
-            thumbnail = capturedThumbnail;
-          }
+          thumbnailDataUrl = await captureFrame();
         } else {
           // Fallback to source-based thumbnail if Player isn't available
           const fps = project.metadata?.fps || 30;
-          const playheadThumbnail = await generatePlayheadThumbnail(
+          thumbnailDataUrl = await generatePlayheadThumbnail(
             itemsState.items,
             itemsState.tracks,
             currentFrame,
             fps
           );
-          if (playheadThumbnail) {
-            thumbnail = playheadThumbnail;
-          }
+        }
+
+        // Convert data URL to Blob and save to thumbnails store
+        if (thumbnailDataUrl) {
+          thumbnailId = `project:${projectId}:cover`;
+          const blob = await dataUrlToBlob(thumbnailDataUrl);
+          await saveThumbnail({
+            id: thumbnailId,
+            mediaId: projectId, // Use projectId for project covers
+            blob,
+            timestamp: Date.now(),
+            width: 320,
+            height: 180,
+          });
         }
       } catch (thumbError) {
         // Thumbnail generation failure shouldn't block save
@@ -137,9 +155,10 @@ async function saveTimeline(projectId: string): Promise<void> {
     }
 
     // Update project
+    // Clear deprecated thumbnail field when using thumbnailId to save space
     await updateProject(projectId, {
       timeline,
-      ...(thumbnail && { thumbnail }),
+      ...(thumbnailId && { thumbnailId, thumbnail: undefined }),
       updatedAt: Date.now(),
     });
 

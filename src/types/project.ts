@@ -7,8 +7,9 @@ export interface Project {
   createdAt: number;
   updatedAt: number;
   duration: number;
-  thumbnail?: string; // Data URL of project thumbnail (from playhead)
-  thumbnailUrl?: string; // External URL (deprecated, use thumbnail)
+  thumbnailId?: string; // Reference to ThumbnailData in IndexedDB
+  thumbnail?: string; // @deprecated Base64 data URL (for backward compatibility)
+  thumbnailUrl?: string; // @deprecated External URL
   metadata: ProjectResolution;
   timeline?: ProjectTimeline;
 }

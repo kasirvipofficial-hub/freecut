@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import type { Project } from '@/types/project';
 import { formatRelativeTime } from '../utils/project-helpers';
 import { useDeleteProject, useDuplicateProject } from '../hooks/use-project-actions';
+import { useProjectThumbnail } from '../hooks/use-project-thumbnail';
 
 export interface ProjectCardProps {
   project: Project;
@@ -35,6 +36,7 @@ export function ProjectCard({ project, onEdit }: ProjectCardProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const deleteProject = useDeleteProject();
   const duplicateProject = useDuplicateProject();
+  const thumbnailUrl = useProjectThumbnail(project);
 
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -98,10 +100,10 @@ export function ProjectCard({ project, onEdit }: ProjectCardProps) {
         params={{ projectId: project.id }}
         className="block relative aspect-video bg-secondary/30 overflow-hidden"
       >
-        {project.thumbnail ? (
+        {thumbnailUrl ? (
           <img
             key={project.updatedAt} // Force re-render when project is updated
-            src={project.thumbnail}
+            src={thumbnailUrl}
             alt={project.name}
             className="w-full h-full object-cover"
           />
