@@ -512,9 +512,11 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, transiti
           </Sequence>
         ))}
 
-        {/* VIDEO LAYER - all videos in SINGLE wrapper for DOM stability */}
-        {/* ALL effects (CSS, glitch, halftone) applied per-item via ItemEffectWrapper */}
+        {/* ALL VISUAL LAYERS - videos and non-media in SINGLE wrapper for proper z-index stacking */}
+        {/* This ensures items from different tracks respect z-index across all types */}
         <StableMaskedGroup hasMasks={hasActiveMasks}>
+          {/* VIDEO LAYER - all videos rendered via StableVideoSequence */}
+          {/* ALL effects (CSS, glitch, halftone) applied per-item via ItemEffectWrapper */}
           <StableVideoSequence
             items={videoItems as any}
             premountFor={Math.round(fps * 1)}
@@ -528,11 +530,9 @@ export const MainComposition: React.FC<RemotionInputProps> = ({ tracks, transiti
             itemsById={itemsById}
             adjustmentLayers={visibleAdjustmentLayers}
           />
-        </StableMaskedGroup>
 
-        {/* NON-MEDIA LAYERS - all in single structure, per-item effects via ItemEffectWrapper */}
-        {/* No more above/below split - items never move between DOM parents */}
-        <StableMaskedGroup hasMasks={hasActiveMasks}>
+          {/* NON-MEDIA LAYERS - text, shapes, etc. with per-item effects via ItemEffectWrapper */}
+          {/* No more above/below split - items never move between DOM parents */}
           {nonMediaByTrack
             .filter((track) => track.items.length > 0)
             .map((track) => {
