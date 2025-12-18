@@ -120,7 +120,7 @@ export class RenderService {
       // Include file extension in URL so Remotion can detect the container format
       // Also strip out thumbnailUrl which contains blob URLs that don't work on server
       const PORT = process.env.PORT || 3001;
-      const SERVER_URL = process.env.SERVER_URL || `http://localhost:${PORT}`;
+      const SERVER_URL = (process.env.SERVER_URL || `http://localhost:${PORT}`).trim();
 
       const tracksWithResolvedMedia = composition.tracks.map(track => ({
         ...track,
