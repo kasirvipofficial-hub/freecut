@@ -30,7 +30,6 @@ import { TimelineTrack } from './timeline-track';
 import { TimelineGuidelines } from './timeline-guidelines';
 import { TimelineSplitIndicator } from './timeline-split-indicator';
 import { MarqueeOverlay } from '@/components/marquee-overlay';
-import { TimelineScrollProvider } from '../contexts/timeline-scroll-context';
 
 export interface TimelineContentProps {
   duration: number; // Total timeline duration in seconds
@@ -731,9 +730,8 @@ export const TimelineContent = memo(function TimelineContent({ duration, scrollR
         <TimelinePlayhead inRuler maxFrame={Math.floor(actualDuration * fps)} />
       </div>
 
-      {/* Track lanes - wrapped in scroll provider for viewport culling */}
-      <TimelineScrollProvider scrollLeft={scrollLeft} viewportWidth={containerWidth}>
-        <div
+      {/* Track lanes */}
+      <div
           ref={tracksContainerRef}
           className="relative timeline-tracks"
           style={{
@@ -769,8 +767,7 @@ export const TimelineContent = memo(function TimelineContent({ duration, scrollR
 
           {/* Playhead line through all tracks */}
           <TimelinePlayhead maxFrame={Math.floor(actualDuration * fps)} />
-        </div>
-      </TimelineScrollProvider>
+      </div>
     </div>
   );
 });
