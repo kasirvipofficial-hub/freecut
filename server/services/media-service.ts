@@ -9,7 +9,7 @@ const TEMP_DIR = path.join(__dirname, '..', 'temp', 'media');
 
 export class MediaService {
   /**
-   * Save uploaded media file to temp directory for a specific job
+   * Save uploaded media file to temp directory for a specific job (from buffer)
    */
   async saveMediaFile(jobId: string, mediaId: string, buffer: Buffer, filename: string): Promise<string> {
     const jobDir = path.join(TEMP_DIR, jobId);
@@ -24,6 +24,25 @@ export class MediaService {
     await fs.writeFile(filePath, buffer);
 
     console.log(`[MediaService] Saved media file: ${mediaId} for job ${jobId}`);
+    return filePath;
+  }
+
+  /**
+   * Move uploaded media file from temp upload path to job directory (disk storage)
+   */
+  async moveMediaFile(jobId: string, mediaId: string, tempPath: string, filename: string): Promise<string> {
+    const jobDir = path.join(TEMP_DIR, jobId);
+
+    // Create job directory if it doesn't exist
+    await fs.mkdir(jobDir, { recursive: true });
+
+    // Move file with original extension
+    const ext = path.extname(filename) || '.bin';
+    const filePath = path.join(jobDir, `${mediaId}${ext}`);
+
+    await fs.rename(tempPath, filePath);
+
+    console.log(`[MediaService] Moved media file: ${mediaId} for job ${jobId}`);
     return filePath;
   }
 

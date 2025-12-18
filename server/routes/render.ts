@@ -1,21 +1,35 @@
 import { Router, type Request, type Response } from 'express';
 import multer from 'multer';
 import { randomUUID } from 'crypto';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import type { RenderRequest } from '../types.js';
 import { jobManager } from '../services/job-manager.js';
 import { mediaService } from '../services/media-service.js';
 import { renderService } from '../services/render-service.js';
 import fs from 'fs';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const router = Router();
 
-// Configure multer for file uploads
+// Configure multer for file uploads - use disk storage to avoid OOM on large files
+const uploadDir = path.join(__dirname, '..', 'temp', 'uploads');
+fs.mkdirSync(uploadDir, { recursive: true });
+
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: multer.diskStorage({
+    destination: uploadDir,
+    filename: (req, file, cb) => {
+      // Temporary filename, will be moved by mediaService
+      cb(null, `${Date.now()}-${file.originalname}`);
+    },
+  }),
   limits: {
-    fileSize: 5000 * 1024 * 1024, // 5000MB max file size
-    files: 100, // Allow up to 100 files
-    fields: 100, // Allow up to 100 fields
+    fileSize: 2000 * 1024 * 1024, // 2GB max file size (reduced for cloud)
+    files: 50, // Allow up to 50 files
+    fields: 50, // Allow up to 50 fields
   },
 });
 
@@ -85,6 +99,75 @@ router.get('/render/:jobId/status', (req: Request, res: Response) => {
       createdAt: job.createdAt,
       completedAt: job.completedAt,
     },
+  });
+});
+
+/**
+ * GET /api/render/:jobId/stream
+ * Server-Sent Events stream for real-time progress updates
+ * Fallback for when WebSocket is unavailable (e.g., serverless environments)
+ */
+router.get('/render/:jobId/stream', (req: Request, res: Response) => {
+  const { jobId } = req.params;
+
+  const job = jobManager.getJob(jobId);
+
+  if (!job) {
+    return res.status(404).json({
+      success: false,
+      error: 'Job not found',
+    });
+  }
+
+  // Set SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+  res.flushHeaders();
+
+  // Send initial status
+  const sendStatus = () => {
+    const currentJob = jobManager.getJob(jobId);
+    if (!currentJob) return false;
+
+    const data = {
+      jobId: currentJob.jobId,
+      status: currentJob.status,
+      progress: currentJob.progress,
+      renderedFrames: currentJob.renderedFrames,
+      totalFrames: currentJob.totalFrames,
+      error: currentJob.error,
+    };
+
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+    // Check if job is complete
+    return currentJob.status === 'completed' ||
+           currentJob.status === 'failed' ||
+           currentJob.status === 'cancelled';
+  };
+
+  // Send initial status immediately
+  const isComplete = sendStatus();
+
+  if (isComplete) {
+    res.end();
+    return;
+  }
+
+  // Poll for updates every 500ms
+  const intervalId = setInterval(() => {
+    const isDone = sendStatus();
+    if (isDone) {
+      clearInterval(intervalId);
+      res.end();
+    }
+  }, 500);
+
+  // Clean up on client disconnect
+  req.on('close', () => {
+    clearInterval(intervalId);
   });
 });
 
@@ -160,14 +243,15 @@ router.post('/media/upload', (req, res, next) => {
     // Update job status
     jobManager.updateJob(jobId, { status: 'uploading' });
 
-    // Save all files
+    // Move all files from temp upload dir to job media dir
     const uploadedFiles: string[] = [];
 
     for (const file of files) {
       // Extract mediaId from fieldname (should be like "media-{mediaId}")
       const mediaId = file.fieldname.replace('media-', '');
 
-      const filePath = await mediaService.saveMediaFile(jobId, mediaId, file.buffer, file.originalname);
+      // Use moveMediaFile for disk storage (file.path) instead of buffer
+      const filePath = await mediaService.moveMediaFile(jobId, mediaId, file.path, file.originalname);
 
       uploadedFiles.push(filePath);
     }

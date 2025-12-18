@@ -26,6 +26,13 @@ export class RenderService {
   }
 
   /**
+   * Check if the Remotion bundle is ready
+   */
+  isBundleReady(): boolean {
+    return this.bundleLocation !== null;
+  }
+
+  /**
    * Invalidate the cached bundle (forces rebuild on next render)
    * Call this when Remotion composition code changes.
    */

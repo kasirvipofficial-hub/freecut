@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "vite --host",
     "server": "tsx server/index.ts",
+    "server:prod": "NODE_ENV=production tsx server/index.ts",
     "dev:all": "concurrently \"npm run dev\" \"npm run server\"",
     "build": "vite build",
+    "build:server": "npm run build && echo 'Server runs via tsx (no build needed)'",
     "lint": "eslint .",
     "preview": "vite preview",
     "routes": "tsr generate"

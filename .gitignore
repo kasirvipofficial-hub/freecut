@@ -45,3 +45,6 @@ coverage
 # src/routeTree.gen.ts
 nul
 .claude/settings.local.json
+
+.vercel
+.env*.local

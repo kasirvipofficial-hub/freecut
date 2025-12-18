@@ -7,23 +7,46 @@ import { renderService } from './services/render-service.js';
 
 const app = express();
 const httpServer = createServer(app);
+
+// Environment configuration
+const PORT = process.env.PORT || 3001;
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
+
+// Parse CORS origins (comma-separated for multiple origins)
+const corsOrigins = CORS_ORIGIN.split(',').map(o => o.trim());
+
+console.log(`[Server] Environment: ${NODE_ENV}`);
+console.log(`[Server] CORS origins: ${corsOrigins.join(', ')}`);
+
 const io = new SocketServer(httpServer, {
   cors: {
-    origin: 'http://localhost:5173', // Vite dev server
+    origin: corsOrigins.length === 1 ? corsOrigins[0] : corsOrigins,
     methods: ['GET', 'POST', 'DELETE'],
+    credentials: true,
   },
+  // Allow long polling as fallback
+  transports: ['websocket', 'polling'],
 });
 
-const PORT = process.env.PORT || 3001;
-
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: corsOrigins.length === 1 ? corsOrigins[0] : corsOrigins,
+  credentials: true,
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Health check
+// Health check with detailed status
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  const bundleReady = renderService.isBundleReady();
+  res.json({
+    status: bundleReady ? 'ok' : 'initializing',
+    timestamp: new Date().toISOString(),
+    environment: NODE_ENV,
+    bundleReady,
+    uptime: process.uptime(),
+  });
 });
 
 // API routes
@@ -49,10 +72,12 @@ async function startServer() {
     await renderService.bundleProject();
     console.log('[Server] Remotion project bundled successfully');
 
-    // Start listening
-    httpServer.listen(PORT, () => {
-      console.log(`[Server] Running on http://localhost:${PORT}`);
-      console.log(`[Server] WebSocket ready on ws://localhost:${PORT}`);
+    // Listen on 0.0.0.0 for container/cloud deployment
+    const HOST = process.env.HOST || '0.0.0.0';
+    httpServer.listen(Number(PORT), HOST, () => {
+      console.log(`[Server] Running on http://${HOST}:${PORT}`);
+      console.log(`[Server] WebSocket ready`);
+      console.log(`[Server] Health check: http://${HOST}:${PORT}/health`);
     });
   } catch (error) {
     console.error('[Server] Failed to start:', error);
