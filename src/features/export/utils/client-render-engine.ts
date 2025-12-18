@@ -49,8 +49,24 @@ import {
   type TransitionCanvasSettings,
 } from './canvas-transitions';
 import { processAudio, createAudioBuffer, hasAudioContent } from './canvas-audio';
+import { gifFrameCache, type CachedGifFrames } from '../../timeline/services/gif-frame-cache';
 
 const log = createLogger('ClientRenderEngine');
+
+/**
+ * Check if a URL or filename indicates a GIF file
+ */
+function isGifUrl(url: string): boolean {
+  const lowerUrl = url.toLowerCase();
+  return lowerUrl.endsWith('.gif') || lowerUrl.includes('.gif');
+}
+
+/**
+ * Check if an image item is an animated GIF
+ */
+function isAnimatedGif(item: ImageItem): boolean {
+  return isGifUrl(item.src) || item.label.toLowerCase().endsWith('.gif');
+}
 
 // Font weight mapping to match preview (same as FONT_WEIGHT_MAP in fonts.ts)
 const FONT_WEIGHT_MAP: Record<string, number> = {
@@ -434,16 +450,28 @@ async function createCompositionRenderer(
   const imageElements = new Map<string, HTMLImageElement>();
   const imageLoadPromises: Promise<void>[] = [];
 
+  // Track GIF items for animated frame extraction
+  const gifItems: ImageItem[] = [];
+  const gifFramesMap = new Map<string, CachedGifFrames>();
+
   for (const track of tracks) {
     for (const item of track.items ?? []) {
       if (item.type === 'image' && (item as ImageItem).src) {
+        const imageItem = item as ImageItem;
+
+        // Check if this is an animated GIF
+        if (isAnimatedGif(imageItem)) {
+          gifItems.push(imageItem);
+          // Still load as regular image for fallback
+        }
+
         const img = new Image();
         img.crossOrigin = 'anonymous';
         const loadPromise = new Promise<void>((resolve, reject) => {
           img.onload = () => resolve();
-          img.onerror = () => reject(new Error(`Failed to load image: ${(item as ImageItem).src}`));
+          img.onerror = () => reject(new Error(`Failed to load image: ${imageItem.src}`));
         });
-        img.src = (item as ImageItem).src;
+        img.src = imageItem.src;
         imageElements.set(item.id, img);
         imageLoadPromises.push(loadPromise);
       }
@@ -512,6 +540,32 @@ async function createCompositionRenderer(
       );
 
       await Promise.all(videoLoadPromises);
+
+      // Load GIF frames for animated GIFs
+      if (gifItems.length > 0) {
+        log.debug('Preloading GIF frames', { gifCount: gifItems.length });
+
+        const gifLoadPromises = gifItems.map(async (gifItem) => {
+          try {
+            // Use mediaId if available, otherwise use item id
+            const mediaId = gifItem.mediaId ?? gifItem.id;
+            const cachedFrames = await gifFrameCache.getGifFrames(mediaId, gifItem.src);
+            gifFramesMap.set(gifItem.id, cachedFrames);
+            log.debug('GIF frames loaded', {
+              itemId: gifItem.id.substring(0, 8),
+              frameCount: cachedFrames.frames.length,
+              totalDuration: cachedFrames.totalDuration,
+            });
+          } catch (err) {
+            log.error('Failed to load GIF frames', { itemId: gifItem.id, error: err });
+            // GIF will fallback to static image rendering
+          }
+        });
+
+        await Promise.all(gifLoadPromises);
+        log.debug('All GIF frames loaded', { loadedCount: gifFramesMap.size });
+      }
+
       log.debug('All media loaded');
     },
 
@@ -812,6 +866,7 @@ async function createCompositionRenderer(
       }
       videoElements.clear();
       imageElements.clear();
+      gifFramesMap.clear(); // Clear GIF frame references (actual frames are managed by gifFrameCache)
     },
   };
 
@@ -852,7 +907,7 @@ async function createCompositionRenderer(
         await renderVideoItem(ctx, item as VideoItem, transform, frame, canvas, videoElements, sourceFrameOffset);
         break;
       case 'image':
-        renderImageItem(ctx, item as ImageItem, transform, canvas, imageElements);
+        renderImageItem(ctx, item as ImageItem, transform, canvas, imageElements, frame, gifFramesMap);
         break;
       case 'text':
         renderTextItem(ctx, item as TextItem, transform, canvas);
@@ -971,15 +1026,47 @@ async function createCompositionRenderer(
   }
 
   /**
-   * Render image item
+   * Render image item (supports animated GIFs)
    */
   function renderImageItem(
     ctx: OffscreenCanvasRenderingContext2D,
     item: ImageItem,
     transform: { x: number; y: number; width: number; height: number },
     canvas: CanvasSettings,
-    imageElements: Map<string, HTMLImageElement>
+    imageElements: Map<string, HTMLImageElement>,
+    frame: number,
+    gifFramesMap: Map<string, CachedGifFrames>
   ): void {
+    // Check if this is an animated GIF with cached frames
+    const cachedGif = gifFramesMap.get(item.id);
+
+    if (cachedGif && cachedGif.frames.length > 0) {
+      // Calculate GIF frame based on current timeline frame
+      const localFrame = frame - item.from;
+      const playbackRate = item.speed ?? 1;
+      const timeMs = (localFrame / fps) * 1000 * playbackRate;
+
+      // Get the correct GIF frame for this time
+      const { frame: gifFrame } = gifFrameCache.getFrameAtTime(cachedGif, timeMs);
+
+      const drawDimensions = calculateMediaDrawDimensions(
+        cachedGif.width,
+        cachedGif.height,
+        transform,
+        canvas
+      );
+
+      ctx.drawImage(
+        gifFrame,
+        drawDimensions.x,
+        drawDimensions.y,
+        drawDimensions.width,
+        drawDimensions.height
+      );
+      return;
+    }
+
+    // Fallback to static image rendering
     const img = imageElements.get(item.id);
     if (!img) return;
 
