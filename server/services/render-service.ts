@@ -367,12 +367,6 @@ export class RenderService {
     return null;
   }
 
-  /**
-   * Get output file path for a job (legacy - use findOutputPath instead)
-   */
-  getOutputPath(jobId: string): string {
-    return path.join(OUTPUT_DIR, `${jobId}.mp4`);
-  }
 
   /**
    * Check if output file exists (checks for any extension)
@@ -392,7 +386,12 @@ export class RenderService {
    * Clean up output file
    */
   async cleanupOutput(jobId: string): Promise<void> {
-    const outputPath = this.getOutputPath(jobId);
+    const outputPath = await this.findOutputPath(jobId);
+    if (!outputPath) {
+      console.log(`[RenderService] No output file found to clean up for job ${jobId}`);
+      return;
+    }
+
     try {
       await fs.unlink(outputPath);
       console.log(`[RenderService] Cleaned up output for job ${jobId}`);
