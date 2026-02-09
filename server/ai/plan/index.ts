@@ -1,4 +1,4 @@
-import { ScoredSegment, EditPlan, UserConfig } from '../types/index.js';
+import { ScoredSegment, EditPlan, UserConfig, EditSegment } from '../types/index.js';
 
 /**
  * Builds the final JSON Edit Plan for the renderer.
@@ -7,53 +7,46 @@ import { ScoredSegment, EditPlan, UserConfig } from '../types/index.js';
 export function buildEditPlan(segments: ScoredSegment[], config: UserConfig): EditPlan {
   console.log("Building edit plan...");
 
-  let currentTime = 0;
-  const clips: EditPlan['clips'] = [];
-  const transitions: EditPlan['transitions'] = [];
-
   // Sort segments by start time to maintain narrative flow
-  // (Assuming director already sorted, but safe to ensure)
   const sortedSegments = [...segments].sort((a, b) => a.startTime - b.startTime);
 
-  for (let i = 0; i < sortedSegments.length; i++) {
-    const segment = sortedSegments[i];
+  const editSegments: EditSegment[] = sortedSegments.map((segment, index) => {
+    const isLast = index === sortedSegments.length - 1;
+    let transition: string | undefined;
 
-    // Add clip
-    clips.push({
-      sourceId: segment.sourceVideoId,
-      start: segment.startTime,
-      end: segment.endTime,
-      volume: 1.0, // Default volume
-    });
-
-    // Add transition (except for the last clip)
-    if (i < sortedSegments.length - 1) {
+    if (!isLast) {
       // Simple logic: fade between clips if mood is calm, cut otherwise
-      const transitionType = config.mood === 'calm' ? 'fade' : 'cut';
-      const duration = transitionType === 'fade' ? 0.5 : 0; // 0.5s fade
-
-      if (duration > 0) {
-        transitions.push({
-          type: transitionType,
-          duration,
-          atTime: currentTime + segment.duration, // Transition happens at the end of this clip
-        });
-      }
+      transition = config.mood === 'calm' ? 'fade' : 'cut';
     }
 
-    currentTime += segment.duration;
-  }
-
-  // Add metadata
-  const metadata = {
-    totalDuration: currentTime,
-    fps: 30, // Standard FPS
-    resolution: { width: 1920, height: 1080 }, // Default HD
-  };
+    return {
+      id: segment.id,
+      start: segment.startTime,
+      end: segment.endTime,
+      score: segment.score,
+      actions: {
+        video: [segment.sourceVideoId],
+        audio: [segment.sourceVideoId],
+        transition,
+      },
+      explain: segment.explain
+    };
+  });
 
   return {
-    clips,
-    transitions,
-    metadata,
+    meta: {
+      template: 'default',
+      targetDuration: config.targetDuration,
+      mood: config.mood,
+      fps: 30,
+      resolution: { width: 1920, height: 1080 }
+    },
+    segments: editSegments,
+    branding: {
+      intro: 'assets/intro.mp4',
+      outro: 'assets/outro.mp4',
+      watermark: 'assets/watermark.png',
+      music: config.mood === 'energetic' ? 'assets/music-upbeat.mp3' : 'assets/music-calm.mp3'
+    }
   };
 }

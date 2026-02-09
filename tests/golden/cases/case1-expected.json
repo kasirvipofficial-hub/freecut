@@ -1,0 +1,131 @@
+{
+  "meta": {
+    "template": "default",
+    "targetDuration": 30,
+    "mood": "energetic",
+    "fps": 30,
+    "resolution": {
+      "width": 1920,
+      "height": 1080
+    }
+  },
+  "segments": [
+    {
+      "id": "video-1_seg_0",
+      "start": 0,
+      "end": 9,
+      "score": 77.16615894334686,
+      "actions": {
+        "video": [
+          "video-1"
+        ],
+        "audio": [
+          "video-1"
+        ],
+        "transition": "cut"
+      },
+      "explain": {
+        "reasons": [
+          "Base score of 50",
+          "High audio energy (0.66) contributed +20",
+          "Selected by director (accumulated duration: 29.0s)",
+          "Next segment video-1_seg_1 rejected (score: 44.2)"
+        ],
+        "weights": {
+          "audioEnergy": 19.76615894334685,
+          "wordDensity": 7.4
+        }
+      }
+    },
+    {
+      "id": "video-1_seg_2",
+      "start": 12,
+      "end": 21,
+      "score": 86.38580446419978,
+      "actions": {
+        "video": [
+          "video-1"
+        ],
+        "audio": [
+          "video-1"
+        ],
+        "transition": "cut"
+      },
+      "explain": {
+        "reasons": [
+          "Base score of 50",
+          "High audio energy (0.67) contributed +20",
+          "High speech density",
+          "Selected by director (accumulated duration: 14.5s)",
+          "Previous segment video-1_seg_1 rejected (score: 44.2)",
+          "Next segment video-1_seg_3 rejected (score: 53.5)"
+        ],
+        "weights": {
+          "audioEnergy": 20.185804464199776,
+          "wordDensity": 16.200000000000003
+        }
+      }
+    },
+    {
+      "id": "video-1_seg_4",
+      "start": 23,
+      "end": 28.5,
+      "score": 79.34052957258268,
+      "actions": {
+        "video": [
+          "video-1"
+        ],
+        "audio": [
+          "video-1"
+        ],
+        "transition": "cut"
+      },
+      "explain": {
+        "reasons": [
+          "Base score of 50",
+          "High audio energy (0.56) contributed +17",
+          "High speech density",
+          "Selected by director (accumulated duration: 20.0s)",
+          "Previous segment video-1_seg_3 rejected (score: 53.5)"
+        ],
+        "weights": {
+          "audioEnergy": 16.840529572582675,
+          "wordDensity": 12.5
+        }
+      }
+    },
+    {
+      "id": "video-1_seg_5",
+      "start": 28.5,
+      "end": 34,
+      "score": 85.57588515575623,
+      "actions": {
+        "video": [
+          "video-1"
+        ],
+        "audio": [
+          "video-1"
+        ]
+      },
+      "explain": {
+        "reasons": [
+          "Base score of 50",
+          "High audio energy (0.58) contributed +17",
+          "High speech density",
+          "Selected by director (accumulated duration: 5.5s)",
+          "Next segment video-1_seg_6 rejected (score: 39.3)"
+        ],
+        "weights": {
+          "audioEnergy": 17.375885155756222,
+          "wordDensity": 18.2
+        }
+      }
+    }
+  ],
+  "branding": {
+    "intro": "assets/intro.mp4",
+    "outro": "assets/outro.mp4",
+    "watermark": "assets/watermark.png",
+    "music": "assets/music-upbeat.mp3"
+  }
+}
