@@ -2,9 +2,11 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import fs from 'fs';
 import path from 'path';
-import { processVideo } from '../../server/ai/index.ts';
+import { processVideo } from '../../server/ai/index.js'; // Ensure .js extension for ESM
 
-const casesDir = path.join(__dirname, 'cases');
+// Use import.meta.dirname for Bun compatibility, or fallback to process.cwd() joined with path
+// Since we are in a test environment, let's use a robust way to find the cases directory relative to this file
+const casesDir = path.join(import.meta.dirname, 'cases');
 
 describe('Golden Tests', () => {
   const files = fs.readdirSync(casesDir).filter(f => f.endsWith('-expected.json'));
@@ -25,8 +27,8 @@ describe('Golden Tests', () => {
       const result = await processVideo(testCase.input, testCase.config);
 
       // Verify total output duration
-      const resultDuration = result.segments.reduce((acc, s) => acc + (s.end - s.start), 0);
-      const expectedDuration = expectedOutput.segments.reduce((acc, s) => acc + (s.end - s.start), 0);
+      const resultDuration = result.segments.reduce((acc: any, s: any) => acc + (s.end - s.start), 0);
+      const expectedDuration = expectedOutput.segments.reduce((acc: any, s: any) => acc + (s.end - s.start), 0);
       assert.strictEqual(resultDuration, expectedDuration, 'Total duration mismatch');
 
       // Verify number of segments
@@ -36,7 +38,7 @@ describe('Golden Tests', () => {
       assert.strictEqual(result.meta.mood, expectedOutput.meta.mood, 'Mood mismatch');
 
       // Verify deterministic ordering
-      assert.deepStrictEqual(result.segments.map(s => s.id), expectedOutput.segments.map(s => s.id), 'Segment order mismatch');
+      assert.deepStrictEqual(result.segments.map((s: any) => s.id), expectedOutput.segments.map((s: any) => s.id), 'Segment order mismatch');
 
       // Verify deep equality of the entire structure
       // Normalize result to match JSON serialization (strips undefined)

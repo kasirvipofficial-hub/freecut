@@ -1,67 +1,52 @@
-import { ScoredSegment, EditPlan, UserConfig, VideoInput, AssetMap } from '../types/index.js';
+import { ScoredSegment, EditPlan, UserConfig, EditSegment } from '../types/index.js';
 
 /**
  * Builds the final JSON Edit Plan for the renderer.
  * Converts selected segments into render-ready instructions.
  */
-export function buildEditPlan(segments: ScoredSegment[], config: UserConfig, input?: VideoInput): EditPlan {
+export function buildEditPlan(segments: ScoredSegment[], config: UserConfig): EditPlan {
   console.log("Building edit plan...");
 
   // Sort segments by start time to maintain narrative flow
   const sortedSegments = [...segments].sort((a, b) => a.startTime - b.startTime);
 
-  const clips: EditPlan['clips'] = sortedSegments.map(segment => ({
-    sourceId: segment.sourceVideoId,
-    start: segment.startTime,
-    end: segment.endTime,
-    volume: 1.0,
-    // Add zoom intent based on score
-    zoom: segment.score > 80
-  }));
+  const editSegments: EditSegment[] = sortedSegments.map((segment, index) => {
+    const isLast = index === sortedSegments.length - 1;
+    let transition: string | undefined;
 
-  const transitions: EditPlan['transitions'] = [];
-  let currentTime = 0;
-
-  for (let i = 0; i < clips.length; i++) {
-    const clip = clips[i];
-    const clipDuration = clip.end - clip.start;
-
-    // Simple transition logic
-    if (i < clips.length - 1) {
-       const type = config.mood === 'calm' ? 'fade' : 'cut';
-       if (type !== 'cut') {
-           transitions.push({
-               type: type as any,
-               duration: 0.5,
-               atTime: currentTime + clipDuration
-           });
-       }
+    if (!isLast) {
+      // Simple logic: fade between clips if mood is calm, cut otherwise
+      transition = config.mood === 'calm' ? 'fade' : 'cut';
     }
-    currentTime += clipDuration;
-  }
 
-  // Build Asset Map if input is provided
-  const assetMap: AssetMap = {};
-  if (input) {
-      // Map the main video source
-      assetMap[input.id] = {
-          type: 'video',
-          src: input.filePath
-      };
-  }
+    return {
+      id: segment.id,
+      start: segment.startTime,
+      end: segment.endTime,
+      score: segment.score,
+      actions: {
+        video: [segment.sourceVideoId],
+        audio: [segment.sourceVideoId],
+        transition,
+      },
+      explain: segment.explain
+    };
+  });
 
   return {
-    clips,
-    transitions,
-    metadata: {
-      totalDuration: currentTime,
+    meta: {
+      template: 'default',
+      targetDuration: config.targetDuration,
+      mood: config.mood,
       fps: 30,
       resolution: { width: 1920, height: 1080 }
     },
-    branding: undefined,
-    captions: false,
-    decisionTrace: segments.map(s => s.explain),
-    assetMap,
-    debug: true
+    segments: editSegments,
+    branding: {
+      intro: 'assets/intro.mp4',
+      outro: 'assets/outro.mp4',
+      watermark: 'assets/watermark.png',
+      music: config.mood === 'energetic' ? 'assets/music-upbeat.mp3' : 'assets/music-calm.mp3'
+    }
   };
 }
