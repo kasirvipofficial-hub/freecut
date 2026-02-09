@@ -6,9 +6,6 @@
     "lib": [
       "ES2023"
     ],
-    "types": [
-      "node"
-    ],
     "outDir": "./dist",
     "rootDir": ".",
     "skipLibCheck": true,
