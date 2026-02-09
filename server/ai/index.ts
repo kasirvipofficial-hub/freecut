@@ -44,7 +44,7 @@ export async function processVideo(input: VideoInput, config: UserConfig): Promi
 
     // 6. Build Edit Plan
     console.log(`[AI] Step 6: Building edit plan...`);
-    const editPlan = buildEditPlan(selectedSegments, config);
+    const editPlan = buildEditPlan(selectedSegments, config, input);
 
     const endTime = Date.now();
     console.log(`[AI] Processing complete in ${(endTime - startTime) / 1000}s.`);

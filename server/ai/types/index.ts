@@ -18,15 +18,6 @@ export interface UserConfig {
   mood: 'energetic' | 'calm' | 'neutral';
 }
 
-export interface AnalysisResult {
-  audioEnergyTimeline: number[];
-  detectedKeywords: string[];
-  speakers?: {
-    id: string;
-    segments: { start: number; end: number }[];
-  }[];
-}
-
 export interface AudioSignals {
   // Array of timestamps where significant audio events occur (e.g., start of speech)
   timestamps: number[];
@@ -58,6 +49,32 @@ export interface SignalData {
   duration: number; // Total duration of the source video
 }
 
+// Consolidated AnalysisResult
+export interface AnalysisResult {
+  videoId?: string;
+  segments: {
+    id: string;
+    sourceVideoId?: string;
+    start: number;
+    end: number;
+    energy: number;
+    keywords: string[];
+    speakerId?: string;
+    silenceBefore?: number;
+  }[];
+  timeline?: {
+    energy: number[];
+    silence: number[];
+  };
+  // Legacy fields for compatibility if needed
+  audioEnergyTimeline?: number[];
+  detectedKeywords?: string[];
+  speakers?: {
+    id: string;
+    segments: { start: number; end: number }[];
+  }[];
+}
+
 export interface NormalizedTimeline {
   // Unified timeline with aligned audio/video data points
   timePoints: {
@@ -84,6 +101,11 @@ export type DecisionTrace = {
   reasons: string[];
   weights: Record<string, number>;
   rejectedBecause?: string[];
+  // TemplateEngine specific fields
+  segmentId?: string;
+  rule?: string;
+  outcome?: string; // e.g., "kept", "discarded", "split", "boosted"
+  scoreChange?: number;
 };
 
 export interface ScoredSegment extends Segment {
@@ -94,24 +116,6 @@ export interface ScoredSegment extends Segment {
 }
 
 // --- Template Engine Types ---
-
-export interface AnalysisResult {
-  videoId?: string; // Optional top-level ID
-  segments: {
-    id: string;
-    sourceVideoId?: string; // Optional if top-level is set, but good to have
-    start: number;
-    end: number;
-    energy: number;
-    keywords: string[];
-    speakerId?: string;
-    silenceBefore?: number;
-  }[];
-  timeline?: {
-    energy: number[];
-    silence: number[];
-  };
-}
 
 export interface TemplateRules {
   minEnergy?: number;
@@ -140,12 +144,16 @@ export interface TemplateConfig {
   branding: TemplateBranding;
 }
 
+export interface Asset {
+  type: 'video' | 'audio' | 'image';
+  src: string; // The R2 key or URL or local path
+}
+
+export type AssetMap = Record<string, Asset>;
+
 /**
  * EditPlan: The renderer-agnostic contract describing the desired output.
- *
- * This structure defines "what" should be rendered, not "how".
- * It is consumed by specific renderers (FFmpeg, Remotion, etc.) which translate
- * these intents into concrete implementation details (pixels, frames, draw commands).
+ * Canonical definition.
  */
 export interface EditPlan {
   // Ordered list of clips to sequence
@@ -154,55 +162,24 @@ export interface EditPlan {
     start: number; // Source start time (seconds)
     end: number;   // Source end time (seconds)
     volume: number; // Normalized volume (0.0 - 1.0)
-
-    // Semantic visual intents
-    zoom?: boolean; // Intent: "Apply a zoom effect for emphasis". Renderer decides scale/easing.
+    zoom?: boolean; // Intent: "Apply a zoom effect for emphasis"
   }[];
 
   // Transitions between clips
   transitions: {
-    type: 'fade' | 'cut' | 'wipe' | 'crossfade'; // Semantic transition types
-    duration: number; // Duration in seconds
+    type: 'fade' | 'cut' | 'wipe' | 'crossfade';
+    duration: number;
     atTime: number;   // Output timeline position (seconds)
   }[];
 
   // Metadata for the renderer
   metadata: {
-    totalDuration: number; // Expected total duration in seconds
-    fps: number;           // Target frame rate
-    resolution: { width: number; height: number }; // Target resolution
+    totalDuration: number;
+    fps: number;
+    resolution: { width: number; height: number };
   };
 
-  // Branding elements (Resource references only)
-  // Renderers determine placement (e.g. watermark top-right) and compositing.
-  branding?: {
-    intro?: string;     // Path/URL to intro video/image
-    outro?: string;     // Path/URL to outro video/image
-    watermark?: string; // Path/URL to watermark image
-    music?: string;     // Path/URL to background music
-export type EditSegment = {
-  id: string;
-  start: number;
-  end: number;
-  score: number;
-  actions: {
-    video?: string[];
-    audio?: string[];
-    text?: string[];
-    transition?: string;
-  };
-  explain: DecisionTrace;
-};
-
-export interface EditPlan {
-  meta: {
-    template: string;
-    targetDuration: number;
-    mood: string;
-    fps?: number;
-    resolution?: { width: number; height: number };
-  };
-  segments: EditSegment[];
+  // Branding elements
   branding?: {
     intro?: string;
     outro?: string;
@@ -210,15 +187,14 @@ export interface EditPlan {
     music?: string;
   };
 
-  // Global caption intent
-  // If true, the renderer should generate/overlay captions from transcription data.
   captions?: boolean;
 
-  // Explainability trace (not rendered, but useful for debugging/UI)
-  decisionTrace?: {
-    segmentId: string;
-    rule: string;
-    outcome: string; // e.g., "kept", "discarded", "split", "boosted"
-    scoreChange?: number;
-  }[];
+  // Explainability trace
+  decisionTrace?: DecisionTrace[];
+
+  // Asset Map for resolving external resources
+  assetMap?: AssetMap;
+
+  // Debug mode
+  debug?: boolean;
 }
