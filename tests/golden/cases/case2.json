@@ -1,0 +1,13 @@
+{
+  "input": {
+    "filePath": "test_video_2.mp4",
+    "id": "video-2"
+  },
+  "config": {
+    "targetDuration": 20,
+    "minSegmentDuration": 3,
+    "maxSegmentDuration": 8,
+    "keywords": ["tutorial"],
+    "mood": "calm"
+  }
+}

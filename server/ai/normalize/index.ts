@@ -12,10 +12,12 @@ export function normalizeSignals(signals: SignalData): NormalizedTimeline {
   // Create a timeline with 1-second intervals for simplicity in this mock
   // In a real scenario, this might be frame-accurate (e.g., 30fps)
   const timePoints: NormalizedTimeline['timePoints'] = [];
+  const audioEnergyTimeline: number[] = [];
 
   for (let t = 0; t <= duration; t++) {
     // Interpolate or find nearest energy level
     const audioEnergy = getInterpolatedEnergy(t, audio);
+    audioEnergyTimeline.push(audioEnergy);
 
     // Check if this time point falls within a speech segment
     const isSpeech = checkIsSpeech(t, audio.transcription);
@@ -31,9 +33,19 @@ export function normalizeSignals(signals: SignalData): NormalizedTimeline {
     });
   }
 
+  // Extract keywords from transcription
+  const detectedKeywords = audio.transcription
+    ? audio.transcription.map(t => t.text.split(' ')).flat()
+    : [];
+
   return {
     timePoints,
     totalDuration: duration,
+    analysis: {
+      audioEnergyTimeline,
+      detectedKeywords,
+      speakers: audio.speakers,
+    }
   };
 }
 

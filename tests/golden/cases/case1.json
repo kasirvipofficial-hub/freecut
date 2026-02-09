@@ -1,0 +1,13 @@
+{
+  "input": {
+    "filePath": "test_video_1.mp4",
+    "id": "video-1"
+  },
+  "config": {
+    "targetDuration": 30,
+    "minSegmentDuration": 2,
+    "maxSegmentDuration": 10,
+    "keywords": ["AI"],
+    "mood": "energetic"
+  }
+}
