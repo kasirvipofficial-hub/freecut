@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import { useEffect, useState, useRef, useCallback, memo } from 'react';
 import { createLogger } from '@/lib/logger';
 import {
@@ -119,10 +120,10 @@ export const Editor = memo(function Editor({ projectId, project }: EditorProps) 
     try {
       await saveTimeline(projectId);
       logger.debug('Project saved successfully');
-      // TODO: Show success toast notification
+      toast.success('Project saved successfully');
     } catch (error) {
       logger.error('Failed to save project:', error);
-      // TODO: Show error toast notification
+      toast.error('Failed to save project', { description: error instanceof Error ? error.message : 'Unknown error' });
       throw error; // Re-throw so callers know save failed
     } finally {
       isSavingRef.current = false;
