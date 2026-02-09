@@ -243,18 +243,16 @@ router.post('/media/upload', (req, res, next) => {
     // Update job status
     jobManager.updateJob(jobId, { status: 'uploading' });
 
-    // Move all files from temp upload dir to job media dir
-    const uploadedFiles: string[] = [];
+    // Move all files from temp upload dir to job media dir concurrently
+    const uploadedFiles = await Promise.all(
+      files.map(async (file) => {
+        // Extract mediaId from fieldname (should be like "media-{mediaId}")
+        const mediaId = file.fieldname.replace('media-', '');
 
-    for (const file of files) {
-      // Extract mediaId from fieldname (should be like "media-{mediaId}")
-      const mediaId = file.fieldname.replace('media-', '');
-
-      // Use moveMediaFile for disk storage (file.path) instead of buffer
-      const filePath = await mediaService.moveMediaFile(jobId, mediaId, file.path, file.originalname);
-
-      uploadedFiles.push(filePath);
-    }
+        // Use moveMediaFile for disk storage (file.path) instead of buffer
+        return await mediaService.moveMediaFile(jobId, mediaId, file.path, file.originalname);
+      })
+    );
 
     console.log(`[API] Uploaded ${uploadedFiles.length} files for job ${jobId}`);
 
