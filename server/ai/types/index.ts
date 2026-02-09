@@ -18,6 +18,15 @@ export interface UserConfig {
   mood: 'energetic' | 'calm' | 'neutral';
 }
 
+export interface AnalysisResult {
+  audioEnergyTimeline: number[];
+  detectedKeywords: string[];
+  speakers?: {
+    id: string;
+    segments: { start: number; end: number }[];
+  }[];
+}
+
 export interface AudioSignals {
   // Array of timestamps where significant audio events occur (e.g., start of speech)
   timestamps: number[];
@@ -28,6 +37,11 @@ export interface AudioSignals {
     text: string;
     startTime: number;
     endTime: number;
+  }[];
+  // Speaker diarization data
+  speakers?: {
+    id: string;
+    segments: { start: number; end: number }[];
   }[];
 }
 
@@ -53,6 +67,8 @@ export interface NormalizedTimeline {
     isSceneChange: boolean;
   }[];
   totalDuration: number;
+  // Metadata derived during normalization
+  analysis?: AnalysisResult;
 }
 
 export interface Segment {
@@ -64,36 +80,46 @@ export interface Segment {
   sourceVideoId: string;
 }
 
+export type DecisionTrace = {
+  reasons: string[];
+  weights: Record<string, number>;
+  rejectedBecause?: string[];
+};
+
 export interface ScoredSegment extends Segment {
   // Calculated quality score (0-100) based on content analysis
   score: number;
-  // Breakdown of how the score was calculated
-  scoreDetails: {
-    wordDensity: number;
-    energyLevel: number;
-    keywordMatch: number;
-    penalty: number;
-  };
+  // Decision trace explaining the score
+  explain: DecisionTrace;
 }
 
+export type EditSegment = {
+  id: string;
+  start: number;
+  end: number;
+  score: number;
+  actions: {
+    video?: string[];
+    audio?: string[];
+    text?: string[];
+    transition?: string;
+  };
+  explain: DecisionTrace;
+};
+
 export interface EditPlan {
-  // List of final clips to include in the render
-  clips: {
-    sourceId: string;
-    start: number;
-    end: number;
-    volume: number;
-  }[];
-  // Transitions between clips
-  transitions: {
-    type: 'fade' | 'cut' | 'wipe';
-    duration: number;
-    atTime: number; // Time in the output timeline
-  }[];
-  // Metadata for the renderer
-  metadata: {
-    totalDuration: number;
-    fps: number;
-    resolution: { width: number; height: number };
+  meta: {
+    template: string;
+    targetDuration: number;
+    mood: string;
+    fps?: number;
+    resolution?: { width: number; height: number };
+  };
+  segments: EditSegment[];
+  branding?: {
+    intro?: string;
+    outro?: string;
+    watermark?: string;
+    music?: string;
   };
 }

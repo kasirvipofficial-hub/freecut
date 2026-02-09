@@ -23,6 +23,23 @@ export async function extractAudioSignals(input: VideoInput): Promise<AudioSigna
       { text: "Welcome to the tutorial.", startTime: 0, endTime: 5 },
       { text: "Today we will learn about AI.", startTime: 10, endTime: 15 },
       { text: "Let's dive right in.", startTime: 20, endTime: 25 },
+      { text: "This is a key concept.", startTime: 35, endTime: 40 },
+    ],
+    speakers: [
+      {
+        id: "speaker_1",
+        segments: [
+          { start: 0, end: 15 },
+          { start: 30, end: 45 }
+        ]
+      },
+      {
+        id: "speaker_2",
+        segments: [
+          { start: 15, end: 30 },
+          { start: 45, end: 60 }
+        ]
+      }
     ]
   };
 }

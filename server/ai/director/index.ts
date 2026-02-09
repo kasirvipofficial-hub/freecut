@@ -44,12 +44,19 @@ export function selectByTargetDuration(segments: ScoredSegment[], targetDuration
   for (const segment of segments) {
     // Check if adding this segment would exceed target duration significantly
     // Allow a small buffer (e.g., 5s over target is okay, but generally try to fit)
-    // Actually, knapsack problem is hard. Greedy is fine.
-    // If we exceed target, skip unless it's the very first segment and target is small?
 
     if (currentDuration + segment.duration <= targetDuration * 1.05) {
       selected.push(segment);
       currentDuration += segment.duration;
+
+      // Update trace
+      segment.explain.reasons.push(`Selected by director (accumulated duration: ${currentDuration.toFixed(1)}s)`);
+    } else {
+      // This segment was rejected
+      // We can't easily add to rejectedBecause here because we only return selected segments
+      // But we could modify the input object if we wanted to track it
+      segment.explain.rejectedBecause = segment.explain.rejectedBecause || [];
+      segment.explain.rejectedBecause.push(`Skipped to avoid exceeding target duration (would be ${(currentDuration + segment.duration).toFixed(1)}s)`);
     }
 
     // Stop if we are within 90% of target duration
@@ -72,7 +79,29 @@ export function applyDirectorLogic(segments: ScoredSegment[], config: UserConfig
   const prioritized = orderByPreference(segments, config);
 
   // 2. Select segments to fill target duration
+  // Note: selectByTargetDuration mutates the segment objects by pushing to reasons/rejectedBecause
   const selected = selectByTargetDuration(prioritized, config.targetDuration);
+  const selectedIds = new Set(selected.map(s => s.id));
+
+  // 3. Enrich decision trace with context about neighbors
+  // We need the original chronological order
+  const chronological = [...segments].sort((a, b) => a.startTime - b.startTime);
+
+  for (let i = 0; i < chronological.length; i++) {
+    const segment = chronological[i];
+    if (selectedIds.has(segment.id)) {
+      // Check neighbors
+      const prev = i > 0 ? chronological[i - 1] : null;
+      const next = i < chronological.length - 1 ? chronological[i + 1] : null;
+
+      if (prev && !selectedIds.has(prev.id)) {
+         segment.explain.reasons.push(`Previous segment ${prev.id} rejected (score: ${prev.score.toFixed(1)})`);
+      }
+      if (next && !selectedIds.has(next.id)) {
+         segment.explain.reasons.push(`Next segment ${next.id} rejected (score: ${next.score.toFixed(1)})`);
+      }
+    }
+  }
 
   return selected;
 }
