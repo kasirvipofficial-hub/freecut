@@ -27,9 +27,9 @@ const upload = multer({
     },
   }),
   limits: {
-    fileSize: 2000 * 1024 * 1024, // 2GB max file size (reduced for cloud)
-    files: 50, // Allow up to 50 files
-    fields: 50, // Allow up to 50 fields
+    fileSize: 100 * 1024 * 1024, // 100MB max file size
+    files: 10, // Allow up to 10 files
+    fields: 10, // Allow up to 10 fields
   },
 });
 
