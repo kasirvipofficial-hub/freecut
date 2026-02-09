@@ -1,30 +1,32 @@
+import { apiClient } from '@/api/client';
 import type { Project, ProjectFormData } from '@/types/project';
 
 export class ProjectsAPI {
-  private baseUrl = '/api/projects';
+  private baseUrl = '/projects';
 
   async getAll(): Promise<Project[]> {
-    // TODO: Implement get all projects
-    return [];
+    return apiClient.get<Project[]>(this.baseUrl);
   }
 
   async getById(id: string): Promise<Project | null> {
-    // TODO: Implement get project by id
-    return null;
+    try {
+      return await apiClient.get<Project>(`${this.baseUrl}/${id}`);
+    } catch (error) {
+      // Return null if project not found
+      return null;
+    }
   }
 
   async create(data: ProjectFormData): Promise<Project> {
-    // TODO: Implement create project
-    throw new Error('Not implemented');
+    return apiClient.post<Project>(this.baseUrl, data);
   }
 
   async update(id: string, data: Partial<ProjectFormData>): Promise<Project> {
-    // TODO: Implement update project
-    throw new Error('Not implemented');
+    return apiClient.put<Project>(`${this.baseUrl}/${id}`, data);
   }
 
   async delete(id: string): Promise<void> {
-    // TODO: Implement delete project
+    await apiClient.delete(`${this.baseUrl}/${id}`);
   }
 }
 
