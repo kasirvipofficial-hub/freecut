@@ -257,6 +257,11 @@ export type EditSegment = {
   explain: DecisionTrace;
 };
 
+/**
+ * EditPlan is the CANONICAL CONTRACT representing semantic edit intent.
+ * It MUST be renderer-agnostic (no FFmpeg flags, no Remotion components).
+ * All renderers (FFmpeg, Remotion) must be able to consume this plan.
+ */
 export interface EditPlan {
   meta: {
     template: string;
@@ -287,6 +292,34 @@ export interface EditPlan {
   }[];
 }
 
+/**
+ * Configuration for the TemplateEngine.
+ * Defines rules for segment selection, scoring, and style application.
+ * Enables data-driven template extensibility.
+ */
+export interface TemplateConfig {
+  name: string;
+  rules: {
+    minSegmentDuration: number;
+    maxSegmentDuration: number;
+    targetDuration: number;
+    // Transition to apply between segments
+    transitions: {
+      type: string; // e.g. "cut", "fade", "wipe"
+      duration: number; // in seconds
+    };
+  };
+  scoring: {
+    keywordBoost: number;
+    silencePenalty: number;
+  };
+  branding?: {
+    intro?: string;
+    outro?: string;
+    watermark?: string;
+    music?: string;
+  };
+}
 export type AssetMap = {
   sourceVideo: string;
   sourceAudio?: string;
