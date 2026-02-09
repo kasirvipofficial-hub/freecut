@@ -113,6 +113,69 @@ export interface AnalysisResult {
   };
 }
 
+// Action Types for Rendering (Agnostic)
+export interface VideoAction {
+  type: 'zoom_in' | 'fade_in' | 'fade_out' | 'opacity';
+  params?: {
+    duration?: number;
+    value?: number; // e.g., opacity value (0-1)
+    scale?: number; // e.g., zoom scale (1.0-2.0)
+  };
+}
+
+export interface AudioAction {
+  type: 'normalize' | 'fade_in' | 'fade_out' | 'ducking';
+  params?: {
+    duration?: number;
+    volume?: number; // Target volume
+    duckingAmount?: number; // Reduction amount
+  };
+}
+
+export interface TextAction {
+  type: 'caption' | 'lower_third';
+  text: string;
+  params?: {
+    position?: 'top' | 'bottom' | 'center';
+    color?: string;
+    fontSize?: number;
+  };
+}
+
+export type BrandingOptions = {
+  intro?: {
+    assetId: string;
+    duration?: number;
+  };
+  outro?: {
+    assetId: string;
+    duration?: number;
+  };
+  watermark?: {
+    assetId: string;
+    position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+    opacity?: number;
+  };
+  backgroundMusic?: {
+    assetId: string;
+    loop: boolean;
+    volume: number;
+  };
+};
+
+export interface EditPlanClip {
+  sourceId: string;
+  start: number;
+  end: number;
+  volume: number;
+  videoActions?: VideoAction[];
+  audioActions?: AudioAction[];
+  textActions?: TextAction[];
+}
+
+export interface EditPlan {
+  // List of final clips to include in the render
+  clips: EditPlanClip[];
 export interface TemplateRules {
   minEnergy?: number;
   maxSegmentDuration?: number;
@@ -202,6 +265,7 @@ export interface EditPlan {
     fps?: number;
     resolution?: { width: number; height: number };
   };
+  branding?: BrandingOptions;
   segments: EditSegment[];
   branding?: {
     intro?: string;
@@ -222,3 +286,15 @@ export interface EditPlan {
     scoreChange?: number;
   }[];
 }
+
+export type AssetMap = {
+  sourceVideo: string;
+  sourceAudio?: string;
+  intro?: string;
+  outro?: string;
+  watermark?: string;
+  music?: string;
+  fonts?: Record<string, string>;
+  // Allow accessing by specific asset IDs if needed
+  [key: string]: string | Record<string, string> | undefined;
+};
