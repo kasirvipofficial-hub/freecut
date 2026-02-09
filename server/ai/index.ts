@@ -23,6 +23,11 @@ function createDefaultTemplate(config: UserConfig): TemplateConfig {
       keywordBoost: 1.0,
       silencePenalty: 0.5
     },
+    style: {
+      transitions: config.mood === 'calm' ? 'fade' : 'cut',
+      caption: false,
+      zoomOnEmphasis: config.mood === 'energetic'
+    },
     branding: {
       intro: 'assets/intro.mp4',
       outro: 'assets/outro.mp4',

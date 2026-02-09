@@ -118,10 +118,16 @@ export interface ScoredSegment extends Segment {
 // --- Template Engine Types ---
 
 export interface TemplateRules {
-  minEnergy?: number;
+  minSegmentDuration?: number;
   maxSegmentDuration?: number;
+  targetDuration?: number;
+  minEnergy?: number;
   keywordsBoost?: number;
   silencePenalty?: number;
+  transitions?: {
+    type: string;
+    duration: number;
+  };
 }
 
 export interface TemplateStyle {
@@ -138,8 +144,13 @@ export interface TemplateBranding {
 }
 
 export interface TemplateConfig {
-  id: string;
+  name: string;
+  id?: string;
   rules: TemplateRules;
+  scoring?: {
+    keywordBoost: number;
+    silencePenalty: number;
+  };
   style: TemplateStyle;
   branding: TemplateBranding;
 }
