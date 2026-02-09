@@ -47,6 +47,11 @@ describe('Freecut AI Pipeline', () => {
     assert.strictEqual(typeof firstPoint.audioEnergy, 'number');
     assert.strictEqual(typeof firstPoint.isSpeech, 'boolean');
     assert.strictEqual(typeof firstPoint.isSceneChange, 'boolean');
+
+    // Check analysis result
+    assert.ok(timeline.analysis);
+    assert.ok(timeline.analysis.audioEnergyTimeline.length > 0);
+    assert.ok(timeline.analysis.detectedKeywords);
   });
 
   it('3. Build Segments: should enforce min/max duration', async () => {
@@ -74,12 +79,15 @@ describe('Freecut AI Pipeline', () => {
     assert.strictEqual(scored.length, segments.length);
     scored.forEach(s => {
       assert.ok(s.score >= 0 && s.score <= 100);
-      assert.ok(s.scoreDetails);
+      assert.ok(s.explain);
+      assert.ok(s.explain.reasons.length > 0);
+      assert.ok(s.explain.weights);
     });
 
     // Check determinism
     const scored2 = scoreSegments(segments, timeline, mockConfig);
     assert.deepStrictEqual(scored[0].score, scored2[0].score);
+    assert.deepStrictEqual(scored[0].explain, scored2[0].explain);
   });
 
   it('5. Director Logic: should select segments within target duration', async () => {
@@ -101,6 +109,11 @@ describe('Freecut AI Pipeline', () => {
     for (let i = 0; i < selected.length - 1; i++) {
       assert.ok(selected[i].startTime <= selected[i+1].startTime, 'Segments not chronological');
     }
+
+    // Check if decision trace has rejection info (might be hard to guarantee with mocks unless we craft specific case)
+    // At least one selected segment should have reasons populated by director
+    const hasDirectorReason = selected.some(s => s.explain.reasons.some(r => r.includes('Selected by director')));
+    assert.ok(hasDirectorReason, 'Director logic did not add reasons');
   });
 
   it('6. Build Edit Plan: should generate valid JSON', async () => {
@@ -112,30 +125,27 @@ describe('Freecut AI Pipeline', () => {
 
     const plan = buildEditPlan(selected, mockConfig);
 
-    assert.ok(plan.clips);
-    assert.strictEqual(plan.clips.length, selected.length);
-    assert.ok(plan.metadata);
+    assert.ok(plan.segments);
+    assert.strictEqual(plan.segments.length, selected.length);
+    assert.ok(plan.meta);
+    assert.ok(plan.branding);
 
-    // Check transitions for energetic (should be 0 as cuts are implicit or 0 duration)
-    // In our implementation, we only push if duration > 0
-    if (mockConfig.mood === 'energetic') {
-      assert.strictEqual(plan.transitions.length, 0);
-    }
-
-    // Test calm mood (fades)
+    // Check transitions
+    // In our implementation, we add transitions if mood is calm
     const calmConfig = { ...mockConfig, mood: 'calm' as const };
     const planCalm = buildEditPlan(selected, calmConfig);
-    if (selected.length > 1) {
-      assert.strictEqual(planCalm.transitions.length, selected.length - 1);
-      assert.strictEqual(planCalm.transitions[0].type, 'fade');
+
+    if (planCalm.segments.length > 1) {
+       // Check first segment has transition "fade" if not last
+       assert.strictEqual(planCalm.segments[0].actions.transition, 'fade');
     }
   });
 
   it('7. Orchestrator: should run end-to-end', async () => {
     const plan = await processVideo(mockInput, mockConfig);
     assert.ok(plan);
-    assert.ok(plan.clips.length > 0);
-    assert.ok(plan.metadata.totalDuration > 0);
+    assert.ok(plan.segments.length > 0);
+    assert.ok(plan.meta.targetDuration === mockConfig.targetDuration);
   });
 
 });

@@ -1,0 +1,133 @@
+{
+  "meta": {
+    "template": "default",
+    "targetDuration": 20,
+    "mood": "calm",
+    "fps": 30,
+    "resolution": {
+      "width": 1920,
+      "height": 1080
+    }
+  },
+  "segments": [
+    {
+      "id": "video-2_seg_0",
+      "start": 0,
+      "end": 4.5,
+      "score": 88.3830668105255,
+      "actions": {
+        "video": [
+          "video-2"
+        ],
+        "audio": [
+          "video-2"
+        ],
+        "transition": "fade"
+      },
+      "explain": {
+        "reasons": [
+          "Base score of 50",
+          "High audio energy (0.82) contributed +25",
+          "High speech density",
+          "Selected by director (accumulated duration: 9.0s)"
+        ],
+        "weights": {
+          "audioEnergy": 24.683066810525503,
+          "wordDensity": 13.700000000000001
+        }
+      }
+    },
+    {
+      "id": "video-2_seg_1",
+      "start": 4.5,
+      "end": 9,
+      "score": 85.62002410937353,
+      "actions": {
+        "video": [
+          "video-2"
+        ],
+        "audio": [
+          "video-2"
+        ],
+        "transition": "fade"
+      },
+      "explain": {
+        "reasons": [
+          "Base score of 50",
+          "High audio energy (0.45) contributed +14",
+          "Contains prioritized keywords (tutorial)",
+          "Selected by director (accumulated duration: 20.5s)",
+          "Next segment video-2_seg_2 rejected (score: 44.2)"
+        ],
+        "weights": {
+          "audioEnergy": 13.620024109373533,
+          "keywordMatch": 20,
+          "wordDensity": 1.9999999999999996
+        }
+      }
+    },
+    {
+      "id": "video-2_seg_3",
+      "start": 12,
+      "end": 16.5,
+      "score": 95.0601479360174,
+      "actions": {
+        "video": [
+          "video-2"
+        ],
+        "audio": [
+          "video-2"
+        ],
+        "transition": "fade"
+      },
+      "explain": {
+        "reasons": [
+          "Base score of 50",
+          "High audio energy (0.75) contributed +23",
+          "Contains prioritized keywords (tutorial)",
+          "Selected by director (accumulated duration: 4.5s)",
+          "Previous segment video-2_seg_2 rejected (score: 44.2)",
+          "Next segment video-2_seg_4 rejected (score: 78.0)"
+        ],
+        "weights": {
+          "audioEnergy": 22.560147936017398,
+          "keywordMatch": 20,
+          "wordDensity": 2.5
+        }
+      }
+    },
+    {
+      "id": "video-2_seg_11",
+      "start": 53,
+      "end": 60,
+      "score": 79.70883955441859,
+      "actions": {
+        "video": [
+          "video-2"
+        ],
+        "audio": [
+          "video-2"
+        ]
+      },
+      "explain": {
+        "reasons": [
+          "Base score of 50",
+          "High audio energy (0.58) contributed +17",
+          "High speech density",
+          "Selected by director (accumulated duration: 16.0s)",
+          "Previous segment video-2_seg_10 rejected (score: 70.6)"
+        ],
+        "weights": {
+          "audioEnergy": 17.308839554418583,
+          "wordDensity": 12.4
+        }
+      }
+    }
+  ],
+  "branding": {
+    "intro": "assets/intro.mp4",
+    "outro": "assets/outro.mp4",
+    "watermark": "assets/watermark.png",
+    "music": "assets/music-calm.mp3"
+  }
+}
