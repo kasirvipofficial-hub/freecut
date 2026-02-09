@@ -6,11 +6,14 @@ import fs from 'fs/promises';
 import type { RenderRequest, RenderProgress } from '../types.js';
 import { jobManager } from './job-manager.js';
 import { mediaService } from './media-service.js';
+import { createLogger } from '../lib/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const OUTPUT_DIR = path.join(__dirname, '..', 'temp', 'output');
+
+const logger = createLogger('RenderService');
 
 export class RenderService {
   private bundleLocation: string | null = null;
@@ -29,7 +32,7 @@ export class RenderService {
    */
   invalidateBundle(): void {
     if (this.bundleLocation) {
-      console.log('[RenderService] Invalidating cached bundle');
+      logger.debug('Invalidating cached bundle');
       this.bundleLocation = null;
     }
   }
@@ -42,7 +45,7 @@ export class RenderService {
       return this.bundleLocation;
     }
 
-    console.log('[RenderService] Bundling Remotion project...');
+    logger.info('Bundling Remotion project...');
 
     // Point to the Remotion entry point
     const entryPoint = path.join(__dirname, '..', '..', 'src', 'lib', 'remotion', 'root.tsx');
@@ -66,10 +69,10 @@ export class RenderService {
         }),
       });
 
-      console.log('[RenderService] Bundle created at:', this.bundleLocation);
+      logger.debug('Bundle created at:', this.bundleLocation);
       return this.bundleLocation;
     } catch (error) {
-      console.error('[RenderService] Bundle error:', error);
+      logger.error('Bundle error:', error);
       throw new Error(`Failed to bundle Remotion project: ${error}`);
     }
   }
@@ -80,7 +83,7 @@ export class RenderService {
   async startRender(request: RenderRequest): Promise<void> {
     const { jobId, composition, settings } = request;
 
-    console.log(`[RenderService] Starting render for job ${jobId}`);
+    logger.info(`Starting render for job ${jobId}`);
 
     // Create cancel signal using Remotion's makeCancelSignal
     const { cancelSignal, cancel } = makeCancelSignal();
@@ -128,7 +131,7 @@ export class RenderService {
             // Debug: log to find any remaining blob URLs
             const itemStr = JSON.stringify(resolvedItem);
             if (itemStr.includes('blob:')) {
-              console.log('[RenderService] WARNING: Item still contains blob URL:', itemStr.substring(0, 500));
+              logger.warn('Item still contains blob URL:', itemStr.substring(0, 500));
             }
             return resolvedItem;
           }
@@ -140,7 +143,7 @@ export class RenderService {
       const tracksStr = JSON.stringify(tracksWithResolvedMedia);
       const blobMatches = tracksStr.match(/blob:[^"]+/g);
       if (blobMatches) {
-        console.warn('[RenderService] WARNING: Found blob URLs in tracks:', blobMatches);
+        logger.warn('Found blob URLs in tracks:', blobMatches);
       }
 
       // Select composition with all properties from export settings
@@ -158,11 +161,11 @@ export class RenderService {
         },
       });
 
-      console.log('[RenderService] Composition selected:', compositionData);
-      console.log('[RenderService] Duration:', compositionData.durationInFrames, 'frames at', compositionData.fps, 'fps');
-      console.log('[RenderService] Resolution:', compositionData.width, 'x', compositionData.height);
-      console.log('[RenderService] Transitions:', composition.transitions?.length || 0);
-      console.log('[RenderService] Keyframes:', composition.keyframes?.length || 0);
+      logger.debug('Composition selected:', compositionData);
+      logger.debug('Duration:', compositionData.durationInFrames, 'frames at', compositionData.fps, 'fps');
+      logger.debug('Resolution:', compositionData.width, 'x', compositionData.height);
+      logger.debug('Transitions:', composition.transitions?.length || 0);
+      logger.debug('Keyframes:', composition.keyframes?.length || 0);
 
       // Update total frames from composition
       jobManager.updateJob(jobId, { totalFrames: compositionData.durationInFrames });
@@ -173,7 +176,7 @@ export class RenderService {
 
       const fileExtension = this.getCodecExtension(codec);
 
-      console.log(`[RenderService] Codec: ${settings.codec} -> ${codec}, Extension: ${fileExtension}`);
+      logger.debug(`Codec: ${settings.codec} -> ${codec}, Extension: ${fileExtension}`);
 
       // Prepare output path with correct extension for codec
       await fs.mkdir(OUTPUT_DIR, { recursive: true });
@@ -181,7 +184,7 @@ export class RenderService {
       const outputPath = path.join(OUTPUT_DIR, outputFileName);
 
       // Start rendering
-      console.log(`[RenderService] Rendering to ${outputPath}`);
+      logger.debug(`Rendering to ${outputPath}`);
 
       // Prepare render options
       const renderOptions: any = {
@@ -211,7 +214,7 @@ export class RenderService {
           });
 
           if (renderedFrames % 30 === 0) {
-            console.log(`[RenderService] Job ${jobId}: ${renderedFrames}/${compositionData.durationInFrames} frames (${progress}%)`);
+            logger.debug(`Job ${jobId}: ${renderedFrames}/${compositionData.durationInFrames} frames (${progress}%)`);
           }
         },
         cancelSignal,
@@ -237,7 +240,7 @@ export class RenderService {
       // Mark as completed
       jobManager.completeJob(jobId, outputPath);
 
-      console.log(`[RenderService] Job ${jobId} completed successfully`);
+      logger.info(`Job ${jobId} completed successfully`);
 
       // Clean up media files after successful render
       await mediaService.cleanupJob(jobId);
@@ -247,11 +250,11 @@ export class RenderService {
                           error?.message?.includes('cancelled');
       if (isCancelled) {
         jobManager.cancelJob(jobId);
-        console.log(`[RenderService] Job ${jobId} was cancelled`);
+        logger.info(`Job ${jobId} was cancelled`);
       } else {
         const errorMessage = error?.message || String(error);
         jobManager.failJob(jobId, errorMessage);
-        console.error(`[RenderService] Job ${jobId} failed:`, error);
+        logger.error(`Job ${jobId} failed:`, error);
       }
 
       // Clean up media files on error
@@ -268,7 +271,7 @@ export class RenderService {
     const cancelFn = this.activeRenders.get(jobId);
     if (cancelFn) {
       cancelFn();
-      console.log(`[RenderService] Cancelling job ${jobId}`);
+      logger.info(`Cancelling job ${jobId}`);
       return true;
     }
     return false;
@@ -304,7 +307,7 @@ export class RenderService {
     };
 
     const ext = extensionMap[codec];
-    console.log(`[getCodecExtension] codec="${codec}", extensionMap[codec]="${ext}", fallback=".mp4"`);
+    logger.debug(`[getCodecExtension] codec="${codec}", extensionMap[codec]="${ext}", fallback=".mp4"`);
     return ext || '.mp4';
   }
 
@@ -395,9 +398,9 @@ export class RenderService {
     const outputPath = this.getOutputPath(jobId);
     try {
       await fs.unlink(outputPath);
-      console.log(`[RenderService] Cleaned up output for job ${jobId}`);
+      logger.debug(`Cleaned up output for job ${jobId}`);
     } catch (error) {
-      console.error(`[RenderService] Error cleaning up output for job ${jobId}:`, error);
+      logger.error(`Error cleaning up output for job ${jobId}:`, error);
     }
   }
 
