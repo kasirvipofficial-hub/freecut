@@ -76,6 +76,53 @@ export interface ScoredSegment extends Segment {
   };
 }
 
+// --- Template Engine Types ---
+
+export interface AnalysisResult {
+  videoId?: string; // Optional top-level ID
+  segments: {
+    id: string;
+    sourceVideoId?: string; // Optional if top-level is set, but good to have
+    start: number;
+    end: number;
+    energy: number;
+    keywords: string[];
+    speakerId?: string;
+    silenceBefore?: number;
+  }[];
+  timeline?: {
+    energy: number[];
+    silence: number[];
+  };
+}
+
+export interface TemplateRules {
+  minEnergy?: number;
+  maxSegmentDuration?: number;
+  keywordsBoost?: number;
+  silencePenalty?: number;
+}
+
+export interface TemplateStyle {
+  transitions?: string; // e.g., 'crossfade'
+  caption?: boolean;
+  zoomOnEmphasis?: boolean;
+}
+
+export interface TemplateBranding {
+  intro?: string;
+  watermark?: string;
+  music?: string;
+  outro?: string;
+}
+
+export interface TemplateConfig {
+  id: string;
+  rules: TemplateRules;
+  style: TemplateStyle;
+  branding: TemplateBranding;
+}
+
 export interface EditPlan {
   // List of final clips to include in the render
   clips: {
@@ -83,10 +130,11 @@ export interface EditPlan {
     start: number;
     end: number;
     volume: number;
+    zoom?: boolean; // Apply zoom effect
   }[];
   // Transitions between clips
   transitions: {
-    type: 'fade' | 'cut' | 'wipe';
+    type: 'fade' | 'cut' | 'wipe' | 'crossfade';
     duration: number;
     atTime: number; // Time in the output timeline
   }[];
@@ -96,4 +144,20 @@ export interface EditPlan {
     fps: number;
     resolution: { width: number; height: number };
   };
+  // Branding elements
+  branding?: {
+    intro?: string;
+    outro?: string;
+    watermark?: string;
+    music?: string;
+  };
+  // Global caption flag
+  captions?: boolean;
+  // Decision trace for explainability
+  decisionTrace?: {
+    segmentId: string;
+    rule: string;
+    outcome: string; // e.g., "kept", "discarded", "split", "boosted"
+    scoreChange?: number;
+  }[];
 }
