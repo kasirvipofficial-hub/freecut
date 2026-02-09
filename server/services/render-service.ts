@@ -171,18 +171,9 @@ export class RenderService {
       // This ensures codec and extension are always consistent
       const codec = this.getCodec(settings.codec);
 
-      // Inline extension lookup to avoid any caching issues
-      const extMap: Record<string, string> = {
-        h264: '.mp4',
-        h265: '.mp4',
-        vp8: '.webm',
-        vp9: '.webm',
-        prores: '.mov',
-        gif: '.gif',
-      };
-      const fileExtension = extMap[codec] || '.mp4';
+      const fileExtension = this.getCodecExtension(codec);
 
-      console.log(`[RenderService] Codec: ${settings.codec} -> ${codec}, Extension: ${fileExtension}, extMap[codec]: ${extMap[codec]}`);
+      console.log(`[RenderService] Codec: ${settings.codec} -> ${codec}, Extension: ${fileExtension}`);
 
       // Prepare output path with correct extension for codec
       await fs.mkdir(OUTPUT_DIR, { recursive: true });
@@ -302,7 +293,7 @@ export class RenderService {
   /**
    * Get file extension for codec
    */
-  private getFileExtension(codec: string): string {
+  private getCodecExtension(codec: string): string {
     const extensionMap: Record<string, string> = {
       h264: '.mp4',
       h265: '.mp4',
@@ -313,7 +304,7 @@ export class RenderService {
     };
 
     const ext = extensionMap[codec];
-    console.log(`[getFileExtension] codec="${codec}", extensionMap[codec]="${ext}", fallback=".mp4"`);
+    console.log(`[getCodecExtension] codec="${codec}", extensionMap[codec]="${ext}", fallback=".mp4"`);
     return ext || '.mp4';
   }
 
@@ -410,15 +401,6 @@ export class RenderService {
     }
   }
 
-  /**
-   * Extract file extension from a filename or URL
-   */
-  private getFileExtension(filename: string): string {
-    // Handle blob URLs and regular filenames
-    const name = filename.split('/').pop() || '';
-    const match = name.match(/\.([^.]+)$/);
-    return match ? match[0] : '';
-  }
 }
 
 export const renderService = new RenderService();
