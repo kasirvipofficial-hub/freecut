@@ -18,15 +18,6 @@ export interface UserConfig {
   mood: 'energetic' | 'calm' | 'neutral';
 }
 
-export interface AnalysisResult {
-  audioEnergyTimeline: number[];
-  detectedKeywords: string[];
-  speakers?: {
-    id: string;
-    segments: { start: number; end: number }[];
-  }[];
-}
-
 export interface AudioSignals {
   // Array of timestamps where significant audio events occur (e.g., start of speech)
   timestamps: number[];
@@ -58,6 +49,32 @@ export interface SignalData {
   duration: number; // Total duration of the source video
 }
 
+// Consolidated AnalysisResult
+export interface AnalysisResult {
+  videoId?: string;
+  segments: {
+    id: string;
+    sourceVideoId?: string;
+    start: number;
+    end: number;
+    energy: number;
+    keywords: string[];
+    speakerId?: string;
+    silenceBefore?: number;
+  }[];
+  timeline?: {
+    energy: number[];
+    silence: number[];
+  };
+  // Legacy fields for compatibility if needed
+  audioEnergyTimeline?: number[];
+  detectedKeywords?: string[];
+  speakers?: {
+    id: string;
+    segments: { start: number; end: number }[];
+  }[];
+}
+
 export interface NormalizedTimeline {
   // Unified timeline with aligned audio/video data points
   timePoints: {
@@ -84,6 +101,11 @@ export type DecisionTrace = {
   reasons: string[];
   weights: Record<string, number>;
   rejectedBecause?: string[];
+  // TemplateEngine specific fields
+  segmentId?: string;
+  rule?: string;
+  outcome?: string; // e.g., "kept", "discarded", "split", "boosted"
+  scoreChange?: number;
 };
 
 export interface ScoredSegment extends Segment {
@@ -95,87 +117,6 @@ export interface ScoredSegment extends Segment {
 
 // --- Template Engine Types ---
 
-export interface AnalysisResult {
-  videoId?: string; // Optional top-level ID
-  segments: {
-    id: string;
-    sourceVideoId?: string; // Optional if top-level is set, but good to have
-    start: number;
-    end: number;
-    energy: number;
-    keywords: string[];
-    speakerId?: string;
-    silenceBefore?: number;
-  }[];
-  timeline?: {
-    energy: number[];
-    silence: number[];
-  };
-}
-
-// Action Types for Rendering (Agnostic)
-export interface VideoAction {
-  type: 'zoom_in' | 'fade_in' | 'fade_out' | 'opacity';
-  params?: {
-    duration?: number;
-    value?: number; // e.g., opacity value (0-1)
-    scale?: number; // e.g., zoom scale (1.0-2.0)
-  };
-}
-
-export interface AudioAction {
-  type: 'normalize' | 'fade_in' | 'fade_out' | 'ducking';
-  params?: {
-    duration?: number;
-    volume?: number; // Target volume
-    duckingAmount?: number; // Reduction amount
-  };
-}
-
-export interface TextAction {
-  type: 'caption' | 'lower_third';
-  text: string;
-  params?: {
-    position?: 'top' | 'bottom' | 'center';
-    color?: string;
-    fontSize?: number;
-  };
-}
-
-export type BrandingOptions = {
-  intro?: {
-    assetId: string;
-    duration?: number;
-  };
-  outro?: {
-    assetId: string;
-    duration?: number;
-  };
-  watermark?: {
-    assetId: string;
-    position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
-    opacity?: number;
-  };
-  backgroundMusic?: {
-    assetId: string;
-    loop: boolean;
-    volume: number;
-  };
-};
-
-export interface EditPlanClip {
-  sourceId: string;
-  start: number;
-  end: number;
-  volume: number;
-  videoActions?: VideoAction[];
-  audioActions?: AudioAction[];
-  textActions?: TextAction[];
-}
-
-export interface EditPlan {
-  // List of final clips to include in the render
-  clips: EditPlanClip[];
 export interface TemplateRules {
   minEnergy?: number;
   maxSegmentDuration?: number;
@@ -203,12 +144,16 @@ export interface TemplateConfig {
   branding: TemplateBranding;
 }
 
+export interface Asset {
+  type: 'video' | 'audio' | 'image';
+  src: string; // The R2 key or URL or local path
+}
+
+export type AssetMap = Record<string, Asset>;
+
 /**
  * EditPlan: The renderer-agnostic contract describing the desired output.
- *
- * This structure defines "what" should be rendered, not "how".
- * It is consumed by specific renderers (FFmpeg, Remotion, etc.) which translate
- * these intents into concrete implementation details (pixels, frames, draw commands).
+ * Canonical definition.
  */
 export interface EditPlan {
   // Ordered list of clips to sequence
@@ -217,61 +162,24 @@ export interface EditPlan {
     start: number; // Source start time (seconds)
     end: number;   // Source end time (seconds)
     volume: number; // Normalized volume (0.0 - 1.0)
-
-    // Semantic visual intents
-    zoom?: boolean; // Intent: "Apply a zoom effect for emphasis". Renderer decides scale/easing.
+    zoom?: boolean; // Intent: "Apply a zoom effect for emphasis"
   }[];
 
   // Transitions between clips
   transitions: {
-    type: 'fade' | 'cut' | 'wipe' | 'crossfade'; // Semantic transition types
-    duration: number; // Duration in seconds
+    type: 'fade' | 'cut' | 'wipe' | 'crossfade';
+    duration: number;
     atTime: number;   // Output timeline position (seconds)
   }[];
 
   // Metadata for the renderer
   metadata: {
-    totalDuration: number; // Expected total duration in seconds
-    fps: number;           // Target frame rate
-    resolution: { width: number; height: number }; // Target resolution
+    totalDuration: number;
+    fps: number;
+    resolution: { width: number; height: number };
   };
 
-  // Branding elements (Resource references only)
-  // Renderers determine placement (e.g. watermark top-right) and compositing.
-  branding?: {
-    intro?: string;     // Path/URL to intro video/image
-    outro?: string;     // Path/URL to outro video/image
-    watermark?: string; // Path/URL to watermark image
-    music?: string;     // Path/URL to background music
-export type EditSegment = {
-  id: string;
-  start: number;
-  end: number;
-  score: number;
-  actions: {
-    video?: string[];
-    audio?: string[];
-    text?: string[];
-    transition?: string;
-  };
-  explain: DecisionTrace;
-};
-
-/**
- * EditPlan is the CANONICAL CONTRACT representing semantic edit intent.
- * It MUST be renderer-agnostic (no FFmpeg flags, no Remotion components).
- * All renderers (FFmpeg, Remotion) must be able to consume this plan.
- */
-export interface EditPlan {
-  meta: {
-    template: string;
-    targetDuration: number;
-    mood: string;
-    fps?: number;
-    resolution?: { width: number; height: number };
-  };
-  branding?: BrandingOptions;
-  segments: EditSegment[];
+  // Branding elements
   branding?: {
     intro?: string;
     outro?: string;
@@ -279,55 +187,14 @@ export interface EditPlan {
     music?: string;
   };
 
-  // Global caption intent
-  // If true, the renderer should generate/overlay captions from transcription data.
   captions?: boolean;
 
-  // Explainability trace (not rendered, but useful for debugging/UI)
-  decisionTrace?: {
-    segmentId: string;
-    rule: string;
-    outcome: string; // e.g., "kept", "discarded", "split", "boosted"
-    scoreChange?: number;
-  }[];
-}
+  // Explainability trace
+  decisionTrace?: DecisionTrace[];
 
-/**
- * Configuration for the TemplateEngine.
- * Defines rules for segment selection, scoring, and style application.
- * Enables data-driven template extensibility.
- */
-export interface TemplateConfig {
-  name: string;
-  rules: {
-    minSegmentDuration: number;
-    maxSegmentDuration: number;
-    targetDuration: number;
-    // Transition to apply between segments
-    transitions: {
-      type: string; // e.g. "cut", "fade", "wipe"
-      duration: number; // in seconds
-    };
-  };
-  scoring: {
-    keywordBoost: number;
-    silencePenalty: number;
-  };
-  branding?: {
-    intro?: string;
-    outro?: string;
-    watermark?: string;
-    music?: string;
-  };
+  // Asset Map for resolving external resources
+  assetMap?: AssetMap;
+
+  // Debug mode
+  debug?: boolean;
 }
-export type AssetMap = {
-  sourceVideo: string;
-  sourceAudio?: string;
-  intro?: string;
-  outro?: string;
-  watermark?: string;
-  music?: string;
-  fonts?: Record<string, string>;
-  // Allow accessing by specific asset IDs if needed
-  [key: string]: string | Record<string, string> | undefined;
-};
