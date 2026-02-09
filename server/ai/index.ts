@@ -1,10 +1,36 @@
-import { VideoInput, UserConfig, EditPlan } from './types/index.js';
+import { VideoInput, UserConfig, EditPlan, TemplateConfig } from './types/index.js';
 import { extractSignals } from './extract/index.js';
 import { normalizeSignals } from './normalize/index.js';
 import { buildSegments } from './segment/index.js';
 import { scoreSegments } from './score/index.js';
-import { applyDirectorLogic } from './director/index.js';
-import { buildEditPlan } from './plan/index.js';
+import { TemplateEngine } from './template/TemplateEngine.js';
+
+const templateEngine = new TemplateEngine();
+
+function createDefaultTemplate(config: UserConfig): TemplateConfig {
+  return {
+    name: 'default',
+    rules: {
+      minSegmentDuration: config.minSegmentDuration,
+      maxSegmentDuration: config.maxSegmentDuration,
+      targetDuration: config.targetDuration,
+      transitions: {
+        type: config.mood === 'calm' ? 'fade' : 'cut',
+        duration: 0.5
+      }
+    },
+    scoring: {
+      keywordBoost: 1.0,
+      silencePenalty: 0.5
+    },
+    branding: {
+      intro: 'assets/intro.mp4',
+      outro: 'assets/outro.mp4',
+      watermark: 'assets/watermark.png',
+      music: config.mood === 'energetic' ? 'assets/music-upbeat.mp3' : 'assets/music-calm.mp3'
+    }
+  };
+}
 
 /**
  * Main Orchestrator for the Freecut AI pipeline.
@@ -36,6 +62,7 @@ export async function processVideo(input: VideoInput, config: UserConfig): Promi
     const avgScore = scoredSegments.reduce((sum, s) => sum + s.score, 0) / scoredSegments.length;
     console.log(`[AI] Scored segments. Average score: ${avgScore.toFixed(2)}`);
 
+<<<<<<< HEAD
     // 5. Apply Director Logic
     console.log(`[AI] Step 5: Applying director logic...`);
     const selectedSegments = applyDirectorLogic(scoredSegments, config);
@@ -45,6 +72,12 @@ export async function processVideo(input: VideoInput, config: UserConfig): Promi
     // 6. Build Edit Plan
     console.log(`[AI] Step 6: Building edit plan...`);
     const editPlan = buildEditPlan(selectedSegments, config, input);
+=======
+    // 5. Apply Template Engine
+    console.log(`[AI] Step 5: Applying Template Engine...`);
+    const templateConfig = createDefaultTemplate(config);
+    const editPlan = templateEngine.run(scoredSegments, templateConfig);
+>>>>>>> origin/master
 
     const endTime = Date.now();
     console.log(`[AI] Processing complete in ${(endTime - startTime) / 1000}s.`);
