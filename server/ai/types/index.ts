@@ -123,37 +123,53 @@ export interface TemplateConfig {
   branding: TemplateBranding;
 }
 
+/**
+ * EditPlan: The renderer-agnostic contract describing the desired output.
+ *
+ * This structure defines "what" should be rendered, not "how".
+ * It is consumed by specific renderers (FFmpeg, Remotion, etc.) which translate
+ * these intents into concrete implementation details (pixels, frames, draw commands).
+ */
 export interface EditPlan {
-  // List of final clips to include in the render
+  // Ordered list of clips to sequence
   clips: {
     sourceId: string;
-    start: number;
-    end: number;
-    volume: number;
-    zoom?: boolean; // Apply zoom effect
+    start: number; // Source start time (seconds)
+    end: number;   // Source end time (seconds)
+    volume: number; // Normalized volume (0.0 - 1.0)
+
+    // Semantic visual intents
+    zoom?: boolean; // Intent: "Apply a zoom effect for emphasis". Renderer decides scale/easing.
   }[];
+
   // Transitions between clips
   transitions: {
-    type: 'fade' | 'cut' | 'wipe' | 'crossfade';
-    duration: number;
-    atTime: number; // Time in the output timeline
+    type: 'fade' | 'cut' | 'wipe' | 'crossfade'; // Semantic transition types
+    duration: number; // Duration in seconds
+    atTime: number;   // Output timeline position (seconds)
   }[];
+
   // Metadata for the renderer
   metadata: {
-    totalDuration: number;
-    fps: number;
-    resolution: { width: number; height: number };
+    totalDuration: number; // Expected total duration in seconds
+    fps: number;           // Target frame rate
+    resolution: { width: number; height: number }; // Target resolution
   };
-  // Branding elements
+
+  // Branding elements (Resource references only)
+  // Renderers determine placement (e.g. watermark top-right) and compositing.
   branding?: {
-    intro?: string;
-    outro?: string;
-    watermark?: string;
-    music?: string;
+    intro?: string;     // Path/URL to intro video/image
+    outro?: string;     // Path/URL to outro video/image
+    watermark?: string; // Path/URL to watermark image
+    music?: string;     // Path/URL to background music
   };
-  // Global caption flag
+
+  // Global caption intent
+  // If true, the renderer should generate/overlay captions from transcription data.
   captions?: boolean;
-  // Decision trace for explainability
+
+  // Explainability trace (not rendered, but useful for debugging/UI)
   decisionTrace?: {
     segmentId: string;
     rule: string;
