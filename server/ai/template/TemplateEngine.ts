@@ -1,4 +1,4 @@
-import { ScoredSegment, EditPlan, TemplateConfig, EditSegment } from '../types/index.js';
+import { ScoredSegment, EditPlan, TemplateConfig } from '../types/index.js';
 
 export class TemplateEngine {
   /**
@@ -35,7 +35,7 @@ export class TemplateEngine {
   }
 
   private selectSegments(segments: ScoredSegment[], config: TemplateConfig): ScoredSegment[] {
-    const targetDuration = config.rules.targetDuration;
+    const targetDuration = config.rules.targetDuration || 60; // Default to 60s if not specified
 
     // Deterministic Sort: Primary = Score (desc), Secondary = StartTime (asc)
     const sorted = [...segments].sort((a, b) => {
@@ -67,33 +67,40 @@ export class TemplateEngine {
   }
 
   private buildPlan(segments: ScoredSegment[], config: TemplateConfig): EditPlan {
-    const editSegments: EditSegment[] = segments.map((segment, index) => {
-      const isLast = index === segments.length - 1;
+    const totalDuration = segments.reduce((sum, s) => sum + s.duration, 0);
 
-      return {
-        id: segment.id,
-        start: segment.startTime,
-        end: segment.endTime,
-        score: segment.score,
-        actions: {
-          video: [segment.sourceVideoId],
-          audio: [segment.sourceVideoId],
-          transition: !isLast && config.rules.transitions ? config.rules.transitions.type : undefined
-        },
-        explain: segment.explain
-      };
-    });
+    // Build clips array matching EditPlan interface
+    const clips = segments.map(segment => ({
+      sourceId: segment.sourceVideoId,
+      start: segment.startTime,
+      end: segment.endTime,
+      volume: 1.0 // Default volume
+    }));
+
+    // Build transitions
+    const transitions = segments.slice(0, -1).map((_, index) => ({
+      type: (config.rules.transitions?.type || 'cut') as 'fade' | 'cut' | 'wipe' | 'crossfade',
+      duration: config.rules.transitions?.duration || 0,
+      atTime: segments.slice(0, index + 1).reduce((sum, s) => sum + s.duration, 0)
+    }));
 
     return {
-      meta: {
-        template: config.name,
-        targetDuration: config.rules.targetDuration,
-        mood: 'custom', // Derived from template
+      clips,
+      transitions,
+      metadata: {
+        totalDuration,
         fps: 30,
         resolution: { width: 1920, height: 1080 }
       },
-      segments: editSegments,
-      branding: config.branding
+      branding: config.branding,
+      captions: config.style.caption,
+      decisionTrace: segments.map(segment => ({
+        segmentId: segment.id,
+        rule: 'template_selection',
+        outcome: 'kept',
+        reasons: segment.explain.reasons,
+        weights: segment.explain.weights
+      }))
     };
   }
 }
